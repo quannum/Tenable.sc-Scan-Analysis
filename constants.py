@@ -1,3 +1,5 @@
+from pathlib import Path
+
 INCLUDE = "Include"
 EXCLUDE = "Exclude"
 
@@ -6,6 +8,8 @@ STATUS_PARTIAL = "PARTIAL"
 STATUS_GAP = "GAP"
 
 DEFAULT_EXPECTED_SHEET = "rsg-all"
+FALLBACK_EXPECTED_SHEET = "Expected_Ranges"
+DEFAULT_OUTPUT_FILE = Path("output") / "tenable_scan_summary_v7.xlsx"
 
 SHEET_SCAN_SCOPE_SUMMARY = "Scan_Scope_Summary"
 SHEET_SCAN_SCOPE_NORMALIZED = "Scan_Scope_Normalized"

@@ -61,7 +61,11 @@ class DataAccess:
     def get_scan_details(self, scan_id):
         if self.config.mode == "live":
             return self.sc.scans.details(scan_id)
-        return self.offline_scans[str(scan_id)]
+        details = self.offline_scans.get(str(scan_id))
+        if not details:
+            LOGGER.warning("Missing offline scan details for scan id '%s'", scan_id)
+            return {}
+        return details
 
     def get_asset(self, asset_id):
         if self.config.mode == "live":

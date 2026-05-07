@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from constants import (
     DEFAULT_EXPECTED_SHEET,
     EXCLUDE,
+    FALLBACK_EXPECTED_SHEET,
     INCLUDE,
     SHEET_EXPECTED_RANGE_COMPLIANCE,
     SHEET_EXPECTED_VS_ACTUAL,
@@ -13,6 +14,7 @@ from constants import (
     STATUS_PARTIAL,
 )
 from scope_utils import (
+    ParsedScope,
     merge_intervals,
     parse_scope_item,
     scope_contains,
@@ -28,14 +30,14 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ScopeRecord:
-    parsed: tuple
+    parsed: ParsedScope
     scan_name: str
     scope_item: str
 
 
 @dataclass(frozen=True)
 class ExcludedScopeRecord:
-    parsed: tuple
+    parsed: ParsedScope
     scan_name: str
     asset_name: str
     scope_item: str
@@ -46,6 +48,26 @@ class ExclusionImpact:
     asset: str
     scope: str
     loss: int
+
+
+@dataclass(frozen=True)
+class CoverageResult:
+    environment: str | None
+    location: str | None
+    scope_item: str
+    expected_size: int
+    covered_count: int
+    gap_count: int
+    percent_lost: float
+    total_included_ips: int
+    exclusion_ip_total: int
+    covered: str
+    covering_scans: set[str]
+    status: str
+    reason: str
+    required_scan: str
+    required_scan_covered: str
+    coverage_pct: float
 
 
 def filter_scans(scans, config):
@@ -195,6 +217,9 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
             continue
 
         details = data_access.get_scan_details(scan_id)
+        if not details:
+            LOGGER.warning("Skipping scan '%s' because details were not found", scan_name)
+            continue
 
         ip_list = details.get("ipList")
         if ip_list and ip_list != "*":
@@ -293,13 +318,13 @@ def build_coverage_data(normalized_ws):
 def resolve_expected_sheet(expected_workbook):
     if DEFAULT_EXPECTED_SHEET in expected_workbook.sheetnames:
         return expected_workbook[DEFAULT_EXPECTED_SHEET]
-    if "Expected_Ranges" in expected_workbook.sheetnames:
-        return expected_workbook["Expected_Ranges"]
+    if FALLBACK_EXPECTED_SHEET in expected_workbook.sheetnames:
+        return expected_workbook[FALLBACK_EXPECTED_SHEET]
 
     available = ", ".join(expected_workbook.sheetnames)
     raise KeyError(
         "Expected scope workbook must contain either "
-        f"'{DEFAULT_EXPECTED_SHEET}' or 'Expected_Ranges'. Found: {available}"
+        f"'{DEFAULT_EXPECTED_SHEET}' or '{FALLBACK_EXPECTED_SHEET}'. Found: {available}"
     )
 
 
@@ -320,32 +345,7 @@ def validate_expected_row(row):
     return scope_item, location, environment, required_scan
 
 
-def analyze_expected_ranges(
-    workbook, expected_scope_file, actual_scopes, actual_by_scan, excluded_by_scan
-):
-    compare_ws = None
-    compliance_ws = None
-    exclusion_impact_by_scan = defaultdict(int)
-
-    totals = {
-        "portfolio_expected_total": 0,
-        "portfolio_covered_total": 0,
-        "portfolio_gap_total": 0,
-        "portfolio_exclusion_total": 0,
-        "portfolio_included_total": 0,
-    }
-
-    if not expected_scope_file:
-        LOGGER.info(
-            "No expected scope workbook selected; skipping expected-vs-actual analysis"
-        )
-        return compare_ws, compliance_ws, exclusion_impact_by_scan, totals
-
-    from openpyxl import load_workbook
-
-    expected_wb = load_workbook(expected_scope_file)
-    expected_ws = resolve_expected_sheet(expected_wb)
-
+def build_expected_analysis_sheets(workbook):
     compare_ws = workbook.create_sheet(SHEET_EXPECTED_VS_ACTUAL)
     compare_ws.append(
         [
@@ -360,6 +360,8 @@ def analyze_expected_ranges(
             "Scans Covering",
             "Status",
             "Reason",
+            "Required Scan",
+            "Required Scan Covered",
         ]
     )
 
@@ -375,6 +377,266 @@ def analyze_expected_ranges(
             "Coverage %",
         ]
     )
+
+    return compare_ws, compliance_ws
+
+
+def build_totals():
+    return {
+        "portfolio_expected_total": 0,
+        "portfolio_covered_total": 0,
+        "portfolio_gap_total": 0,
+        "portfolio_exclusion_total": 0,
+        "portfolio_included_total": 0,
+    }
+
+
+def determine_required_scan_coverage(required_scan, covering_scans):
+    normalized_required_scan = str(required_scan or "").strip()
+    if not normalized_required_scan:
+        return "", ""
+
+    if normalized_required_scan in covering_scans:
+        return normalized_required_scan, "Yes"
+
+    return normalized_required_scan, "No"
+
+
+def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
+    exclusion_lines = []
+    for excluded_scan_name in sorted(relevant_exclusions):
+        for entry in relevant_exclusions[excluded_scan_name]:
+            exclusion_lines.append(
+                f"{excluded_scan_name} | {entry.asset} | "
+                f"{entry.scope} ({entry.loss} IPs)"
+            )
+
+    return f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(exclusion_lines)
+
+
+def determine_coverage_status(covered_count, expected_size, exclusion_ip_total, relevant_exclusions):
+    if covered_count == expected_size:
+        return STATUS_OK, "Yes", "Fully contained by scan scope"
+
+    if covered_count > 0:
+        if exclusion_ip_total > 0:
+            return (
+                STATUS_PARTIAL,
+                "Partial",
+                build_exclusion_reason(exclusion_ip_total, relevant_exclusions),
+            )
+
+        return STATUS_PARTIAL, "Partial", "Partial coverage detected"
+
+    return STATUS_GAP, "No", "No scan scope intersects expected range"
+
+
+def collect_covering_scans(actual_scopes, expected):
+    full_cover_scans = set()
+    partial_scans = set()
+
+    for actual_scope in actual_scopes:
+        if scope_contains(actual_scope.parsed, expected):
+            full_cover_scans.add(actual_scope.scan_name)
+        elif scope_intersects(actual_scope.parsed, expected):
+            partial_scans.add(actual_scope.scan_name)
+
+    return full_cover_scans.union(partial_scans)
+
+
+def calculate_scan_intervals(
+    scan_name,
+    expected,
+    expected_start,
+    expected_end,
+    actual_by_scan,
+    excluded_by_scan,
+):
+    included = []
+    excluded = []
+    relevant_exclusions = []
+    exclusion_ip_total = 0
+
+    for actual_scope in actual_by_scan[scan_name]:
+        if not scope_intersects(actual_scope.parsed, expected):
+            continue
+
+        actual_start, actual_end = scope_to_interval(actual_scope.parsed)
+        overlap_start = max(actual_start, expected_start)
+        overlap_end = min(actual_end, expected_end)
+
+        if overlap_start <= overlap_end:
+            included.append((overlap_start, overlap_end))
+
+    for excluded_scope in excluded_by_scan[scan_name]:
+        if not scope_intersects(excluded_scope.parsed, expected):
+            continue
+
+        excluded_start, excluded_end = scope_to_interval(excluded_scope.parsed)
+        overlap_start = max(excluded_start, expected_start)
+        overlap_end = min(excluded_end, expected_end)
+
+        if overlap_start > overlap_end:
+            continue
+
+        excluded.append((overlap_start, overlap_end))
+        loss = overlap_end - overlap_start + 1
+        relevant_exclusions.append(
+            ExclusionImpact(
+                asset=excluded_scope.asset_name,
+                scope=excluded_scope.scope_item,
+                loss=loss,
+            )
+        )
+        exclusion_ip_total += loss
+
+    included = merge_intervals(included)
+    excluded = merge_intervals(excluded)
+
+    included_ip_total = sum(end - start + 1 for start, end in included)
+    net_intervals = subtract_intervals(included, excluded)
+
+    return included_ip_total, net_intervals, relevant_exclusions, exclusion_ip_total
+
+
+def calculate_coverage_result(
+    scope_item,
+    location,
+    environment,
+    required_scan,
+    expected,
+    actual_scopes,
+    actual_by_scan,
+    excluded_by_scan,
+    exclusion_impact_by_scan,
+):
+    expected_size = scope_size(expected)
+    expected_start, expected_end = scope_to_interval(expected)
+    covering_scans = collect_covering_scans(actual_scopes, expected)
+
+    relevant_exclusions = defaultdict(list)
+    cover_intervals = []
+    total_included_ips = 0
+    exclusion_ip_total = 0
+
+    for scan_name in covering_scans:
+        included_ips, net_intervals, scan_exclusions, scan_excluded_ips = (
+            calculate_scan_intervals(
+                scan_name,
+                expected,
+                expected_start,
+                expected_end,
+                actual_by_scan,
+                excluded_by_scan,
+            )
+        )
+
+        total_included_ips += included_ips
+        cover_intervals.extend(net_intervals)
+        exclusion_ip_total += scan_excluded_ips
+        if scan_excluded_ips:
+            exclusion_impact_by_scan[scan_name] += scan_excluded_ips
+
+        if scan_exclusions:
+            relevant_exclusions[scan_name].extend(scan_exclusions)
+
+    cover_intervals = merge_intervals(cover_intervals)
+    covered_count = sum(end - start + 1 for start, end in cover_intervals)
+    covered_count = min(covered_count, expected_size)
+    gap_count = max(0, expected_size - covered_count)
+    percent_lost = (
+        round((exclusion_ip_total / total_included_ips) * 100, 2)
+        if total_included_ips
+        else 0.0
+    )
+
+    status, covered, reason = determine_coverage_status(
+        covered_count, expected_size, exclusion_ip_total, relevant_exclusions
+    )
+    required_scan_value, required_scan_covered = determine_required_scan_coverage(
+        required_scan, covering_scans
+    )
+    coverage_pct = round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
+
+    return CoverageResult(
+        environment=environment,
+        location=location,
+        scope_item=scope_item,
+        expected_size=expected_size,
+        covered_count=covered_count,
+        gap_count=gap_count,
+        percent_lost=percent_lost,
+        total_included_ips=total_included_ips,
+        exclusion_ip_total=exclusion_ip_total,
+        covered=covered,
+        covering_scans=covering_scans,
+        status=status,
+        reason=reason,
+        required_scan=required_scan_value,
+        required_scan_covered=required_scan_covered,
+        coverage_pct=coverage_pct,
+    )
+
+
+def update_totals(totals, result):
+    totals["portfolio_expected_total"] += result.expected_size
+    totals["portfolio_covered_total"] += result.covered_count
+    totals["portfolio_gap_total"] += result.gap_count
+    totals["portfolio_exclusion_total"] += result.exclusion_ip_total
+    totals["portfolio_included_total"] += result.total_included_ips
+
+
+def append_coverage_result(compare_ws, compliance_ws, result):
+    compare_ws.append(
+        [
+            result.environment,
+            result.location,
+            result.scope_item,
+            result.expected_size,
+            result.covered_count,
+            result.gap_count,
+            result.percent_lost,
+            result.covered,
+            ", ".join(sorted(result.covering_scans)),
+            result.status,
+            result.reason,
+            result.required_scan,
+            result.required_scan_covered,
+        ]
+    )
+
+    compliance_ws.append(
+        [
+            result.environment,
+            result.location,
+            result.scope_item,
+            result.expected_size,
+            result.covered_count,
+            result.gap_count,
+            result.coverage_pct,
+        ]
+    )
+
+
+def analyze_expected_ranges(
+    workbook, expected_scope_file, actual_scopes, actual_by_scan, excluded_by_scan
+):
+    compare_ws = None
+    compliance_ws = None
+    exclusion_impact_by_scan = defaultdict(int)
+    totals = build_totals()
+
+    if not expected_scope_file:
+        LOGGER.info(
+            "No expected scope workbook selected; skipping expected-vs-actual analysis"
+        )
+        return compare_ws, compliance_ws, exclusion_impact_by_scan, totals
+
+    from openpyxl import load_workbook
+
+    expected_wb = load_workbook(expected_scope_file)
+    expected_ws = resolve_expected_sheet(expected_wb)
+    compare_ws, compliance_ws = build_expected_analysis_sheets(workbook)
 
     for row_index, row in enumerate(
         expected_ws.iter_rows(min_row=2, values_only=True), start=2
@@ -398,146 +660,18 @@ def analyze_expected_ranges(
             )
             continue
 
-        expected_size = scope_size(expected)
-        expected_start, expected_end = scope_to_interval(expected)
-
-        full_cover_scans = set()
-        partial_scans = set()
-
-        for actual_scope in actual_scopes:
-            if scope_contains(actual_scope.parsed, expected):
-                full_cover_scans.add(actual_scope.scan_name)
-            elif scope_intersects(actual_scope.parsed, expected):
-                partial_scans.add(actual_scope.scan_name)
-
-        covering_scans = full_cover_scans.union(partial_scans)
-
-        relevant_exclusions = defaultdict(list)
-        cover_intervals = []
-        total_included_ips = 0
-        exclusion_ip_total = 0
-
-        for scan_name in covering_scans:
-            included = []
-            excluded = []
-
-            for actual_scope in actual_by_scan[scan_name]:
-                if not scope_intersects(actual_scope.parsed, expected):
-                    continue
-
-                actual_start, actual_end = scope_to_interval(actual_scope.parsed)
-                overlap_start = max(actual_start, expected_start)
-                overlap_end = min(actual_end, expected_end)
-
-                if overlap_start <= overlap_end:
-                    included.append((overlap_start, overlap_end))
-
-            for excluded_scope in excluded_by_scan[scan_name]:
-                if not scope_intersects(excluded_scope.parsed, expected):
-                    continue
-
-                excluded_start, excluded_end = scope_to_interval(excluded_scope.parsed)
-                overlap_start = max(excluded_start, expected_start)
-                overlap_end = min(excluded_end, expected_end)
-
-                if overlap_start > overlap_end:
-                    continue
-
-                interval = (overlap_start, overlap_end)
-                excluded.append(interval)
-                loss = overlap_end - overlap_start + 1
-
-                relevant_exclusions[scan_name].append(
-                    ExclusionImpact(
-                        asset=excluded_scope.asset_name,
-                        scope=excluded_scope.scope_item,
-                        loss=loss,
-                    )
-                )
-
-                exclusion_ip_total += loss
-                exclusion_impact_by_scan[scan_name] += loss
-
-            included = merge_intervals(included)
-            excluded = merge_intervals(excluded)
-
-            total_included_ips += sum(end - start + 1 for start, end in included)
-            cover_intervals.extend(subtract_intervals(included, excluded))
-
-        cover_intervals = merge_intervals(cover_intervals)
-        covered_count = sum(end - start + 1 for start, end in cover_intervals)
-        covered_count = min(covered_count, expected_size)
-        gap_count = max(0, expected_size - covered_count)
-
-        percent_lost = (
-            round((exclusion_ip_total / total_included_ips) * 100, 2)
-            if total_included_ips
-            else 0.0
+        result = calculate_coverage_result(
+            scope_item=scope_item,
+            location=location,
+            environment=environment,
+            required_scan=required_scan,
+            expected=expected,
+            actual_scopes=actual_scopes,
+            actual_by_scan=actual_by_scan,
+            excluded_by_scan=excluded_by_scan,
+            exclusion_impact_by_scan=exclusion_impact_by_scan,
         )
-
-        totals["portfolio_expected_total"] += expected_size
-        totals["portfolio_covered_total"] += covered_count
-        totals["portfolio_gap_total"] += gap_count
-        totals["portfolio_exclusion_total"] += exclusion_ip_total
-        totals["portfolio_included_total"] += total_included_ips
-
-        if covered_count == expected_size:
-            status = STATUS_OK
-            covered = "Yes"
-            reason = "Fully contained by scan scope"
-        elif covered_count > 0:
-            status = STATUS_PARTIAL
-            covered = "Partial"
-
-            if exclusion_ip_total > 0:
-                exclusion_lines = []
-                for excluded_scan_name in sorted(relevant_exclusions):
-                    for entry in relevant_exclusions[excluded_scan_name]:
-                        exclusion_lines.append(
-                            f"{excluded_scan_name} | {entry.asset} | "
-                            f"{entry.scope} ({entry.loss} IPs)"
-                        )
-
-                reason = f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(
-                    exclusion_lines
-                )
-            else:
-                reason = "Partial coverage detected"
-        else:
-            status = STATUS_GAP
-            covered = "No"
-            reason = "No scan scope intersects expected range"
-
-        compare_ws.append(
-            [
-                environment,
-                location,
-                scope_item,
-                expected_size,
-                covered_count,
-                gap_count,
-                percent_lost,
-                covered,
-                ", ".join(sorted(covering_scans)),
-                status,
-                reason,
-            ]
-        )
-
-        coverage_pct = (
-            round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
-        )
-
-        compliance_ws.append(
-            [
-                environment,
-                location,
-                scope_item,
-                expected_size,
-                covered_count,
-                gap_count,
-                coverage_pct,
-            ]
-        )
+        update_totals(totals, result)
+        append_coverage_result(compare_ws, compliance_ws, result)
 
     return compare_ws, compliance_ws, exclusion_impact_by_scan, totals

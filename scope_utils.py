@@ -1,4 +1,8 @@
 import ipaddress
+from typing import Any
+
+
+ParsedScope = tuple[str, Any]
 
 _parsed_cache = {}
 

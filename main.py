@@ -10,30 +10,15 @@ from analysis import (
     analyze_expected_ranges,
     build_coverage_data,
     build_scope_sheets,
-    resolve_expected_sheet,
-    validate_expected_row,
 )
 from app_config import build_config
-from data_access import DataAccess, load_json_folder
+from data_access import DataAccess
 from reporting import (
     append_executive_summary,
-    auto_wrap_and_adjust,
     build_impact_sheet,
     build_warning_sheet,
     build_workbook,
-    find_column,
-    format_sheet,
     format_workbook,
-)
-from scope_utils import (
-    merge_intervals,
-    parse_scope_item,
-    scope_contains,
-    scope_intersects,
-    scope_size,
-    scope_to_interval,
-    split_scope_items,
-    subtract_intervals,
 )
 
 LOGGER = logging.getLogger(__name__)

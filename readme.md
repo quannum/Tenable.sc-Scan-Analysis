@@ -147,6 +147,7 @@ If `EXPECTED_SCOPE_FILE` is selected, the script:
 - Loads expected ranges from sheet `rsg-all`
 - Falls back to `Expected_Ranges` if `rsg-all` is not present
 - Compares expected ranges to actual scan coverage
+- Reports whether the optional `Required Scan` value is one of the scans covering each expected range
 - Performs:
     - Full containment checks
     - Partial intersection checks
@@ -219,6 +220,7 @@ Sorted by exclusion IP impact.
 | Expected_Range_Compliance  | % coverage per expected range |
 | Top_Exclusion_Impact_Scans | Exclusion-heavy scans         |
 | Executive_Summary          | Organization overview         |
+| Warnings                   | Skipped records and validation warnings, when present |
 
 ------
 
@@ -284,6 +286,14 @@ Optional CLI arguments can be used instead of the file pickers:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
 
+To skip expected-vs-actual analysis intentionally:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope`
+
+Live mode does not require offline JSON directory arguments:
+
+`python main.py --mode live --expected-scope-file C:\expected.xlsx`
+
 Output:
 
 output\tenable_scan_summary_v7.xlsx
@@ -300,9 +310,9 @@ Run the scope and interval math tests with:
 
 `python -m unittest test_scope_math.py`
 
-Run the end-to-end fixture test with:
+Run the full test suite with:
 
-`python -m unittest test_end_to_end.py`
+`python -m unittest test_scope_math.py test_end_to_end.py test_app_config.py`
 
 
 ------
@@ -348,7 +358,7 @@ Excel Reporting
 - Environment detection is name-based
 - No native support for IPv6
 - No automatic deduplication of overlapping expected ranges
-- Required Scan column is currently informational only
+- Required Scan matching is name-based
 
 ------
 
@@ -356,7 +366,6 @@ Excel Reporting
 - IPAM integration
 - Environment tagging via metadata
 - VLAN/CIDR containment validation
-- CLI argument support
 - GitOps integration
 - CMDB pipeline validation
 

@@ -1,12 +1,19 @@
 import json
 import shutil
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
 import main
 from app_config import Config
+from constants import (
+    SHEET_EXECUTIVE_SUMMARY,
+    SHEET_EXPECTED_VS_ACTUAL,
+    SHEET_WARNINGS,
+)
 
 
 class EndToEndTests(unittest.TestCase):
@@ -49,8 +56,8 @@ class EndToEndTests(unittest.TestCase):
             expected_ws = expected_wb.active
             expected_ws.title = "rsg-all"
             expected_ws.append(["Scope Item", "Location", "Environment", "Required Scan"])
-            expected_ws.append(["10.0.0.0/24", "HQ", "Prod", ""])
-            expected_ws.append(["10.0.1.0/25", "HQ", "Prod", ""])
+            expected_ws.append(["10.0.0.0/24", "HQ", "Prod", "Weekly Network Scan"])
+            expected_ws.append(["10.0.1.0/25", "HQ", "Prod", "Missing Scan"])
             expected_wb.save(expected_file)
 
             config = Config(
@@ -70,28 +77,33 @@ class EndToEndTests(unittest.TestCase):
                 log_level="INFO",
             )
 
-            collector = main.configure_logging("INFO")
-            result_path = main.run_analysis(config, warning_records=collector.records)
+            with patch("sys.stderr", new=StringIO()):
+                collector = main.configure_logging("INFO")
+                result_path = main.run_analysis(config, warning_records=collector.records)
 
             self.assertEqual(result_path, output_file)
             self.assertTrue(output_file.exists())
 
             workbook = load_workbook(output_file)
-            self.assertIn("Expected_vs_Actual", workbook.sheetnames)
-            self.assertIn("Executive_Summary", workbook.sheetnames)
-            self.assertIn("Warnings", workbook.sheetnames)
+            self.assertIn(SHEET_EXPECTED_VS_ACTUAL, workbook.sheetnames)
+            self.assertIn(SHEET_EXECUTIVE_SUMMARY, workbook.sheetnames)
+            self.assertIn(SHEET_WARNINGS, workbook.sheetnames)
 
-            compare_ws = workbook["Expected_vs_Actual"]
+            compare_ws = workbook[SHEET_EXPECTED_VS_ACTUAL]
             self.assertEqual(compare_ws["J2"].value, "OK")
             self.assertEqual(compare_ws["J3"].value, "OK")
+            self.assertEqual(compare_ws["L2"].value, "Weekly Network Scan")
+            self.assertEqual(compare_ws["M2"].value, "Yes")
+            self.assertEqual(compare_ws["L3"].value, "Missing Scan")
+            self.assertEqual(compare_ws["M3"].value, "No")
 
-            exec_ws = workbook["Executive_Summary"]
+            exec_ws = workbook[SHEET_EXECUTIVE_SUMMARY]
             self.assertEqual(exec_ws["A2"].value, "Total Expected IPs")
             self.assertEqual(exec_ws["B2"].value, 384)
             self.assertEqual(exec_ws["B3"].value, 384)
             self.assertEqual(exec_ws["B4"].value, 0)
 
-            warning_ws = workbook["Warnings"]
+            warning_ws = workbook[SHEET_WARNINGS]
             warning_messages = [row[2] for row in warning_ws.iter_rows(min_row=2, values_only=True)]
             self.assertTrue(
                 any("Skipping unreadable JSON file" in message for message in warning_messages)
