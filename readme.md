@@ -6,14 +6,13 @@ This script extracts scan scope definitions from Tenable Security Center and pro
 
 - Enumerates all scan scope definitions with union operator logic (exclusion-aware)
 - Normalizes CIDR and IP ranges
-- Builds a scan-to-scope coverage matrix
 - Compares actual scan coverage against expected IP ranges
 - Calculates per-range compliance metrics
 - Highlights coverage gaps and partial coverage
 
 The output is a consolidated workbook:
 
-tenable_scan_scope_summary.xlsx
+output\tenable_scan_summary_v7.xlsx
 
 
 ------
@@ -124,11 +123,11 @@ Internally converted to interval math for coverage calculations.
 
 ------
 
-## 5. Coverage Matrix (DEFUNCT)
+## 5. Coverage Matrix (Disabled)
 
-* I commented this section out because it didn't turn out particularly useful
+The old matrix experiment is currently disabled in the script and is not generated in the workbook.
 
-Creates a 2D matrix:
+It previously created a 2D matrix like:
 
 Scope Item	Scan A	Scan B	Scan C
 10.0.0.0/24	I		E
@@ -144,8 +143,9 @@ Exclusions override inclusions.
 
 ## 6. Expected vs Actual Coverage Analysis
 
-If EXPECTED_SCOPE_FILE is defined, the script:
-- Loads expected ranges from sheet: Expected_Ranges (e.g., IP address tracker export)
+If `EXPECTED_SCOPE_FILE` is selected, the script:
+- Loads expected ranges from sheet `rsg-all`
+- Falls back to `Expected_Ranges` if `rsg-all` is not present
 - Compares expected ranges to actual scan coverage
 - Performs:
     - Full containment checks
@@ -215,7 +215,6 @@ Sorted by exclusion IP impact.
 | -------------------------- | ----------------------------- |
 | Scan_Scope_Summary         | Raw scan scope definitions    |
 | Scan_Scope_Normalized      | One row per scope item        |
-| Coverage_Matrix            | Scan-to-scope mapping         |
 | Expected_vs_Actual         | Coverage analysis             |
 | Expected_Range_Compliance  | % coverage per expected range |
 | Top_Exclusion_Impact_Scans | Exclusion-heavy scans         |
@@ -226,11 +225,11 @@ Sorted by exclusion IP impact.
 # Expected Scope File Format
 
 Workbook: expected_scope.xlsx
-Sheet: Expected_Ranges
+Sheet: `rsg-all` or `Expected_Ranges`
 
-Minimum required columns:
+Minimum required columns, in order:
 
-Scope Item	Location Environment
+`Scope Item | Location | Environment | Required Scan`
 
 
 Scope Item supports:
@@ -244,10 +243,10 @@ Scope Item supports:
 
 MODE = "offline"
 
-SCAN_JSON_DIR = Path("C:\\Scans\\")
-ASSET_JSON_DIR = Path("C:\\AssetGroups\\")
+SCAN_JSON_DIR = chosen via file picker
+ASSET_JSON_DIR = chosen via file picker
 
-EXPECTED_SCOPE_FILE = "expected_scope.xlsx"
+EXPECTED_SCOPE_FILE = chosen via file picker
 
 SC_ACCESS_KEY = ""
 SC_SECRET_KEY = ""
@@ -266,23 +265,35 @@ Environment and location columns are gathered from IP address tracker data (expe
 # Dependencies
 - Python 3.9+
 - openpyxl
+- python-dotenv
 - ipaddress
 - tenable.sc (only required for live mode)
 
 Install:
 
-pip install openpyxl tenable.sc
+pip install openpyxl python-dotenv tenable.sc
 
 
 ------
 
 # Execution
 
-python pytenable-scan-scope-summary.py
+python tenable-sc-scan-coverage-analysis.py
 
 Output:
 
-tenable_scan_scope_summary.xlsx
+output\tenable_scan_summary_v7.xlsx
+
+Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
+
+
+------
+
+# Testing
+
+Run the scope and interval math tests with:
+
+`python -m unittest test_scope_math.py`
 
 
 ------
@@ -294,8 +305,6 @@ Scan Extraction
 Scan Filtering (if applicable)
       ↓
 Scope Normalization
-      ↓
-Matrix Construction
       ↓
 Coverage Analytics
       ↓
@@ -313,6 +322,7 @@ Excel Reporting
 - Exclusion aware coverage logic
 - Full containment and partial coverage are differentiated
 - Excel formatting is applied programmatically
+- Invalid JSON records and malformed scope values are skipped with warnings instead of aborting the run
 
 ------
 
