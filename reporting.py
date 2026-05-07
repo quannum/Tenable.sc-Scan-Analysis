@@ -1,10 +1,14 @@
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
 from constants import (
     EXCLUDE,
+    GRAY,
+    GREEN,
+    HEADER_FONT,
     INCLUDE,
+    RED,
     SHEET_EXECUTIVE_SUMMARY,
     SHEET_SCAN_SCOPE_NORMALIZED,
     SHEET_SCAN_SCOPE_SUMMARY,
@@ -13,13 +17,8 @@ from constants import (
     STATUS_GAP,
     STATUS_OK,
     STATUS_PARTIAL,
+    YELLOW,
 )
-
-HEADER_FONT = Font(bold=True)
-GREEN = PatternFill("solid", fgColor="C6EFCE")
-YELLOW = PatternFill("solid", fgColor="FFEB9C")
-RED = PatternFill("solid", fgColor="F4CCCC")
-GRAY = PatternFill("solid", fgColor="E7E6E6")
 
 
 def build_workbook():
@@ -48,42 +47,42 @@ def append_executive_summary(workbook, totals):
 
     overall_coverage_pct = (
         round(
-            (totals["portfolio_covered_total"] / totals["portfolio_expected_total"])
+            (totals.portfolio_covered_total / totals.portfolio_expected_total)
             * 100,
             2,
         )
-        if totals["portfolio_expected_total"]
+        if totals.portfolio_expected_total
         else 0.0
     )
 
     portfolio_exclusion_loss_pct = (
         round(
-            (totals["portfolio_exclusion_total"] / totals["portfolio_included_total"])
+            (totals.portfolio_exclusion_total / totals.portfolio_included_total)
             * 100,
             2,
         )
-        if totals["portfolio_included_total"]
+        if totals.portfolio_included_total
         else 0.0
     )
 
     exec_ws.append(
         [
             "Total Expected IPs",
-            totals["portfolio_expected_total"],
+            totals.portfolio_expected_total,
             "Number of IP addresses from expected ranges (Global IP Address Trackers)",
         ]
     )
     exec_ws.append(
         [
             "Total Net Covered IPs",
-            totals["portfolio_covered_total"],
+            totals.portfolio_covered_total,
             "Number of IP addresses covered by scans",
         ]
     )
     exec_ws.append(
         [
             "Total Gap IPs",
-            totals["portfolio_gap_total"],
+            totals.portfolio_gap_total,
             "Number of IP addresses not covered by scans",
         ]
     )
@@ -97,7 +96,7 @@ def append_executive_summary(workbook, totals):
     exec_ws.append(
         [
             "Total IPs Lost Due To Exclusions",
-            totals["portfolio_exclusion_total"],
+            totals.portfolio_exclusion_total,
             "Number of IP addresses excluded in scans",
         ]
     )

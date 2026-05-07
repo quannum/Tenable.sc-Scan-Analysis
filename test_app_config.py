@@ -1,11 +1,21 @@
 import unittest
+from datetime import datetime
 from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 import app_config
+from constants import default_output_file
 
 
 class AppConfigTests(unittest.TestCase):
+    def test_default_output_file_includes_date_and_time(self):
+        output_file = default_output_file(datetime(2026, 5, 7, 13, 2, 3))
+        self.assertEqual(
+            str(output_file),
+            str(Path("output") / "tenable_scan_summary-20260507-130203.xlsx"),
+        )
+
     def test_live_mode_with_no_expected_scope_does_not_prompt(self):
         with patch("app_config.prompt_for_inputs") as prompt_for_inputs:
             config = app_config.build_config(["--mode", "live", "--no-expected-scope"])

@@ -12,7 +12,7 @@ This script extracts scan scope definitions from Tenable Security Center and pro
 
 The output is a consolidated workbook:
 
-output\tenable_scan_summary_v7.xlsx
+output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
 
 
 ------
@@ -296,7 +296,9 @@ Live mode does not require offline JSON directory arguments:
 
 Output:
 
-output\tenable_scan_summary_v7.xlsx
+output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
+
+The default filename includes the run date and time to avoid overwriting earlier reports from the same day.
 
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
 If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
@@ -312,7 +314,7 @@ Run the scope and interval math tests with:
 
 Run the full test suite with:
 
-`python -m unittest test_scope_math.py test_end_to_end.py test_app_config.py`
+`python -m unittest test_scope_math.py test_analysis.py test_end_to_end.py test_app_config.py`
 
 
 ------

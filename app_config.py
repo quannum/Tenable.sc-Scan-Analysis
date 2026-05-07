@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from constants import DEFAULT_OUTPUT_FILE
+from constants import default_output_file
 from ui import prompt_for_inputs
 
 
@@ -90,7 +90,7 @@ def build_config(argv=None):
     output_file = (
         Path(args.output_file)
         if args.output_file
-        else DEFAULT_OUTPUT_FILE
+        else default_output_file()
     )
 
     if scan_json_dir:

@@ -70,6 +70,15 @@ class CoverageResult:
     coverage_pct: float
 
 
+@dataclass
+class Totals:
+    portfolio_expected_total: int = 0
+    portfolio_covered_total: int = 0
+    portfolio_gap_total: int = 0
+    portfolio_exclusion_total: int = 0
+    portfolio_included_total: int = 0
+
+
 def filter_scans(scans, config):
     if (
         not config.include_keywords
@@ -382,13 +391,7 @@ def build_expected_analysis_sheets(workbook):
 
 
 def build_totals():
-    return {
-        "portfolio_expected_total": 0,
-        "portfolio_covered_total": 0,
-        "portfolio_gap_total": 0,
-        "portfolio_exclusion_total": 0,
-        "portfolio_included_total": 0,
-    }
+    return Totals()
 
 
 def determine_required_scan_coverage(required_scan, covering_scans):
@@ -579,11 +582,11 @@ def calculate_coverage_result(
 
 
 def update_totals(totals, result):
-    totals["portfolio_expected_total"] += result.expected_size
-    totals["portfolio_covered_total"] += result.covered_count
-    totals["portfolio_gap_total"] += result.gap_count
-    totals["portfolio_exclusion_total"] += result.exclusion_ip_total
-    totals["portfolio_included_total"] += result.total_included_ips
+    totals.portfolio_expected_total += result.expected_size
+    totals.portfolio_covered_total += result.covered_count
+    totals.portfolio_gap_total += result.gap_count
+    totals.portfolio_exclusion_total += result.exclusion_ip_total
+    totals.portfolio_included_total += result.total_included_ips
 
 
 def append_coverage_result(compare_ws, compliance_ws, result):
