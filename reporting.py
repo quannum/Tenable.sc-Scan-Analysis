@@ -2,11 +2,18 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-STATUS_OK = "OK"
-STATUS_PARTIAL = "PARTIAL"
-STATUS_GAP = "GAP"
-INCLUDE = "Include"
-EXCLUDE = "Exclude"
+from constants import (
+    EXCLUDE,
+    INCLUDE,
+    SHEET_EXECUTIVE_SUMMARY,
+    SHEET_SCAN_SCOPE_NORMALIZED,
+    SHEET_SCAN_SCOPE_SUMMARY,
+    SHEET_TOP_EXCLUSION_IMPACT,
+    SHEET_WARNINGS,
+    STATUS_GAP,
+    STATUS_OK,
+    STATUS_PARTIAL,
+)
 
 HEADER_FONT = Font(bold=True)
 GREEN = PatternFill("solid", fgColor="C6EFCE")
@@ -17,8 +24,8 @@ GRAY = PatternFill("solid", fgColor="E7E6E6")
 
 def build_workbook():
     workbook = Workbook()
-    scope_ws = workbook.create_sheet("Scan_Scope_Summary")
-    normalized_ws = workbook.create_sheet("Scan_Scope_Normalized")
+    scope_ws = workbook.create_sheet(SHEET_SCAN_SCOPE_SUMMARY)
+    normalized_ws = workbook.create_sheet(SHEET_SCAN_SCOPE_NORMALIZED)
     workbook.remove(workbook["Sheet"])
 
     scope_ws.append(
@@ -36,7 +43,7 @@ def build_workbook():
 
 
 def append_executive_summary(workbook, totals):
-    exec_ws = workbook.create_sheet("Executive_Summary")
+    exec_ws = workbook.create_sheet(SHEET_EXECUTIVE_SUMMARY)
     exec_ws.append(["Metric", "Value", "Note"])
 
     overall_coverage_pct = (
@@ -107,7 +114,7 @@ def append_executive_summary(workbook, totals):
 
 
 def build_impact_sheet(workbook, exclusion_impact_by_scan):
-    impact_ws = workbook.create_sheet("Top_Exclusion_Impact_Scans")
+    impact_ws = workbook.create_sheet(SHEET_TOP_EXCLUSION_IMPACT)
     impact_ws.append(["Scan Name", "Total IPs Excluded"])
 
     for scan_name, total in sorted(
@@ -122,7 +129,7 @@ def build_warning_sheet(workbook, warning_records):
     if not warning_records:
         return None
 
-    warning_ws = workbook.create_sheet("Warnings")
+    warning_ws = workbook.create_sheet(SHEET_WARNINGS)
     warning_ws.append(["Level", "Logger", "Message"])
 
     for record in warning_records:

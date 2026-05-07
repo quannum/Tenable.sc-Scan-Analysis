@@ -1,6 +1,17 @@
 import logging
 from collections import defaultdict
+from dataclasses import dataclass
 
+from constants import (
+    DEFAULT_EXPECTED_SHEET,
+    EXCLUDE,
+    INCLUDE,
+    SHEET_EXPECTED_RANGE_COMPLIANCE,
+    SHEET_EXPECTED_VS_ACTUAL,
+    STATUS_GAP,
+    STATUS_OK,
+    STATUS_PARTIAL,
+)
 from scope_utils import (
     merge_intervals,
     parse_scope_item,
@@ -14,14 +25,27 @@ from scope_utils import (
 
 LOGGER = logging.getLogger(__name__)
 
-INCLUDE = "Include"
-EXCLUDE = "Exclude"
 
-STATUS_OK = "OK"
-STATUS_PARTIAL = "PARTIAL"
-STATUS_GAP = "GAP"
+@dataclass(frozen=True)
+class ScopeRecord:
+    parsed: tuple
+    scan_name: str
+    scope_item: str
 
-DEFAULT_EXPECTED_SHEET = "rsg-all"
+
+@dataclass(frozen=True)
+class ExcludedScopeRecord:
+    parsed: tuple
+    scan_name: str
+    asset_name: str
+    scope_item: str
+
+
+@dataclass(frozen=True)
+class ExclusionImpact:
+    asset: str
+    scope: str
+    loss: int
 
 
 def filter_scans(scans, config):
@@ -250,11 +274,16 @@ def build_coverage_data(normalized_ws):
             continue
 
         if inclusion_type == INCLUDE:
-            entry = (parsed, scan_name, scope_item)
+            entry = ScopeRecord(parsed=parsed, scan_name=scan_name, scope_item=scope_item)
             actual_scopes.append(entry)
             actual_by_scan[scan_name].append(entry)
         elif inclusion_type == EXCLUDE:
-            entry = (parsed, scan_name, asset_name, scope_item)
+            entry = ExcludedScopeRecord(
+                parsed=parsed,
+                scan_name=scan_name,
+                asset_name=asset_name,
+                scope_item=scope_item,
+            )
             excluded_scopes.append(entry)
             excluded_by_scan[scan_name].append(entry)
 
@@ -317,7 +346,7 @@ def analyze_expected_ranges(
     expected_wb = load_workbook(expected_scope_file)
     expected_ws = resolve_expected_sheet(expected_wb)
 
-    compare_ws = workbook.create_sheet("Expected_vs_Actual")
+    compare_ws = workbook.create_sheet(SHEET_EXPECTED_VS_ACTUAL)
     compare_ws.append(
         [
             "Environment",
@@ -334,7 +363,7 @@ def analyze_expected_ranges(
         ]
     )
 
-    compliance_ws = workbook.create_sheet("Expected_Range_Compliance")
+    compliance_ws = workbook.create_sheet(SHEET_EXPECTED_RANGE_COMPLIANCE)
     compliance_ws.append(
         [
             "Environment",
@@ -375,11 +404,11 @@ def analyze_expected_ranges(
         full_cover_scans = set()
         partial_scans = set()
 
-        for actual, scan_name, raw in actual_scopes:
-            if scope_contains(actual, expected):
-                full_cover_scans.add(scan_name)
-            elif scope_intersects(actual, expected):
-                partial_scans.add(scan_name)
+        for actual_scope in actual_scopes:
+            if scope_contains(actual_scope.parsed, expected):
+                full_cover_scans.add(actual_scope.scan_name)
+            elif scope_intersects(actual_scope.parsed, expected):
+                partial_scans.add(actual_scope.scan_name)
 
         covering_scans = full_cover_scans.union(partial_scans)
 
@@ -392,22 +421,22 @@ def analyze_expected_ranges(
             included = []
             excluded = []
 
-            for actual, _, raw in actual_by_scan[scan_name]:
-                if not scope_intersects(actual, expected):
+            for actual_scope in actual_by_scan[scan_name]:
+                if not scope_intersects(actual_scope.parsed, expected):
                     continue
 
-                actual_start, actual_end = scope_to_interval(actual)
+                actual_start, actual_end = scope_to_interval(actual_scope.parsed)
                 overlap_start = max(actual_start, expected_start)
                 overlap_end = min(actual_end, expected_end)
 
                 if overlap_start <= overlap_end:
                     included.append((overlap_start, overlap_end))
 
-            for excluded_scope, _, asset_name, raw in excluded_by_scan[scan_name]:
-                if not scope_intersects(excluded_scope, expected):
+            for excluded_scope in excluded_by_scan[scan_name]:
+                if not scope_intersects(excluded_scope.parsed, expected):
                     continue
 
-                excluded_start, excluded_end = scope_to_interval(excluded_scope)
+                excluded_start, excluded_end = scope_to_interval(excluded_scope.parsed)
                 overlap_start = max(excluded_start, expected_start)
                 overlap_end = min(excluded_end, expected_end)
 
@@ -419,7 +448,11 @@ def analyze_expected_ranges(
                 loss = overlap_end - overlap_start + 1
 
                 relevant_exclusions[scan_name].append(
-                    {"asset": asset_name, "scope": raw, "loss": loss}
+                    ExclusionImpact(
+                        asset=excluded_scope.asset_name,
+                        scope=excluded_scope.scope_item,
+                        loss=loss,
+                    )
                 )
 
                 exclusion_ip_total += loss
@@ -461,8 +494,8 @@ def analyze_expected_ranges(
                 for excluded_scan_name in sorted(relevant_exclusions):
                     for entry in relevant_exclusions[excluded_scan_name]:
                         exclusion_lines.append(
-                            f"{excluded_scan_name} | {entry['asset']} | "
-                            f"{entry['scope']} ({entry['loss']} IPs)"
+                            f"{excluded_scan_name} | {entry.asset} | "
+                            f"{entry.scope} ({entry.loss} IPs)"
                         )
 
                 reason = f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(
