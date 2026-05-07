@@ -2,7 +2,6 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).with_name("main.py")
 SPEC = importlib.util.spec_from_file_location("scan_coverage_analysis", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)

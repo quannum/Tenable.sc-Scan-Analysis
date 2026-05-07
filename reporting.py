@@ -2,7 +2,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-
 STATUS_OK = "OK"
 STATUS_PARTIAL = "PARTIAL"
 STATUS_GAP = "GAP"
@@ -23,7 +22,13 @@ def build_workbook():
     workbook.remove(workbook["Sheet"])
 
     scope_ws.append(
-        ["Scan Name", "Inclusion Type", "Source Type", "Source Name", "Scope Definition"]
+        [
+            "Scan Name",
+            "Inclusion Type",
+            "Source Type",
+            "Source Name",
+            "Scope Definition",
+        ]
     )
     normalized_ws.append(["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"])
 
@@ -35,14 +40,19 @@ def append_executive_summary(workbook, totals):
     exec_ws.append(["Metric", "Value", "Note"])
 
     overall_coverage_pct = (
-        round((totals["portfolio_covered_total"] / totals["portfolio_expected_total"]) * 100, 2)
+        round(
+            (totals["portfolio_covered_total"] / totals["portfolio_expected_total"])
+            * 100,
+            2,
+        )
         if totals["portfolio_expected_total"]
         else 0.0
     )
 
     portfolio_exclusion_loss_pct = (
         round(
-            (totals["portfolio_exclusion_total"] / totals["portfolio_included_total"]) * 100,
+            (totals["portfolio_exclusion_total"] / totals["portfolio_included_total"])
+            * 100,
             2,
         )
         if totals["portfolio_included_total"]
@@ -130,7 +140,9 @@ def auto_wrap_and_adjust(ws, column_name):
         ws.row_dimensions[cell.row].height = 15 * line_count
 
 
-def format_sheet(ws, status_col=None, include_exclude_col=None, percent_col=None, value_col=None):
+def format_sheet(
+    ws, status_col=None, include_exclude_col=None, percent_col=None, value_col=None
+):
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
 
@@ -191,12 +203,16 @@ def format_sheet(ws, status_col=None, include_exclude_col=None, percent_col=None
                     else:
                         target_cell.fill = RED
 
-            if metric_cell.value == "Total Gap IPs" and isinstance(target_cell.value, (int, float)):
+            if metric_cell.value == "Total Gap IPs" and isinstance(
+                target_cell.value, (int, float)
+            ):
                 if target_cell.value > 0:
                     target_cell.fill = RED
 
 
-def format_workbook(scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws):
+def format_workbook(
+    scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws
+):
     format_sheet(scope_ws, include_exclude_col=find_column(scope_ws, "Inclusion Type"))
 
     if compare_ws:
@@ -204,7 +220,9 @@ def format_workbook(scope_ws, normalized_ws, compare_ws, compliance_ws, impact_w
         auto_wrap_and_adjust(compare_ws, "Reason")
 
     if compliance_ws:
-        format_sheet(compliance_ws, percent_col=find_column(compliance_ws, "Coverage %"))
+        format_sheet(
+            compliance_ws, percent_col=find_column(compliance_ws, "Coverage %")
+        )
 
     format_sheet(impact_ws)
     format_sheet(exec_ws, value_col=find_column(exec_ws, "Value"))

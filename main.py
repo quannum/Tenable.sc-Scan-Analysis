@@ -35,7 +35,6 @@ from scope_utils import (
     subtract_intervals,
 )
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -53,21 +52,25 @@ def main():
     workbook, scope_ws, normalized_ws = build_workbook()
 
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
-    actual_scopes, excluded_scopes, actual_by_scan, excluded_by_scan = build_coverage_data(
-        normalized_ws
+    actual_scopes, excluded_scopes, actual_by_scan, excluded_by_scan = (
+        build_coverage_data(normalized_ws)
     )
 
-    compare_ws, compliance_ws, exclusion_impact_by_scan, totals = analyze_expected_ranges(
-        workbook,
-        config.expected_scope_file,
-        actual_scopes,
-        actual_by_scan,
-        excluded_by_scan,
+    compare_ws, compliance_ws, exclusion_impact_by_scan, totals = (
+        analyze_expected_ranges(
+            workbook,
+            config.expected_scope_file,
+            actual_scopes,
+            actual_by_scan,
+            excluded_by_scan,
+        )
     )
 
     impact_ws = build_impact_sheet(workbook, exclusion_impact_by_scan)
     exec_ws = append_executive_summary(workbook, totals)
-    format_workbook(scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws)
+    format_workbook(
+        scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws
+    )
 
     config.output_file.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(config.output_file)

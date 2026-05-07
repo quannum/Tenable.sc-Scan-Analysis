@@ -12,7 +12,6 @@ from scope_utils import (
     subtract_intervals,
 )
 
-
 LOGGER = logging.getLogger(__name__)
 
 INCLUDE = "Include"
@@ -69,12 +68,18 @@ def filter_scans(scans, config):
         include_pass = True
         if include_keywords:
             if config.match_all_include:
-                include_pass = all(keyword in compare_name for keyword in include_keywords)
+                include_pass = all(
+                    keyword in compare_name for keyword in include_keywords
+                )
             else:
-                include_pass = any(keyword in compare_name for keyword in include_keywords)
+                include_pass = any(
+                    keyword in compare_name for keyword in include_keywords
+                )
 
         exclude_pass = True
-        if exclude_keywords and any(keyword in compare_name for keyword in exclude_keywords):
+        if exclude_keywords and any(
+            keyword in compare_name for keyword in exclude_keywords
+        ):
             exclude_pass = False
 
         if include_pass and exclude_pass:
@@ -87,12 +92,16 @@ def filter_scans(scans, config):
     return filtered
 
 
-def normalize_scope(normalized_ws, scan_name, asset_name, inclusion_type, defined_string):
+def normalize_scope(
+    normalized_ws, scan_name, asset_name, inclusion_type, defined_string
+):
     for scope_item in split_scope_items(defined_string):
         normalized_ws.append([scan_name, asset_name, inclusion_type, scope_item])
 
 
-def walk_combination(node, scan_name, scope_ws, normalized_ws, data_access, in_complement=False):
+def walk_combination(
+    node, scan_name, scope_ws, normalized_ws, data_access, in_complement=False
+):
     if not isinstance(node, dict):
         return
 
@@ -120,7 +129,9 @@ def walk_combination(node, scan_name, scope_ws, normalized_ws, data_access, in_c
 
         if defined:
             scope_ws.append([scan_name, inclusion_type, "Asset", asset_name, defined])
-            normalize_scope(normalized_ws, scan_name, asset_name, inclusion_type, defined)
+            normalize_scope(
+                normalized_ws, scan_name, asset_name, inclusion_type, defined
+            )
         else:
             LOGGER.warning(
                 "Combination asset '%s' on scan '%s' has no defined IPs",
@@ -169,12 +180,16 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
         for asset_ref in details.get("assets", []):
             asset_id = asset_ref.get("id")
             if asset_id in (None, ""):
-                LOGGER.warning("Scan '%s' contains asset reference without id", scan_name)
+                LOGGER.warning(
+                    "Scan '%s' contains asset reference without id", scan_name
+                )
                 continue
 
             asset = data_access.get_asset(asset_id)
             if not asset:
-                LOGGER.warning("Scan '%s' references missing asset id '%s'", scan_name, asset_id)
+                LOGGER.warning(
+                    "Scan '%s' references missing asset id '%s'", scan_name, asset_id
+                )
                 continue
 
             asset_type = asset.get("type")
@@ -185,7 +200,9 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
                 if defined:
                     scope_ws.append([scan_name, INCLUDE, "Asset", asset_name, defined])
-                    normalize_scope(normalized_ws, scan_name, asset_name, INCLUDE, defined)
+                    normalize_scope(
+                        normalized_ws, scan_name, asset_name, INCLUDE, defined
+                    )
                 else:
                     LOGGER.warning(
                         "Static asset '%s' on scan '%s' has no defined IPs",
@@ -274,7 +291,9 @@ def validate_expected_row(row):
     return scope_item, location, environment, required_scan
 
 
-def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual_by_scan, excluded_by_scan):
+def analyze_expected_ranges(
+    workbook, expected_scope_file, actual_scopes, actual_by_scan, excluded_by_scan
+):
     compare_ws = None
     compliance_ws = None
     exclusion_impact_by_scan = defaultdict(int)
@@ -288,7 +307,9 @@ def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual
     }
 
     if not expected_scope_file:
-        LOGGER.info("No expected scope workbook selected; skipping expected-vs-actual analysis")
+        LOGGER.info(
+            "No expected scope workbook selected; skipping expected-vs-actual analysis"
+        )
         return compare_ws, compliance_ws, exclusion_impact_by_scan, totals
 
     from openpyxl import load_workbook
@@ -326,7 +347,9 @@ def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual
         ]
     )
 
-    for row_index, row in enumerate(expected_ws.iter_rows(min_row=2, values_only=True), start=2):
+    for row_index, row in enumerate(
+        expected_ws.iter_rows(min_row=2, values_only=True), start=2
+    ):
         try:
             validated_row = validate_expected_row(row)
         except ValueError as exc:
@@ -341,7 +364,9 @@ def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual
         try:
             expected = parse_scope_item(scope_item)
         except ValueError as exc:
-            LOGGER.warning("Skipping invalid expected scope in row %s: %s", row_index, exc)
+            LOGGER.warning(
+                "Skipping invalid expected scope in row %s: %s", row_index, exc
+            )
             continue
 
         expected_size = scope_size(expected)
@@ -440,7 +465,9 @@ def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual
                             f"{entry['scope']} ({entry['loss']} IPs)"
                         )
 
-                reason = f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(exclusion_lines)
+                reason = f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(
+                    exclusion_lines
+                )
             else:
                 reason = "Partial coverage detected"
         else:
@@ -464,7 +491,9 @@ def analyze_expected_ranges(workbook, expected_scope_file, actual_scopes, actual
             ]
         )
 
-        coverage_pct = round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
+        coverage_pct = (
+            round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
+        )
 
         compliance_ws.append(
             [

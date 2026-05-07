@@ -1,6 +1,5 @@
 import ipaddress
 
-
 _parsed_cache = {}
 
 
@@ -55,7 +54,10 @@ def scope_contains(actual, expected):
         )
 
     if actual_type == "range" and expected_type == "range":
-        return actual_value[0] <= expected_value[0] and actual_value[1] >= expected_value[1]
+        return (
+            actual_value[0] <= expected_value[0]
+            and actual_value[1] >= expected_value[1]
+        )
 
     return False
 
