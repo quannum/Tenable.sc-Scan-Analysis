@@ -118,6 +118,21 @@ def build_impact_sheet(workbook, exclusion_impact_by_scan):
     return impact_ws
 
 
+def build_warning_sheet(workbook, warning_records):
+    if not warning_records:
+        return None
+
+    warning_ws = workbook.create_sheet("Warnings")
+    warning_ws.append(["Level", "Logger", "Message"])
+
+    for record in warning_records:
+        warning_ws.append(
+            [record.get("level"), record.get("logger"), record.get("message")]
+        )
+
+    return warning_ws
+
+
 def find_column(ws, header_name):
     for idx, cell in enumerate(ws[1], start=1):
         if cell.value == header_name:
@@ -211,7 +226,7 @@ def format_sheet(
 
 
 def format_workbook(
-    scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws
+    scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws, warning_ws=None
 ):
     format_sheet(scope_ws, include_exclude_col=find_column(scope_ws, "Inclusion Type"))
 
@@ -226,5 +241,7 @@ def format_workbook(
 
     format_sheet(impact_ws)
     format_sheet(exec_ws, value_col=find_column(exec_ws, "Value"))
+    if warning_ws:
+        format_sheet(warning_ws)
 
     normalized_ws.sheet_state = "hidden"

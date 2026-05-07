@@ -280,11 +280,16 @@ pip install openpyxl python-dotenv tenable.sc
 
 python main.py
 
+Optional CLI arguments can be used instead of the file pickers:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
+
 Output:
 
 output\tenable_scan_summary_v7.xlsx
 
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
+If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
 
 
 ------
@@ -294,6 +299,10 @@ Console output includes `INFO` and `WARNING` messages for skipped records, inval
 Run the scope and interval math tests with:
 
 `python -m unittest test_scope_math.py`
+
+Run the end-to-end fixture test with:
+
+`python -m unittest test_end_to_end.py`
 
 
 ------

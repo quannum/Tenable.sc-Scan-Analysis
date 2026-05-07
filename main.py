@@ -19,6 +19,7 @@ from reporting import (
     append_executive_summary,
     auto_wrap_and_adjust,
     build_impact_sheet,
+    build_warning_sheet,
     build_workbook,
     find_column,
     format_sheet,
@@ -38,16 +39,30 @@ from scope_utils import (
 LOGGER = logging.getLogger(__name__)
 
 
+class WarningCollector(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(
+            {
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
+        )
+
+
 def configure_logging(level_name):
     level = getattr(logging, str(level_name).upper(), logging.INFO)
-    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    collector = WarningCollector()
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
+    logging.getLogger().addHandler(collector)
+    return collector
 
 
-def main():
-    config = build_config()
-    configure_logging(config.log_level)
-    LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
-
+def run_analysis(config, warning_records=None):
     data_access = DataAccess(config)
     workbook, scope_ws, normalized_ws = build_workbook()
 
@@ -68,13 +83,29 @@ def main():
 
     impact_ws = build_impact_sheet(workbook, exclusion_impact_by_scan)
     exec_ws = append_executive_summary(workbook, totals)
+    warning_ws = build_warning_sheet(workbook, warning_records or [])
     format_workbook(
-        scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws
+        scope_ws,
+        normalized_ws,
+        compare_ws,
+        compliance_ws,
+        impact_ws,
+        exec_ws,
+        warning_ws=warning_ws,
     )
 
     config.output_file.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(config.output_file)
-    LOGGER.info("Workbook saved to %s", config.output_file)
+    return config.output_file
+
+
+def main(argv=None):
+    config = build_config(argv)
+    collector = configure_logging(config.log_level)
+    LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
+
+    output_path = run_analysis(config, warning_records=collector.records)
+    LOGGER.info("Workbook saved to %s", output_path)
 
 
 if __name__ == "__main__":
