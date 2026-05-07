@@ -1,6 +1,7 @@
 import json
 import shutil
 import unittest
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,7 @@ from app_config import Config
 from constants import (
     SHEET_EXECUTIVE_SUMMARY,
     SHEET_EXPECTED_VS_ACTUAL,
+    SHEET_RUN_METADATA,
     SHEET_WARNINGS,
 )
 
@@ -75,6 +77,7 @@ class EndToEndTests(unittest.TestCase):
                 case_sensitive=False,
                 filter_disabled_mode="ALL",
                 log_level="INFO",
+                run_started_at=datetime(2026, 5, 7, 13, 2, 3),
             )
 
             with patch("sys.stderr", new=StringIO()):
@@ -88,6 +91,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertIn(SHEET_EXPECTED_VS_ACTUAL, workbook.sheetnames)
             self.assertIn(SHEET_EXECUTIVE_SUMMARY, workbook.sheetnames)
             self.assertIn(SHEET_WARNINGS, workbook.sheetnames)
+            self.assertIn(SHEET_RUN_METADATA, workbook.sheetnames)
 
             compare_ws = workbook[SHEET_EXPECTED_VS_ACTUAL]
             self.assertEqual(compare_ws["J2"].value, "OK")
@@ -111,6 +115,15 @@ class EndToEndTests(unittest.TestCase):
             self.assertTrue(
                 any("references missing asset id '999'" in message for message in warning_messages)
             )
+
+            metadata_ws = workbook[SHEET_RUN_METADATA]
+            metadata = {
+                row[0]: row[1]
+                for row in metadata_ws.iter_rows(min_row=2, values_only=True)
+            }
+            self.assertEqual(metadata["Run Started At"], "2026-05-07 13:02:03")
+            self.assertEqual(metadata["Mode"], "offline")
+            self.assertEqual(metadata["Output File"], str(output_file))
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)

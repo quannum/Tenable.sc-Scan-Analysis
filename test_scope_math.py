@@ -21,6 +21,10 @@ class ScopeMathTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_scope_item("10.0.0.10-10.0.0.1")
 
+    def test_parse_scope_rejects_ipv6(self):
+        with self.assertRaisesRegex(ValueError, "IPv6 is not supported"):
+            parse_scope_item("2001:db8::/32")
+
     def test_scope_intersects_when_cidr_is_inside_range(self):
         actual = parse_scope_item("10.0.0.0-10.0.0.255")
         expected = parse_scope_item("10.0.0.128/25")

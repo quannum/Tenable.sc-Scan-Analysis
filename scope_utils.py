@@ -7,6 +7,11 @@ ParsedScope = tuple[str, Any]
 _parsed_cache = {}
 
 
+def ensure_ipv4(value, scope):
+    if value.version != 4:
+        raise ValueError(f"IPv6 is not supported: '{scope}'")
+
+
 def parse_scope_item(scope):
     """Parse CIDR, IP range, or single-IP text into a comparable scope tuple."""
     scope = str(scope).strip()
@@ -18,17 +23,22 @@ def parse_scope_item(scope):
 
     try:
         if "/" in scope:
-            parsed = ("cidr", ipaddress.ip_network(scope, strict=False))
+            network = ipaddress.ip_network(scope, strict=False)
+            ensure_ipv4(network, scope)
+            parsed = ("cidr", network)
         elif "-" in scope:
             start, end = scope.split("-", maxsplit=1)
             start_ip = ipaddress.ip_address(start.strip())
             end_ip = ipaddress.ip_address(end.strip())
+            ensure_ipv4(start_ip, scope)
+            ensure_ipv4(end_ip, scope)
             if int(start_ip) > int(end_ip):
                 raise ValueError(f"Invalid IP range order: '{scope}'")
 
             parsed = ("range", (start_ip, end_ip))
         else:
             ip = ipaddress.ip_address(scope)
+            ensure_ipv4(ip, scope)
             parsed = ("cidr", ipaddress.ip_network(f"{ip}/32"))
     except ValueError as exc:
         raise ValueError(f"Invalid scope item '{scope}': {exc}") from exc

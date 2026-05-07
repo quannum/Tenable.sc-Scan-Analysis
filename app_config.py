@@ -1,6 +1,7 @@
 import argparse
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,6 +26,7 @@ class Config:
     case_sensitive: bool
     filter_disabled_mode: str
     log_level: str
+    run_started_at: datetime | None = None
 
 
 def parse_csv_list(value):
@@ -62,6 +64,7 @@ def build_argument_parser():
 
 def build_config(argv=None):
     load_dotenv()
+    run_started_at = datetime.now()
     parser = build_argument_parser()
     args = parser.parse_args(argv)
 
@@ -90,7 +93,7 @@ def build_config(argv=None):
     output_file = (
         Path(args.output_file)
         if args.output_file
-        else default_output_file()
+        else default_output_file(run_started_at)
     )
 
     if scan_json_dir:
@@ -113,4 +116,5 @@ def build_config(argv=None):
         case_sensitive=args.case_sensitive,
         filter_disabled_mode=args.filter_disabled_mode,
         log_level=args.log_level,
+        run_started_at=run_started_at,
     )

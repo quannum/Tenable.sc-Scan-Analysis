@@ -27,6 +27,7 @@ SHEET_EXPECTED_RANGE_COMPLIANCE = "Expected_Range_Compliance"
 SHEET_TOP_EXCLUSION_IMPACT = "Top_Exclusion_Impact_Scans"
 SHEET_EXECUTIVE_SUMMARY = "Executive_Summary"
 SHEET_WARNINGS = "Warnings"
+SHEET_RUN_METADATA = "Run_Metadata"
 
 HEADER_FONT = Font(bold=True)
 GREEN = PatternFill("solid", fgColor="C6EFCE")

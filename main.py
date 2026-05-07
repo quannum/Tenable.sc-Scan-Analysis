@@ -16,6 +16,7 @@ from data_access import DataAccess
 from reporting import (
     append_executive_summary,
     build_impact_sheet,
+    build_run_metadata_sheet,
     build_warning_sheet,
     build_workbook,
     format_workbook,
@@ -69,6 +70,7 @@ def run_analysis(config, warning_records=None):
     impact_ws = build_impact_sheet(workbook, exclusion_impact_by_scan)
     exec_ws = append_executive_summary(workbook, totals)
     warning_ws = build_warning_sheet(workbook, warning_records or [])
+    metadata_ws = build_run_metadata_sheet(workbook, config, config.output_file)
     format_workbook(
         scope_ws,
         normalized_ws,
@@ -77,6 +79,7 @@ def run_analysis(config, warning_records=None):
         impact_ws,
         exec_ws,
         warning_ws=warning_ws,
+        metadata_ws=metadata_ws,
     )
 
     config.output_file.parent.mkdir(parents=True, exist_ok=True)

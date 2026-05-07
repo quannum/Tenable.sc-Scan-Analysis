@@ -221,6 +221,7 @@ Sorted by exclusion IP impact.
 | Top_Exclusion_Impact_Scans | Exclusion-heavy scans         |
 | Executive_Summary          | Organization overview         |
 | Warnings                   | Skipped records and validation warnings, when present |
+| Run_Metadata               | Run timestamp, mode, input paths, filters, and output path |
 
 ------
 
@@ -302,6 +303,7 @@ The default filename includes the run date and time to avoid overwriting earlier
 
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
 If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
+Each workbook also includes a `Run_Metadata` sheet with the selected inputs, filters, output path, and run timestamp.
 
 
 ------
@@ -358,7 +360,7 @@ Excel Reporting
 
 # Limitations
 - Environment detection is name-based
-- No native support for IPv6
+- IPv6 scopes are intentionally rejected with a warning
 - No automatic deduplication of overlapping expected ranges
 - Required Scan matching is name-based
 

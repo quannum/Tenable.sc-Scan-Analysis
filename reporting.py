@@ -10,6 +10,7 @@ from constants import (
     INCLUDE,
     RED,
     SHEET_EXECUTIVE_SUMMARY,
+    SHEET_RUN_METADATA,
     SHEET_SCAN_SCOPE_NORMALIZED,
     SHEET_SCAN_SCOPE_SUMMARY,
     SHEET_TOP_EXCLUSION_IMPACT,
@@ -139,6 +140,37 @@ def build_warning_sheet(workbook, warning_records):
     return warning_ws
 
 
+def build_run_metadata_sheet(workbook, config, output_file):
+    metadata_ws = workbook.create_sheet(SHEET_RUN_METADATA)
+    metadata_ws.append(["Field", "Value"])
+
+    run_started_at = getattr(config, "run_started_at", None)
+    run_started_value = (
+        run_started_at.isoformat(sep=" ", timespec="seconds")
+        if run_started_at
+        else ""
+    )
+
+    rows = [
+        ("Run Started At", run_started_value),
+        ("Mode", config.mode),
+        ("Scan JSON Dir", config.scan_json_dir or ""),
+        ("Asset JSON Dir", config.asset_json_dir or ""),
+        ("Expected Scope File", config.expected_scope_file or ""),
+        ("Output File", str(output_file)),
+        ("Include Keywords", ", ".join(config.include_keywords)),
+        ("Exclude Keywords", ", ".join(config.exclude_keywords)),
+        ("Match All Include", str(config.match_all_include)),
+        ("Case Sensitive", str(config.case_sensitive)),
+        ("Filter Disabled Mode", config.filter_disabled_mode),
+    ]
+
+    for row in rows:
+        metadata_ws.append(row)
+
+    return metadata_ws
+
+
 def find_column(ws, header_name):
     for idx, cell in enumerate(ws[1], start=1):
         if cell.value == header_name:
@@ -232,7 +264,14 @@ def format_sheet(
 
 
 def format_workbook(
-    scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws, warning_ws=None
+    scope_ws,
+    normalized_ws,
+    compare_ws,
+    compliance_ws,
+    impact_ws,
+    exec_ws,
+    warning_ws=None,
+    metadata_ws=None,
 ):
     format_sheet(scope_ws, include_exclude_col=find_column(scope_ws, "Inclusion Type"))
 
@@ -249,5 +288,7 @@ def format_workbook(
     format_sheet(exec_ws, value_col=find_column(exec_ws, "Value"))
     if warning_ws:
         format_sheet(warning_ws)
+    if metadata_ws:
+        format_sheet(metadata_ws)
 
     normalized_ws.sheet_state = "hidden"
