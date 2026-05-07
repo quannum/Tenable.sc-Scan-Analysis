@@ -1,4 +1,7 @@
 from pathlib import Path
+from datetime import datetime
+
+CURRENT_DATE = datetime.now().strftime("%Y%m%d")
 
 INCLUDE = "Include"
 EXCLUDE = "Exclude"
@@ -9,7 +12,7 @@ STATUS_GAP = "GAP"
 
 DEFAULT_EXPECTED_SHEET = "rsg-all"
 FALLBACK_EXPECTED_SHEET = "Expected_Ranges"
-DEFAULT_OUTPUT_FILE = Path("output") / "tenable_scan_summary_v7.xlsx"
+DEFAULT_OUTPUT_FILE = Path("output") / f"tenable_scan_summary-{CURRENT_DATE}.xlsx"
 
 SHEET_SCAN_SCOPE_SUMMARY = "Scan_Scope_Summary"
 SHEET_SCAN_SCOPE_NORMALIZED = "Scan_Scope_Normalized"
