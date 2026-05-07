@@ -324,7 +324,17 @@ def build_coverage_data(normalized_ws):
     return actual_scopes, excluded_scopes, actual_by_scan, excluded_by_scan
 
 
-def resolve_expected_sheet(expected_workbook):
+def resolve_expected_sheet(expected_workbook, expected_sheet=None):
+    if expected_sheet:
+        if expected_sheet in expected_workbook.sheetnames:
+            return expected_workbook[expected_sheet]
+
+        available = ", ".join(expected_workbook.sheetnames)
+        raise KeyError(
+            f"Expected scope workbook does not contain requested sheet "
+            f"'{expected_sheet}'. Found: {available}"
+        )
+
     if DEFAULT_EXPECTED_SHEET in expected_workbook.sheetnames:
         return expected_workbook[DEFAULT_EXPECTED_SHEET]
     if FALLBACK_EXPECTED_SHEET in expected_workbook.sheetnames:
@@ -622,7 +632,12 @@ def append_coverage_result(compare_ws, compliance_ws, result):
 
 
 def analyze_expected_ranges(
-    workbook, expected_scope_file, actual_scopes, actual_by_scan, excluded_by_scan
+    workbook,
+    expected_scope_file,
+    actual_scopes,
+    actual_by_scan,
+    excluded_by_scan,
+    expected_sheet=None,
 ):
     compare_ws = None
     compliance_ws = None
@@ -638,7 +653,7 @@ def analyze_expected_ranges(
     from openpyxl import load_workbook
 
     expected_wb = load_workbook(expected_scope_file)
-    expected_ws = resolve_expected_sheet(expected_wb)
+    expected_ws = resolve_expected_sheet(expected_wb, expected_sheet)
     compare_ws, compliance_ws = build_expected_analysis_sheets(workbook)
 
     for row_index, row in enumerate(

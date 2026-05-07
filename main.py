@@ -64,6 +64,7 @@ def run_analysis(config, warning_records=None):
             actual_scopes,
             actual_by_scan,
             excluded_by_scan,
+            expected_sheet=config.expected_sheet,
         )
     )
 

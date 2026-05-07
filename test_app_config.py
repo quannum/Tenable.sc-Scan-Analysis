@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app_config
-from constants import default_output_file
+from constants import VERSION, default_output_file
 
 
 class AppConfigTests(unittest.TestCase):
@@ -47,6 +47,34 @@ class AppConfigTests(unittest.TestCase):
         self.assertEqual(config.scan_json_dir, "scans")
         self.assertEqual(config.asset_json_dir, "assets")
         self.assertEqual(config.expected_scope_file, "expected.xlsx")
+        self.assertIsNone(config.expected_sheet)
+
+    def test_expected_sheet_is_configurable(self):
+        with (
+            patch("app_config.os.makedirs"),
+            patch("app_config.prompt_for_inputs") as prompt_for_inputs,
+        ):
+            config = app_config.build_config(
+                [
+                    "--scan-json-dir",
+                    "scans",
+                    "--asset-json-dir",
+                    "assets",
+                    "--expected-scope-file",
+                    "expected.xlsx",
+                    "--expected-sheet",
+                    "CustomSheet",
+                ]
+            )
+
+        prompt_for_inputs.assert_not_called()
+        self.assertEqual(config.expected_sheet, "CustomSheet")
+
+    def test_version_flag_reports_version(self):
+        with patch("sys.stdout", new=StringIO()) as stdout, self.assertRaises(SystemExit):
+            app_config.build_config(["--version"])
+
+        self.assertIn(VERSION, stdout.getvalue())
 
     def test_no_expected_scope_conflicts_with_expected_scope_file(self):
         with patch("sys.stderr", new=StringIO()), self.assertRaises(SystemExit):

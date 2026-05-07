@@ -1,11 +1,14 @@
 import unittest
 from collections import defaultdict
 
+from openpyxl import Workbook
+
 from analysis import (
     ExcludedScopeRecord,
     ScopeRecord,
     calculate_coverage_result,
     calculate_scan_intervals,
+    resolve_expected_sheet,
 )
 from scope_utils import parse_scope_item, scope_to_interval
 
@@ -91,6 +94,22 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(excluded_total, 3)
         self.assertEqual(net_total, 7)
         self.assertEqual(exclusions[0].asset, "Excluded Segment")
+
+    def test_resolve_expected_sheet_uses_requested_sheet(self):
+        workbook = Workbook()
+        workbook.active.title = "Default"
+        workbook.create_sheet("CustomSheet")
+
+        sheet = resolve_expected_sheet(workbook, expected_sheet="CustomSheet")
+
+        self.assertEqual(sheet.title, "CustomSheet")
+
+    def test_resolve_expected_sheet_rejects_missing_requested_sheet(self):
+        workbook = Workbook()
+        workbook.active.title = "Default"
+
+        with self.assertRaises(KeyError):
+            resolve_expected_sheet(workbook, expected_sheet="MissingSheet")
 
 
 if __name__ == "__main__":

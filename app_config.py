@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from constants import default_output_file
+from constants import VERSION, default_output_file
 from ui import prompt_for_inputs
 
 
@@ -16,6 +16,7 @@ class Config:
     scan_json_dir: str | None
     asset_json_dir: str | None
     expected_scope_file: str | None
+    expected_sheet: str | None
     output_file: Path
     sc_access_key: str | None
     sc_secret_key: str | None
@@ -44,6 +45,10 @@ def build_argument_parser():
     parser.add_argument("--asset-json-dir")
     parser.add_argument("--expected-scope-file")
     parser.add_argument(
+        "--expected-sheet",
+        help="Worksheet name to use for expected ranges. Defaults to rsg-all, then Expected_Ranges.",
+    )
+    parser.add_argument(
         "--no-expected-scope",
         action="store_true",
         help="Skip expected-vs-actual analysis without opening a file picker.",
@@ -59,6 +64,7 @@ def build_argument_parser():
         default="ALL",
     )
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     return parser
 
 
@@ -106,6 +112,7 @@ def build_config(argv=None):
         scan_json_dir=scan_json_dir,
         asset_json_dir=asset_json_dir,
         expected_scope_file=expected_scope_file,
+        expected_sheet=args.expected_sheet,
         output_file=output_file,
         sc_access_key=os.getenv("SC_ACCESS_KEY"),
         sc_secret_key=os.getenv("SC_SECRET_KEY"),

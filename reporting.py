@@ -18,6 +18,7 @@ from constants import (
     STATUS_GAP,
     STATUS_OK,
     STATUS_PARTIAL,
+    VERSION,
     YELLOW,
 )
 
@@ -153,10 +154,12 @@ def build_run_metadata_sheet(workbook, config, output_file):
 
     rows = [
         ("Run Started At", run_started_value),
+        ("Tool Version", VERSION),
         ("Mode", config.mode),
         ("Scan JSON Dir", config.scan_json_dir or ""),
         ("Asset JSON Dir", config.asset_json_dir or ""),
         ("Expected Scope File", config.expected_scope_file or ""),
+        ("Expected Sheet", config.expected_sheet or ""),
         ("Output File", str(output_file)),
         ("Include Keywords", ", ".join(config.include_keywords)),
         ("Exclude Keywords", ", ".join(config.exclude_keywords)),

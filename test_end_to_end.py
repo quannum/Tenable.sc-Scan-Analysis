@@ -67,6 +67,7 @@ class EndToEndTests(unittest.TestCase):
                 scan_json_dir=str(scan_dir),
                 asset_json_dir=str(asset_dir),
                 expected_scope_file=str(expected_file),
+                expected_sheet=None,
                 output_file=output_file,
                 sc_access_key=None,
                 sc_secret_key=None,

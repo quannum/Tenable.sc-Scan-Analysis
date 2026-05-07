@@ -266,15 +266,22 @@ Environment and location columns are gathered from IP address tracker data (expe
 ------
 
 # Dependencies
-- Python 3.9+
+- Python 3.10+
 - openpyxl
 - python-dotenv
-- ipaddress
-- tenable.sc (only required for live mode)
+- pyTenable (only required for live mode)
 
 Install:
 
-pip install openpyxl python-dotenv tenable.sc
+pip install -r requirements.txt
+
+For live Tenable.sc API mode:
+
+`pip install ".[live]"`
+
+For an editable local install with the `tenable-scan-analysis` command:
+
+`pip install -e .`
 
 
 ------
@@ -283,9 +290,17 @@ pip install openpyxl python-dotenv tenable.sc
 
 python main.py
 
+If installed as a package, run:
+
+`tenable-scan-analysis`
+
 Optional CLI arguments can be used instead of the file pickers:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
+
+Use a specific expected-ranges worksheet:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --expected-sheet Expected_Ranges`
 
 To skip expected-vs-actual analysis intentionally:
 
@@ -294,6 +309,10 @@ To skip expected-vs-actual analysis intentionally:
 Live mode does not require offline JSON directory arguments:
 
 `python main.py --mode live --expected-scope-file C:\expected.xlsx`
+
+Show the installed version:
+
+`python main.py --version`
 
 Output:
 
@@ -316,7 +335,7 @@ Run the scope and interval math tests with:
 
 Run the full test suite with:
 
-`python -m unittest test_scope_math.py test_analysis.py test_end_to_end.py test_app_config.py`
+`python -m unittest test_scope_math.py test_analysis.py test_filtering.py test_end_to_end.py test_app_config.py`
 
 
 ------

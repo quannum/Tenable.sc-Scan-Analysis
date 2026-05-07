@@ -4,6 +4,9 @@ from pathlib import Path
 from openpyxl.styles import Font, PatternFill
 
 
+VERSION = "0.1.0"
+
+
 def default_output_file(run_datetime=None):
     timestamp = (run_datetime or datetime.now()).strftime("%Y%m%d-%H%M%S")
     return Path("output") / f"tenable_scan_summary-{timestamp}.xlsx"

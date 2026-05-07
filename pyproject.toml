@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tenable-sc-scan-analysis"
+version = "0.1.0"
+description = "Analyze Tenable.sc scan scope coverage and generate Excel reports."
+readme = "readme.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Ken Parker" }
+]
+dependencies = [
+    "openpyxl>=3.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+live = [
+    "pyTenable>=1.7",
+]
+
+[project.scripts]
+tenable-scan-analysis = "main:main"
+
+[tool.setuptools]
+py-modules = [
+    "analysis",
+    "app_config",
+    "constants",
+    "data_access",
+    "main",
+    "reporting",
+    "scope_utils",
+    "ui",
+]
