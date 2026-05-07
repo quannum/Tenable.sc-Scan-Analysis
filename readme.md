@@ -298,6 +298,10 @@ Optional CLI arguments can be used instead of the file pickers:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
 
+Manual runs can omit paths and use file pickers. Future scheduled jobs should include `--non-interactive` so missing inputs fail immediately instead of waiting on a GUI prompt:
+
+`python main.py --non-interactive --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
+
 Use a specific expected-ranges worksheet:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --expected-sheet Expected_Ranges`
@@ -305,6 +309,10 @@ Use a specific expected-ranges worksheet:
 To skip expected-vs-actual analysis intentionally:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope`
+
+Non-interactive scope-only run:
+
+`python main.py --non-interactive --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope`
 
 Live mode does not require offline JSON directory arguments:
 

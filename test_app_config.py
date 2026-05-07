@@ -26,6 +26,50 @@ class AppConfigTests(unittest.TestCase):
         self.assertIsNone(config.scan_json_dir)
         self.assertIsNone(config.asset_json_dir)
 
+    def test_missing_offline_paths_prompt_when_interactive(self):
+        with (
+            patch("app_config.os.makedirs"),
+            patch("app_config.prompt_for_inputs") as prompt_for_inputs,
+        ):
+            prompt_for_inputs.return_value = ("picked-scans", "picked-assets", "")
+            config = app_config.build_config(["--no-expected-scope"])
+
+        prompt_for_inputs.assert_called_once_with(
+            ask_scan_dir=True,
+            ask_asset_dir=True,
+            ask_expected_file=False,
+        )
+        self.assertEqual(config.scan_json_dir, "picked-scans")
+        self.assertEqual(config.asset_json_dir, "picked-assets")
+
+    def test_non_interactive_missing_paths_fails_without_prompt(self):
+        with (
+            patch("sys.stderr", new=StringIO()),
+            patch("app_config.prompt_for_inputs") as prompt_for_inputs,
+            self.assertRaises(SystemExit),
+        ):
+            app_config.build_config(["--non-interactive", "--no-expected-scope"])
+
+        prompt_for_inputs.assert_not_called()
+
+    def test_non_interactive_requires_expected_scope_choice(self):
+        with (
+            patch("sys.stderr", new=StringIO()),
+            patch("app_config.prompt_for_inputs") as prompt_for_inputs,
+            self.assertRaises(SystemExit),
+        ):
+            app_config.build_config(
+                [
+                    "--non-interactive",
+                    "--scan-json-dir",
+                    "scans",
+                    "--asset-json-dir",
+                    "assets",
+                ]
+            )
+
+        prompt_for_inputs.assert_not_called()
+
     def test_offline_mode_with_all_paths_does_not_prompt(self):
         with (
             patch("app_config.os.makedirs") as makedirs,

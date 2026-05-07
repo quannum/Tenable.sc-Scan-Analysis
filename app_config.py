@@ -41,6 +41,11 @@ def build_argument_parser():
         description="Analyze Tenable.sc scan coverage and generate an Excel workbook."
     )
     parser.add_argument("--mode", choices=["offline", "live"], default="offline")
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Fail instead of opening file pickers when required inputs are missing.",
+    )
     parser.add_argument("--scan-json-dir")
     parser.add_argument("--asset-json-dir")
     parser.add_argument("--expected-scope-file")
@@ -84,6 +89,21 @@ def build_config(argv=None):
     needs_scan_dir = args.mode == "offline" and not scan_json_dir
     needs_asset_dir = args.mode == "offline" and not asset_json_dir
     needs_expected_file = expected_scope_file is None and not args.no_expected_scope
+
+    if args.non_interactive:
+        missing = []
+        if needs_scan_dir:
+            missing.append("--scan-json-dir")
+        if needs_asset_dir:
+            missing.append("--asset-json-dir")
+        if needs_expected_file:
+            missing.append("--expected-scope-file or --no-expected-scope")
+
+        if missing:
+            parser.error(
+                "--non-interactive requires: "
+                + ", ".join(missing)
+            )
 
     if needs_scan_dir or needs_asset_dir or needs_expected_file:
         prompted_scan_dir, prompted_asset_dir, prompted_expected_file = prompt_for_inputs(
