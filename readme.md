@@ -278,7 +278,7 @@ pip install openpyxl python-dotenv tenable.sc
 
 # Execution
 
-python tenable-sc-scan-coverage-analysis.py
+python main.py
 
 Output:
 

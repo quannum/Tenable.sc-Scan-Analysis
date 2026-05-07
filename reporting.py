@@ -1,0 +1,212 @@
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+
+
+STATUS_OK = "OK"
+STATUS_PARTIAL = "PARTIAL"
+STATUS_GAP = "GAP"
+INCLUDE = "Include"
+EXCLUDE = "Exclude"
+
+HEADER_FONT = Font(bold=True)
+GREEN = PatternFill("solid", fgColor="C6EFCE")
+YELLOW = PatternFill("solid", fgColor="FFEB9C")
+RED = PatternFill("solid", fgColor="F4CCCC")
+GRAY = PatternFill("solid", fgColor="E7E6E6")
+
+
+def build_workbook():
+    workbook = Workbook()
+    scope_ws = workbook.create_sheet("Scan_Scope_Summary")
+    normalized_ws = workbook.create_sheet("Scan_Scope_Normalized")
+    workbook.remove(workbook["Sheet"])
+
+    scope_ws.append(
+        ["Scan Name", "Inclusion Type", "Source Type", "Source Name", "Scope Definition"]
+    )
+    normalized_ws.append(["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"])
+
+    return workbook, scope_ws, normalized_ws
+
+
+def append_executive_summary(workbook, totals):
+    exec_ws = workbook.create_sheet("Executive_Summary")
+    exec_ws.append(["Metric", "Value", "Note"])
+
+    overall_coverage_pct = (
+        round((totals["portfolio_covered_total"] / totals["portfolio_expected_total"]) * 100, 2)
+        if totals["portfolio_expected_total"]
+        else 0.0
+    )
+
+    portfolio_exclusion_loss_pct = (
+        round(
+            (totals["portfolio_exclusion_total"] / totals["portfolio_included_total"]) * 100,
+            2,
+        )
+        if totals["portfolio_included_total"]
+        else 0.0
+    )
+
+    exec_ws.append(
+        [
+            "Total Expected IPs",
+            totals["portfolio_expected_total"],
+            "Number of IP addresses from expected ranges (Global IP Address Trackers)",
+        ]
+    )
+    exec_ws.append(
+        [
+            "Total Net Covered IPs",
+            totals["portfolio_covered_total"],
+            "Number of IP addresses covered by scans",
+        ]
+    )
+    exec_ws.append(
+        [
+            "Total Gap IPs",
+            totals["portfolio_gap_total"],
+            "Number of IP addresses not covered by scans",
+        ]
+    )
+    exec_ws.append(
+        [
+            "Overall Portfolio Coverage %",
+            overall_coverage_pct,
+            "Percentage of IP addresses covered by scans (Total Net Covered IPs/Total Expected IPs)",
+        ]
+    )
+    exec_ws.append(
+        [
+            "Total IPs Lost Due To Exclusions",
+            totals["portfolio_exclusion_total"],
+            "Number of IP addresses excluded in scans",
+        ]
+    )
+    exec_ws.append(
+        [
+            "% Coverage Lost Due To Exclusions",
+            portfolio_exclusion_loss_pct,
+            "Percentage of coverage lost due to exclusions (Total Excluded/Total Included)",
+        ]
+    )
+
+    workbook.move_sheet(exec_ws, offset=1)
+    return exec_ws
+
+
+def build_impact_sheet(workbook, exclusion_impact_by_scan):
+    impact_ws = workbook.create_sheet("Top_Exclusion_Impact_Scans")
+    impact_ws.append(["Scan Name", "Total IPs Excluded"])
+
+    for scan_name, total in sorted(
+        exclusion_impact_by_scan.items(), key=lambda item: item[1], reverse=True
+    ):
+        impact_ws.append([scan_name, total])
+
+    return impact_ws
+
+
+def find_column(ws, header_name):
+    for idx, cell in enumerate(ws[1], start=1):
+        if cell.value == header_name:
+            return idx
+    return None
+
+
+def auto_wrap_and_adjust(ws, column_name):
+    column_index = find_column(ws, column_name)
+    if not column_index:
+        return
+
+    for row in ws.iter_rows(min_row=2):
+        cell = row[column_index - 1]
+        if not cell.value:
+            continue
+
+        cell.alignment = Alignment(wrap_text=True)
+        line_count = str(cell.value).count("\n") + 1
+        ws.row_dimensions[cell.row].height = 15 * line_count
+
+
+def format_sheet(ws, status_col=None, include_exclude_col=None, percent_col=None, value_col=None):
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    for cell in ws[1]:
+        cell.font = HEADER_FONT
+        cell.fill = GRAY
+
+    for col in ws.columns:
+        max_length = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max_length + 2, 60)
+
+    if status_col:
+        for row in ws.iter_rows(min_row=2):
+            cell = row[status_col - 1]
+            if cell.value == STATUS_OK:
+                cell.fill = GREEN
+            elif cell.value == STATUS_PARTIAL:
+                cell.fill = YELLOW
+            elif cell.value == STATUS_GAP:
+                cell.fill = RED
+
+    if include_exclude_col:
+        for row in ws.iter_rows(min_row=2):
+            cell = row[include_exclude_col - 1]
+            if cell.value == INCLUDE:
+                cell.fill = GREEN
+            elif cell.value == EXCLUDE:
+                cell.fill = RED
+
+    if percent_col:
+        for row in ws.iter_rows(min_row=2):
+            cell = row[percent_col - 1]
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0.00"
+                if cell.value >= 90:
+                    cell.fill = GREEN
+                elif cell.value >= 70:
+                    cell.fill = YELLOW
+                else:
+                    cell.fill = RED
+
+    if value_col:
+        for row in ws.iter_rows(min_row=2):
+            metric_cell = row[0]
+            target_cell = row[value_col - 1]
+
+            if "Coverage %" in str(metric_cell.value):
+                target_cell.number_format = "0.00"
+                if isinstance(target_cell.value, (int, float)):
+                    if target_cell.value >= 95:
+                        target_cell.fill = GREEN
+                    elif target_cell.value >= 85:
+                        target_cell.fill = YELLOW
+                    else:
+                        target_cell.fill = RED
+
+            if metric_cell.value == "Total Gap IPs" and isinstance(target_cell.value, (int, float)):
+                if target_cell.value > 0:
+                    target_cell.fill = RED
+
+
+def format_workbook(scope_ws, normalized_ws, compare_ws, compliance_ws, impact_ws, exec_ws):
+    format_sheet(scope_ws, include_exclude_col=find_column(scope_ws, "Inclusion Type"))
+
+    if compare_ws:
+        format_sheet(compare_ws, status_col=find_column(compare_ws, "Status"))
+        auto_wrap_and_adjust(compare_ws, "Reason")
+
+    if compliance_ws:
+        format_sheet(compliance_ws, percent_col=find_column(compliance_ws, "Coverage %"))
+
+    format_sheet(impact_ws)
+    format_sheet(exec_ws, value_col=find_column(exec_ws, "Value"))
+
+    normalized_ws.sheet_state = "hidden"
