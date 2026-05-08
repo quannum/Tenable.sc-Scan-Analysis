@@ -14,7 +14,7 @@ from .ui import prompt_for_inputs
 try:
     import tomllib
 except ImportError:  # pragma: no cover
-    import tomli as tomllib
+    import tomli as tomllib # pyright: ignore[reportMissingImports]
 
 
 @dataclass
