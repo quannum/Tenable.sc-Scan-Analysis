@@ -3,11 +3,17 @@ import logging
 import shutil
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 main = importlib.import_module("tenable_scan_analysis.cli.main")
 
 
 class MainTests(unittest.TestCase):
+    def tearDown(self):
+        logging.shutdown()
+        logging.basicConfig(level=logging.WARNING, force=True)
+
     def test_configure_logging_writes_to_optional_log_file(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "main_logging_case"
@@ -28,6 +34,44 @@ class MainTests(unittest.TestCase):
             logging.shutdown()
             if temp_path.exists():
                 shutil.rmtree(temp_path)
+
+    def test_atomic_save_workbook_writes_final_output(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "atomic_save_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        output_file = temp_path / "output" / "report.xlsx"
+
+        class FakeWorkbook:
+            def save(self, path):
+                Path(path).write_bytes(b"fake-xlsx-content")
+
+        try:
+            main.atomic_save_workbook(FakeWorkbook(), output_file)
+            self.assertTrue(output_file.exists())
+            self.assertEqual(output_file.read_bytes(), b"fake-xlsx-content")
+
+            temp_candidates = list(output_file.parent.glob("tenable-scan-*.xlsx"))
+            self.assertEqual(temp_candidates, [])
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
+    def test_main_returns_non_zero_on_runtime_failure(self):
+        cfg = SimpleNamespace(log_level="INFO", log_file=None, mode="offline")
+        with (
+            patch("tenable_scan_analysis.cli.main.build_config", return_value=cfg),
+            patch("tenable_scan_analysis.cli.main.configure_logging"),
+            patch(
+                "tenable_scan_analysis.cli.main.run_analysis",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            code = main.main([])
+
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

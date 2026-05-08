@@ -2,6 +2,7 @@ import glob
 import json
 import logging
 import os
+import time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,13 +26,23 @@ def load_json_folder(folder_path):
             LOGGER.warning("Skipping JSON file without an 'id': %s", file_path)
             continue
 
-        data[str(object_id)] = obj
+        object_id = str(object_id)
+        if object_id in data:
+            LOGGER.warning(
+                "Duplicate object id '%s' in '%s'; replacing previously loaded object",
+                object_id,
+                file_path,
+            )
+        data[object_id] = obj
 
     LOGGER.info("Loaded %s JSON objects from %s", len(data), folder_path)
     return data
 
 
 class DataAccess:
+    LIVE_CALL_MAX_RETRIES = 3
+    LIVE_RETRY_BACKOFF_SECONDS = 1.5
+
     def __init__(self, config):
         self.config = config
         self.sc = None
@@ -72,7 +83,10 @@ class DataAccess:
 
     def get_scans(self):
         if self.config.mode == "live":
-            scans_payload = self.sc.scans.list()
+            scans_payload = self._call_live(
+                self.sc.scans.list,
+                operation_name="scans.list",
+            )
             usable = scans_payload.get("usable")
             if isinstance(usable, list):
                 return usable
@@ -84,7 +98,10 @@ class DataAccess:
 
     def get_scan_details(self, scan_id):
         if self.config.mode == "live":
-            return self.sc.scans.details(scan_id)
+            return self._call_live(
+                lambda: self.sc.scans.details(scan_id),
+                operation_name=f"scans.details({scan_id})",
+            )
         details = self.offline_scans.get(str(scan_id))
         if not details:
             LOGGER.warning("Missing offline scan details for scan id '%s'", scan_id)
@@ -93,5 +110,55 @@ class DataAccess:
 
     def get_asset(self, asset_id):
         if self.config.mode == "live":
-            return self.sc.asset_lists.details(asset_id)
+            return self._call_live(
+                lambda: self.sc.asset_lists.details(asset_id),
+                operation_name=f"asset_lists.details({asset_id})",
+            )
         return self.offline_assets.get(str(asset_id), {})
+
+    def _call_live(self, call_fn, operation_name):
+        attempts = self.LIVE_CALL_MAX_RETRIES
+
+        for attempt in range(1, attempts + 1):
+            try:
+                result = call_fn()
+            except Exception as exc:
+                if not self._is_retryable_exception(exc) or attempt >= attempts:
+                    raise
+
+                delay = self.LIVE_RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                LOGGER.warning(
+                    "Live API call '%s' failed on attempt %s/%s: %s. Retrying in %.1fs",
+                    operation_name,
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+                continue
+
+            if result is None:
+                raise RuntimeError(
+                    f"Live API call '{operation_name}' returned no data"
+                )
+
+            return result
+
+        raise RuntimeError(
+            f"Live API call '{operation_name}' failed after {attempts} attempts"
+        )
+
+    @staticmethod
+    def _is_retryable_exception(exc):
+        retryable_types = (TimeoutError, ConnectionError, OSError)
+        if isinstance(exc, retryable_types):
+            return True
+
+        message = str(exc).lower()
+        if "timeout" in message or "timed out" in message:
+            return True
+        if "connection" in message or "temporarily unavailable" in message:
+            return True
+
+        return False

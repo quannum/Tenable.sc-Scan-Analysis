@@ -1,6 +1,9 @@
+import json
+import shutil
 import sys
 import types
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -23,8 +26,12 @@ def make_config(**overrides):
 class FakeScans:
     def __init__(self):
         self._list_payload = {"usable": [{"id": 1, "name": "Scan A"}]}
+        self._failures_before_success = 0
 
     def list(self):
+        if self._failures_before_success > 0:
+            self._failures_before_success -= 1
+            raise TimeoutError("timed out")
         return self._list_payload
 
     def details(self, scan_id):
@@ -105,6 +112,60 @@ class DataAccessTests(unittest.TestCase):
             access.sc.scans._list_payload = {"unexpected": []}
 
         self.assertEqual(access.get_scans(), [])
+
+    def test_live_mode_retries_retryable_errors(self):
+        tenable_module = types.ModuleType("tenable")
+        tenable_sc_module = types.ModuleType("tenable.sc")
+        tenable_sc_module.TenableSC = FakeTenableSC
+        tenable_module.sc = tenable_sc_module
+
+        with patch.dict(
+            sys.modules,
+            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            clear=False,
+        ), patch("tenable_scan_analysis.io.data_access.time.sleep") as sleep_mock:
+            access = DataAccess(make_config())
+            access.sc.scans._failures_before_success = 2
+            scans = access.get_scans()
+
+        self.assertEqual(scans, [{"id": 1, "name": "Scan A"}])
+        self.assertEqual(sleep_mock.call_count, 2)
+
+    def test_offline_duplicate_ids_replace_previous_object(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "duplicate_id_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        scan_dir = temp_path / "scans"
+        asset_dir = temp_path / "assets"
+        scan_dir.mkdir()
+        asset_dir.mkdir()
+
+        try:
+            (scan_dir / "first.json").write_text(
+                json.dumps({"id": 1, "name": "Scan A"}),
+                encoding="utf-8",
+            )
+            (scan_dir / "second.json").write_text(
+                json.dumps({"id": 1, "name": "Scan B"}),
+                encoding="utf-8",
+            )
+
+            cfg = make_config(
+                mode="offline",
+                scan_json_dir=str(scan_dir),
+                asset_json_dir=str(asset_dir),
+            )
+            with self.assertLogs("tenable_scan_analysis.io.data_access", level="WARNING") as logs:
+                access = DataAccess(cfg)
+
+            self.assertTrue(any("Duplicate object id '1'" in line for line in logs.output))
+            self.assertIn("Scan B", str(access.offline_scans.get("1")))
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
 
 
 if __name__ == "__main__":

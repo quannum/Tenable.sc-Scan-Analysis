@@ -5,6 +5,8 @@ Ken Parker
 """
 
 import logging
+import os
+import tempfile
 
 from ..core.analysis import (
     analyze_expected_ranges,
@@ -94,19 +96,46 @@ def run_analysis(config, warning_records=None):
         metadata_ws=metadata_ws,
     )
 
-    config.output_file.parent.mkdir(parents=True, exist_ok=True)
-    workbook.save(config.output_file)
+    atomic_save_workbook(workbook, config.output_file)
     return config.output_file
 
 
-def main(argv=None):
-    config = build_config(argv)
-    collector = configure_logging(config.log_level, config.log_file)
-    LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
+def atomic_save_workbook(workbook, output_path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_path = run_analysis(config, warning_records=collector.records)
-    LOGGER.info("Workbook saved to %s", output_path)
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=".xlsx",
+            prefix="tenable-scan-",
+            dir=output_path.parent,
+            delete=False,
+        ) as tmp:
+            temp_file = tmp.name
+
+        workbook.save(temp_file)
+        os.replace(temp_file, output_path)
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
+
+
+def main(argv=None):
+    try:
+        config = build_config(argv)
+        collector = configure_logging(config.log_level, config.log_file)
+        LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
+
+        output_path = run_analysis(config, warning_records=collector.records)
+        LOGGER.info("Workbook saved to %s", output_path)
+        return 0
+    except SystemExit:
+        raise
+    except Exception:
+        logging.getLogger().exception("Analysis failed")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
