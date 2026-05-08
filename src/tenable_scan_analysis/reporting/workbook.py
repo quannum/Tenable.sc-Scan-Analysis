@@ -94,7 +94,10 @@ def append_executive_summary(workbook, totals):
         [
             "Overall Portfolio Coverage %",
             overall_coverage_pct,
-            "Percentage of IP addresses covered by scans (Total Net Covered IPs/Total Expected IPs)",
+            (
+                "Percentage of IP addresses covered by scans "
+                "(Total Net Covered IPs/Total Expected IPs)"
+            ),
         ]
     )
     exec_ws.append(
@@ -108,7 +111,10 @@ def append_executive_summary(workbook, totals):
         [
             "% Coverage Lost Due To Exclusions",
             portfolio_exclusion_loss_pct,
-            "Percentage of coverage lost due to exclusions (Total Excluded/Total Included)",
+            (
+                "Percentage of coverage lost due to exclusions "
+                "(Total Excluded/Total Included)"
+            ),
         ]
     )
 
@@ -164,7 +170,10 @@ def build_run_metadata_sheet(workbook, config, output_file):
         ("Log File", str(config.log_file) if config.log_file else ""),
         ("Log Format", getattr(config, "log_format", "text")),
         ("CSV Output Dir", str(config.csv_output_dir) if config.csv_output_dir else ""),
-        ("Run Summary File", str(config.run_summary_file) if config.run_summary_file else ""),
+        (
+            "Run Summary File",
+            str(config.run_summary_file) if config.run_summary_file else "",
+        ),
         ("Config File", str(config.config_file) if config.config_file else ""),
         ("Include Keywords", ", ".join(config.include_keywords)),
         ("Exclude Keywords", ", ".join(config.exclude_keywords)),
@@ -184,7 +193,9 @@ def _safe_sheet_filename(sheet_name: str) -> str:
     return cleaned or "sheet"
 
 
-def export_workbook_sheets_to_csv(workbook, output_dir: Path, include_hidden: bool = True):
+def export_workbook_sheets_to_csv(
+    workbook, output_dir: Path, include_hidden: bool = True
+):
     output_dir.mkdir(parents=True, exist_ok=True)
     exported = []
 

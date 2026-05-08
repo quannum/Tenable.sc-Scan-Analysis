@@ -3,7 +3,7 @@ from typing import Any
 
 ParsedScope = tuple[str, Any]
 
-_parsed_cache = {}
+_parsed_cache: dict[str, ParsedScope] = {}
 
 
 def ensure_ipv4(value, scope):
@@ -112,7 +112,10 @@ def merge_intervals(intervals):
 
 
 def subtract_intervals(included, excluded):
-    """Subtract excluded intervals from included intervals and return remaining ranges."""
+    """Subtract excluded intervals from included intervals.
+
+    Return remaining ranges.
+    """
     remaining_intervals = []
 
     for included_start, included_end in included:

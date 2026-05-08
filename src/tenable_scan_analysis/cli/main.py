@@ -3,10 +3,10 @@ Tenable SC Scan Coverage Analysis
 Ken Parker
 """
 
+import json
 import logging
 import os
 import tempfile
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -68,7 +68,7 @@ def configure_logging(
     collector = WarningCollector()
     stream_handler = logging.StreamHandler()
     if str(log_format).lower() == "json":
-        formatter = JsonLogFormatter()
+        formatter: logging.Formatter = JsonLogFormatter()
     else:
         formatter = logging.Formatter("%(levelname)s: %(message)s")
     stream_handler.setFormatter(formatter)
@@ -89,7 +89,9 @@ def configure_logging(
 def run_analysis(config, warning_records=None) -> Path:
     data_access = DataAccess(config)
     workbook, scope_ws, normalized_ws = build_workbook()
-    summary_path = config.run_summary_file or (config.output_file.parent / "run_summary.json")
+    summary_path = config.run_summary_file or (
+        config.output_file.parent / "run_summary.json"
+    )
     if config.run_summary_file is None:
         config.run_summary_file = summary_path
 
@@ -197,7 +199,10 @@ def build_run_summary(
 ) -> dict:
     run_started_at = getattr(config, "run_started_at", None)
     coverage_pct = (
-        round((totals.portfolio_covered_total / totals.portfolio_expected_total) * 100, 2)
+        round(
+            (totals.portfolio_covered_total / totals.portfolio_expected_total) * 100,
+            2,
+        )
         if totals.portfolio_expected_total
         else 0.0
     )
@@ -246,7 +251,9 @@ def build_run_summary(
 def main(argv=None) -> int:
     try:
         config = build_config(argv)
-        collector = configure_logging(config.log_level, config.log_file, config.log_format)
+        collector = configure_logging(
+            config.log_level, config.log_file, config.log_format
+        )
         LOGGER.info(
             "Starting Tenable SC scan coverage analysis in %s mode", config.mode
         )

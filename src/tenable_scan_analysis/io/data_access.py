@@ -9,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
-    data = {}
+    data: dict[str, dict[str, Any]] = {}
     if not folder_path:
         return data
 
@@ -46,7 +46,7 @@ class DataAccess:
 
     def __init__(self, config) -> None:
         self.config = config
-        self.sc = None
+        self.sc: Any = None
         self.offline_scans = {}
         self.offline_assets = {}
 

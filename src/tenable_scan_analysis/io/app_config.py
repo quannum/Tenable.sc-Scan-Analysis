@@ -14,7 +14,7 @@ from .ui import prompt_for_inputs
 try:
     import tomllib
 except ImportError:  # pragma: no cover
-    import tomli as tomllib # pyright: ignore[reportMissingImports]
+    import tomli as tomllib  # pyright: ignore[reportMissingImports]
 
 
 @dataclass
@@ -67,7 +67,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-scope-file")
     parser.add_argument(
         "--expected-sheet",
-        help="Worksheet name to use for expected ranges. Defaults to rsg-all, then Expected_Ranges.",
+        help=(
+            "Worksheet name to use for expected ranges. Defaults to rsg-all, "
+            "then Expected_Ranges."
+        ),
     )
     parser.add_argument(
         "--no-expected-scope",
@@ -125,9 +128,7 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
         with config_file_path.open("rb") as handle:
             data = tomllib.load(handle)
     else:
-        raise ValueError(
-            "Unsupported config file type. Use .json or .toml."
-        )
+        raise ValueError("Unsupported config file type. Use .json or .toml.")
 
     if not isinstance(data, dict):
         raise ValueError("Config file root must be an object/dictionary.")
@@ -154,9 +155,15 @@ def _parse_bool(value: Any, field_name: str) -> bool:
 
 
 def _as_path(value: str | Path | None) -> Path | None:
-    if value in (None, ""):
+    if value is None:
         return None
-    return Path(value)
+    if isinstance(value, Path):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+    return Path(text)
 
 
 def build_config(argv=None) -> Config:
@@ -179,8 +186,12 @@ def build_config(argv=None) -> Config:
 
     try:
         non_interactive = _parse_bool(pick("non_interactive", False), "non_interactive")
-        no_expected_scope = _parse_bool(pick("no_expected_scope", False), "no_expected_scope")
-        match_all_include = _parse_bool(pick("match_all_include", False), "match_all_include")
+        no_expected_scope = _parse_bool(
+            pick("no_expected_scope", False), "no_expected_scope"
+        )
+        match_all_include = _parse_bool(
+            pick("match_all_include", False), "match_all_include"
+        )
         case_sensitive = _parse_bool(pick("case_sensitive", False), "case_sensitive")
     except ValueError as exc:
         parser.error(str(exc))
@@ -239,11 +250,8 @@ def build_config(argv=None) -> Config:
         if needs_expected_file:
             expected_scope_file = prompted_expected_file
 
-    output_file = (
-        _as_path(pick("output_file"))
-        if pick("output_file")
-        else default_output_file(run_started_at)
-    )
+    output_file_value = _as_path(pick("output_file"))
+    output_file = output_file_value or default_output_file(run_started_at)
     log_file = _as_path(pick("log_file"))
     csv_output_dir = _as_path(pick("csv_output_dir"))
     run_summary_file = _as_path(pick("run_summary_file"))

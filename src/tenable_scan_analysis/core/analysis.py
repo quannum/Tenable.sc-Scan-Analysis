@@ -369,7 +369,8 @@ def resolve_expected_sheet(expected_workbook, expected_sheet=None):
 def validate_expected_row(row):
     if len(row) < 3:
         raise ValueError(
-            "Expected range rows must include at least Scope Item, Location, and Environment columns"
+            "Expected range rows must include at least Scope Item, "
+            "Location, and Environment columns"
         )
 
     scope_item = row[0]
