@@ -23,7 +23,7 @@ live = [
 ]
 
 [project.scripts]
-tenable-scan-analysis = "tenable_scan_analysis.main:main"
+tenable-scan-analysis = "tenable_scan_analysis.cli.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

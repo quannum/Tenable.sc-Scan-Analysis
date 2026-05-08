@@ -365,6 +365,13 @@ Core application code is in:
 
 `src/tenable_scan_analysis/`
 
+Suggested internal boundaries:
+
+- `core/` - scope parsing and coverage logic
+- `io/` - config, prompts, and Tenable/offline data access
+- `reporting/` - workbook generation and formatting
+- `cli/` - orchestration entrypoint
+
 Automated tests are in:
 
 `tests/`

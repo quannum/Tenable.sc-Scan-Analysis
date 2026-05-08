@@ -3,14 +3,14 @@ from collections import defaultdict
 
 from openpyxl import Workbook
 
-from tenable_scan_analysis.analysis import (
+from tenable_scan_analysis.core.analysis import (
     ExcludedScopeRecord,
     ScopeRecord,
     calculate_coverage_result,
     calculate_scan_intervals,
     resolve_expected_sheet,
 )
-from tenable_scan_analysis.scope_utils import parse_scope_item, scope_to_interval
+from tenable_scan_analysis.core.scope_utils import parse_scope_item, scope_to_interval
 
 
 class AnalysisTests(unittest.TestCase):

@@ -1,6 +1,7 @@
 import json
 import shutil
 import unittest
+import importlib
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
@@ -8,8 +9,8 @@ from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
-from tenable_scan_analysis import main
-from tenable_scan_analysis.app_config import Config
+main = importlib.import_module("tenable_scan_analysis.cli.main")
+from tenable_scan_analysis.io.app_config import Config
 from tenable_scan_analysis.constants import (
     SHEET_EXECUTIVE_SUMMARY,
     SHEET_EXPECTED_VS_ACTUAL,

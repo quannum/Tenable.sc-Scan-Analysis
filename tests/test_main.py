@@ -1,9 +1,10 @@
+import importlib
 import logging
 import shutil
 import unittest
 from pathlib import Path
 
-from tenable_scan_analysis import main
+main = importlib.import_module("tenable_scan_analysis.cli.main")
 
 
 class MainTests(unittest.TestCase):

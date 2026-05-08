@@ -6,14 +6,14 @@ Ken Parker
 
 import logging
 
-from .analysis import (
+from ..core.analysis import (
     analyze_expected_ranges,
     build_coverage_data,
     build_scope_sheets,
 )
-from .app_config import build_config
-from .data_access import DataAccess
-from .reporting import (
+from ..io.app_config import build_config
+from ..io.data_access import DataAccess
+from ..reporting.workbook import (
     append_executive_summary,
     build_impact_sheet,
     build_run_metadata_sheet,

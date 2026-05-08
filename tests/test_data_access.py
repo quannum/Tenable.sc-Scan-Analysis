@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tenable_scan_analysis.data_access import DataAccess
+from tenable_scan_analysis.io.data_access import DataAccess
 
 
 def make_config(**overrides):

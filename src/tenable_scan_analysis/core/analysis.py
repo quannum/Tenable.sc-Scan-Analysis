@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 
-from .constants import (
+from ..constants import (
     DEFAULT_EXPECTED_SHEET,
     EXCLUDE,
     FALLBACK_EXPECTED_SHEET,
