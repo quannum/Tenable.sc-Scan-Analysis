@@ -7,6 +7,7 @@ Ken Parker
 import logging
 import os
 import tempfile
+from pathlib import Path
 
 from ..core.analysis import (
     analyze_expected_ranges,
@@ -28,11 +29,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class WarningCollector(logging.Handler):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(level=logging.WARNING)
-        self.records = []
+        self.records: list[dict[str, str]] = []
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         self.records.append(
             {
                 "level": record.levelname,
@@ -42,7 +43,7 @@ class WarningCollector(logging.Handler):
         )
 
 
-def configure_logging(level_name, log_file=None):
+def configure_logging(level_name: str, log_file: Path | None = None) -> WarningCollector:
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     collector = WarningCollector()
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
@@ -61,7 +62,7 @@ def configure_logging(level_name, log_file=None):
     return collector
 
 
-def run_analysis(config, warning_records=None):
+def run_analysis(config, warning_records=None) -> Path:
     data_access = DataAccess(config)
     workbook, scope_ws, normalized_ws = build_workbook()
 
@@ -100,7 +101,7 @@ def run_analysis(config, warning_records=None):
     return config.output_file
 
 
-def atomic_save_workbook(workbook, output_path):
+def atomic_save_workbook(workbook, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     temp_file = None
@@ -121,7 +122,7 @@ def atomic_save_workbook(workbook, output_path):
             os.remove(temp_file)
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     try:
         config = build_config(argv)
         collector = configure_logging(config.log_level, config.log_file)

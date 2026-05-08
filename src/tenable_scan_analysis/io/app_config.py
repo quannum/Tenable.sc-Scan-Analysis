@@ -31,13 +31,13 @@ class Config:
     run_started_at: datetime | None = None
 
 
-def parse_csv_list(value):
+def parse_csv_list(value: str | None) -> list[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def build_argument_parser():
+def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Analyze Tenable.sc scan coverage and generate an Excel workbook."
     )
@@ -78,7 +78,7 @@ def build_argument_parser():
     return parser
 
 
-def build_config(argv=None):
+def build_config(argv=None) -> Config:
     load_dotenv()
     run_started_at = datetime.now()
     parser = build_argument_parser()

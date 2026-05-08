@@ -21,6 +21,12 @@ dependencies = [
 live = [
     "pyTenable>=1.7",
 ]
+dev = [
+    "black>=24.8",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+    "ruff>=0.6",
+]
 
 [project.scripts]
 tenable-scan-analysis = "tenable_scan_analysis.cli.main:main"
@@ -30,3 +36,20 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src", "tests"]
+ignore_missing_imports = true
+warn_unused_ignores = true

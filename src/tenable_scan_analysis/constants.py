@@ -6,7 +6,7 @@ from openpyxl.styles import Font, PatternFill
 VERSION = "0.1.0"
 
 
-def default_output_file(run_datetime=None):
+def default_output_file(run_datetime: datetime | None = None) -> Path:
     timestamp = (run_datetime or datetime.now()).strftime("%Y%m%d-%H%M%S")
     return Path("output") / f"tenable_scan_summary-{timestamp}.xlsx"
 
@@ -20,7 +20,6 @@ STATUS_GAP = "GAP"
 
 DEFAULT_EXPECTED_SHEET = "rsg-all"
 FALLBACK_EXPECTED_SHEET = "Expected_Ranges"
-DEFAULT_OUTPUT_FILE = default_output_file()
 
 SHEET_SCAN_SCOPE_SUMMARY = "Scan_Scope_Summary"
 SHEET_SCAN_SCOPE_NORMALIZED = "Scan_Scope_Normalized"

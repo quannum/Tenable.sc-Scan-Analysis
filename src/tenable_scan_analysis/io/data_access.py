@@ -3,11 +3,12 @@ import json
 import logging
 import os
 import time
+from typing import Any, Callable
 
 LOGGER = logging.getLogger(__name__)
 
 
-def load_json_folder(folder_path):
+def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     data = {}
     if not folder_path:
         return data
@@ -43,7 +44,7 @@ class DataAccess:
     LIVE_CALL_MAX_RETRIES = 3
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
-    def __init__(self, config):
+    def __init__(self, config) -> None:
         self.config = config
         self.sc = None
         self.offline_scans = {}
@@ -66,7 +67,7 @@ class DataAccess:
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
     @staticmethod
-    def _validate_live_config(config):
+    def _validate_live_config(config) -> None:
         missing = []
         if not config.sc_url:
             missing.append("SC_URL")
@@ -81,7 +82,7 @@ class DataAccess:
                 + ", ".join(missing)
             )
 
-    def get_scans(self):
+    def get_scans(self) -> list[dict[str, Any]]:
         if self.config.mode == "live":
             scans_payload = self._call_live(
                 self.sc.scans.list,
@@ -96,7 +97,7 @@ class DataAccess:
             return []
         return list(self.offline_scans.values())
 
-    def get_scan_details(self, scan_id):
+    def get_scan_details(self, scan_id) -> dict[str, Any]:
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.scans.details(scan_id),
@@ -108,7 +109,7 @@ class DataAccess:
             return {}
         return details
 
-    def get_asset(self, asset_id):
+    def get_asset(self, asset_id) -> dict[str, Any]:
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.asset_lists.details(asset_id),
@@ -116,7 +117,7 @@ class DataAccess:
             )
         return self.offline_assets.get(str(asset_id), {})
 
-    def _call_live(self, call_fn, operation_name):
+    def _call_live(self, call_fn: Callable[[], Any], operation_name: str) -> Any:
         attempts = self.LIVE_CALL_MAX_RETRIES
 
         for attempt in range(1, attempts + 1):
@@ -148,7 +149,7 @@ class DataAccess:
         )
 
     @staticmethod
-    def _is_retryable_exception(exc):
+    def _is_retryable_exception(exc: Exception) -> bool:
         retryable_types = (TimeoutError, ConnectionError, OSError)
         if isinstance(exc, retryable_types):
             return True
