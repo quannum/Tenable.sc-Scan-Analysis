@@ -2,7 +2,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
-from constants import (
+from .constants import (
     EXCLUDE,
     GRAY,
     GREEN,

@@ -295,6 +295,10 @@ If installed as a package, run:
 
 `tenable-scan-analysis`
 
+You can also run as a module after install:
+
+`python -m tenable_scan_analysis`
+
 Optional CLI arguments can be used instead of the file pickers:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
@@ -347,11 +351,23 @@ Each workbook also includes a `Run_Metadata` sheet with the selected inputs, fil
 
 Run the scope and interval math tests with:
 
-`python -m unittest test_scope_math.py`
+`python -m unittest tests/test_scope_math.py`
 
 Run the full test suite with:
 
-`python -m unittest test_scope_math.py test_analysis.py test_filtering.py test_end_to_end.py test_app_config.py test_data_access.py test_main.py`
+`python -m unittest discover -s tests -t . -p "test_*.py"`
+
+------
+
+# Project Layout
+
+Core application code is in:
+
+`src/tenable_scan_analysis/`
+
+Automated tests are in:
+
+`tests/`
 
 
 ------

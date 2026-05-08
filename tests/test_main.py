@@ -3,7 +3,7 @@ import shutil
 import unittest
 from pathlib import Path
 
-import main
+from tenable_scan_analysis import main
 
 
 class MainTests(unittest.TestCase):

@@ -6,8 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from constants import VERSION, default_output_file
-from ui import prompt_for_inputs
+from .constants import VERSION, default_output_file
+from .ui import prompt_for_inputs
 
 
 @dataclass

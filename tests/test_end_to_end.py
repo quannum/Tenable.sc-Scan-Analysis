@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
-import main
-from app_config import Config
-from constants import (
+from tenable_scan_analysis import main
+from tenable_scan_analysis.app_config import Config
+from tenable_scan_analysis.constants import (
     SHEET_EXECUTIVE_SUMMARY,
     SHEET_EXPECTED_VS_ACTUAL,
     SHEET_RUN_METADATA,

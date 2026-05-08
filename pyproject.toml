@@ -23,16 +23,10 @@ live = [
 ]
 
 [project.scripts]
-tenable-scan-analysis = "main:main"
+tenable-scan-analysis = "tenable_scan_analysis.main:main"
 
 [tool.setuptools]
-py-modules = [
-    "analysis",
-    "app_config",
-    "constants",
-    "data_access",
-    "main",
-    "reporting",
-    "scope_utils",
-    "ui",
-]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
