@@ -1,7 +1,6 @@
 """
 Tenable SC Scan Coverage Analysis
 Ken Parker
-19 February 2026
 """
 
 import logging
