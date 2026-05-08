@@ -1,3 +1,7 @@
+import csv
+import re
+from pathlib import Path
+
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
@@ -158,6 +162,10 @@ def build_run_metadata_sheet(workbook, config, output_file):
         ("Expected Sheet", config.expected_sheet or ""),
         ("Output File", str(output_file)),
         ("Log File", str(config.log_file) if config.log_file else ""),
+        ("Log Format", getattr(config, "log_format", "text")),
+        ("CSV Output Dir", str(config.csv_output_dir) if config.csv_output_dir else ""),
+        ("Run Summary File", str(config.run_summary_file) if config.run_summary_file else ""),
+        ("Config File", str(config.config_file) if config.config_file else ""),
         ("Include Keywords", ", ".join(config.include_keywords)),
         ("Exclude Keywords", ", ".join(config.exclude_keywords)),
         ("Match All Include", str(config.match_all_include)),
@@ -169,6 +177,32 @@ def build_run_metadata_sheet(workbook, config, output_file):
         metadata_ws.append(row)
 
     return metadata_ws
+
+
+def _safe_sheet_filename(sheet_name: str) -> str:
+    cleaned = re.sub(r"[^\w.-]+", "_", sheet_name.strip())
+    return cleaned or "sheet"
+
+
+def export_workbook_sheets_to_csv(workbook, output_dir: Path, include_hidden: bool = True):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    exported = []
+
+    for index, worksheet in enumerate(workbook.worksheets, start=1):
+        if not include_hidden and worksheet.sheet_state != "visible":
+            continue
+
+        filename = f"{index:02d}_{_safe_sheet_filename(worksheet.title)}.csv"
+        target_path = output_dir / filename
+
+        with target_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            for row in worksheet.iter_rows(values_only=True):
+                writer.writerow(["" if value is None else value for value in row])
+
+        exported.append(target_path)
+
+    return exported
 
 
 def find_column(ws, header_name):

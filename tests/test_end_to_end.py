@@ -32,6 +32,8 @@ class EndToEndTests(unittest.TestCase):
             scan_dir = temp_path / "scans"
             asset_dir = temp_path / "assets"
             output_file = temp_path / "output" / "report.xlsx"
+            csv_output_dir = temp_path / "csv"
+            run_summary_file = temp_path / "run_summary.json"
             expected_file = temp_path / "expected.xlsx"
 
             scan_dir.mkdir()
@@ -86,6 +88,10 @@ class EndToEndTests(unittest.TestCase):
                 filter_disabled_mode="ALL",
                 log_level="INFO",
                 log_file=None,
+                log_format="json",
+                csv_output_dir=csv_output_dir,
+                run_summary_file=run_summary_file,
+                config_file=None,
                 run_started_at=datetime(2026, 5, 7, 13, 2, 3),
             )
 
@@ -97,6 +103,10 @@ class EndToEndTests(unittest.TestCase):
 
             self.assertEqual(result_path, output_file)
             self.assertTrue(output_file.exists())
+            self.assertTrue(run_summary_file.exists())
+            self.assertTrue(csv_output_dir.exists())
+            csv_files = list(csv_output_dir.glob("*.csv"))
+            self.assertGreater(len(csv_files), 0)
 
             workbook = load_workbook(output_file)
             self.assertIn(SHEET_EXPECTED_VS_ACTUAL, workbook.sheetnames)
@@ -144,6 +154,15 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(metadata["Mode"], "offline")
             self.assertEqual(metadata["Output File"], str(output_file))
             self.assertIsNone(metadata["Log File"])
+            self.assertEqual(metadata["Log Format"], "json")
+            self.assertEqual(metadata["CSV Output Dir"], str(csv_output_dir))
+            self.assertEqual(metadata["Run Summary File"], str(run_summary_file))
+
+            run_summary = json.loads(run_summary_file.read_text(encoding="utf-8"))
+            self.assertEqual(run_summary["output_file"], str(output_file))
+            self.assertEqual(run_summary["totals"]["expected_ips"], 384)
+            self.assertEqual(run_summary["totals"]["gap_ips"], 0)
+            self.assertEqual(run_summary["log_format"], "json")
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)

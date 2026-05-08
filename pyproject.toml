@@ -15,6 +15,7 @@ authors = [
 dependencies = [
     "openpyxl>=3.1",
     "python-dotenv>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]

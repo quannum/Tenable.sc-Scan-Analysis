@@ -334,15 +334,29 @@ Write console logs to a file as well:
 
 `python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope --log-file C:\logs\tenable-scan-analysis.log`
 
+Use structured JSON logs for SIEM ingestion:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope --log-format json`
+
+Export every workbook sheet as CSV files for BI tools:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --csv-output-dir C:\output\csv`
+
+Provide settings from a config file (`.toml` or `.json`), with CLI flags overriding config values:
+
+`python main.py --config-file C:\config\tenable-scan.toml`
+
 Output:
 
 output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
 
 The default filename includes the run date and time to avoid overwriting earlier reports from the same day.
+Each run also writes a machine-readable summary JSON file to `output\run_summary.json` by default
+(or the path provided by `--run-summary-file`).
 
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
 If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
-Each workbook also includes a `Run_Metadata` sheet with the selected inputs, filters, output path, optional log path, and run timestamp.
+Each workbook also includes a `Run_Metadata` sheet with selected inputs, filters, output path, log settings, optional CSV path, summary path, and run timestamp.
 
 
 ------

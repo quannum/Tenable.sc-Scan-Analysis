@@ -1,3 +1,4 @@
+import shutil
 import unittest
 from datetime import datetime
 from io import StringIO
@@ -9,6 +10,91 @@ from tenable_scan_analysis.constants import VERSION, default_output_file
 
 
 class AppConfigTests(unittest.TestCase):
+    def test_config_file_toml_is_applied(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "config_file_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        config_file = temp_path / "settings.toml"
+        config_file.write_text(
+            (
+                'mode = "offline"\n'
+                'scan_json_dir = "cfg-scans"\n'
+                'asset_json_dir = "cfg-assets"\n'
+                "no_expected_scope = true\n"
+                'log_format = "json"\n'
+                'csv_output_dir = "cfg-csv"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            with (
+                patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+                patch(
+                    "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                ) as prompt_for_inputs,
+            ):
+                config = app_config.build_config(["--config-file", str(config_file)])
+
+            prompt_for_inputs.assert_not_called()
+            self.assertEqual(config.mode, "offline")
+            self.assertEqual(config.scan_json_dir, "cfg-scans")
+            self.assertEqual(config.asset_json_dir, "cfg-assets")
+            self.assertIsNone(config.expected_scope_file)
+            self.assertEqual(config.log_format, "json")
+            self.assertEqual(config.csv_output_dir, Path("cfg-csv"))
+            self.assertEqual(config.config_file, config_file)
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
+    def test_cli_values_override_config_file(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "config_override_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        config_file = temp_path / "settings.toml"
+        config_file.write_text(
+            (
+                'mode = "offline"\n'
+                'scan_json_dir = "cfg-scans"\n'
+                'asset_json_dir = "cfg-assets"\n'
+                "no_expected_scope = true\n"
+                'log_format = "json"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            with (
+                patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+                patch(
+                    "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                ) as prompt_for_inputs,
+            ):
+                config = app_config.build_config(
+                    [
+                        "--config-file",
+                        str(config_file),
+                        "--mode",
+                        "live",
+                        "--log-format",
+                        "text",
+                    ]
+                )
+
+            prompt_for_inputs.assert_not_called()
+            self.assertEqual(config.mode, "live")
+            self.assertEqual(config.log_format, "text")
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
     def test_default_output_file_includes_date_and_time(self):
         output_file = default_output_file(datetime(2026, 5, 7, 13, 2, 3))
         self.assertEqual(

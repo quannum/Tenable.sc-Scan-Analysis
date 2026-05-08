@@ -1,4 +1,5 @@
 import importlib
+import json
 import logging
 import shutil
 import unittest
@@ -59,8 +60,40 @@ class MainTests(unittest.TestCase):
             if temp_path.exists():
                 shutil.rmtree(temp_path)
 
+    def test_configure_logging_json_format_writes_json_line(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "json_logging_case"
+        log_file = temp_path / "logs" / "run.json.log"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            main.configure_logging("INFO", log_file=log_file, log_format="json")
+            logger = main.logging.getLogger("test.json")
+            logger.info("hello json logging")
+
+            lines = [
+                line.strip()
+                for line in log_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            payload = json.loads(lines[-1])
+            self.assertEqual(payload["level"], "INFO")
+            self.assertEqual(payload["logger"], "test.json")
+            self.assertEqual(payload["message"], "hello json logging")
+        finally:
+            logging.shutdown()
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
     def test_main_returns_non_zero_on_runtime_failure(self):
-        cfg = SimpleNamespace(log_level="INFO", log_file=None, mode="offline")
+        cfg = SimpleNamespace(
+            log_level="INFO",
+            log_file=None,
+            log_format="text",
+            mode="offline",
+        )
         with (
             patch("tenable_scan_analysis.cli.main.build_config", return_value=cfg),
             patch("tenable_scan_analysis.cli.main.configure_logging"),
