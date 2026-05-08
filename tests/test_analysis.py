@@ -80,13 +80,15 @@ class AnalysisTests(unittest.TestCase):
             scope_item="10.0.0.4-10.0.0.6",
         )
 
-        included_total, net_intervals, exclusions, excluded_total = calculate_scan_intervals(
-            scan_name=scan_name,
-            expected=expected,
-            expected_start=expected_start,
-            expected_end=expected_end,
-            actual_by_scan=defaultdict(list, {scan_name: [actual]}),
-            excluded_by_scan=defaultdict(list, {scan_name: [excluded]}),
+        included_total, net_intervals, exclusions, excluded_total = (
+            calculate_scan_intervals(
+                scan_name=scan_name,
+                expected=expected,
+                expected_start=expected_start,
+                expected_end=expected_end,
+                actual_by_scan=defaultdict(list, {scan_name: [actual]}),
+                excluded_by_scan=defaultdict(list, {scan_name: [excluded]}),
+            )
         )
 
         net_total = sum(end - start + 1 for start, end in net_intervals)

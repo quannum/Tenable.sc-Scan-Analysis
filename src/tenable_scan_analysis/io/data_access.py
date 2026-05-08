@@ -139,9 +139,7 @@ class DataAccess:
                 continue
 
             if result is None:
-                raise RuntimeError(
-                    f"Live API call '{operation_name}' returned no data"
-                )
+                raise RuntimeError(f"Live API call '{operation_name}' returned no data")
 
             return result
 

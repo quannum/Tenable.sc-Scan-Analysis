@@ -119,11 +119,14 @@ class DataAccessTests(unittest.TestCase):
         tenable_sc_module.TenableSC = FakeTenableSC
         tenable_module.sc = tenable_sc_module
 
-        with patch.dict(
-            sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
-            clear=False,
-        ), patch("tenable_scan_analysis.io.data_access.time.sleep") as sleep_mock:
+        with (
+            patch.dict(
+                sys.modules,
+                {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+                clear=False,
+            ),
+            patch("tenable_scan_analysis.io.data_access.time.sleep") as sleep_mock,
+        ):
             access = DataAccess(make_config())
             access.sc.scans._failures_before_success = 2
             scans = access.get_scans()
@@ -158,10 +161,14 @@ class DataAccessTests(unittest.TestCase):
                 scan_json_dir=str(scan_dir),
                 asset_json_dir=str(asset_dir),
             )
-            with self.assertLogs("tenable_scan_analysis.io.data_access", level="WARNING") as logs:
+            with self.assertLogs(
+                "tenable_scan_analysis.io.data_access", level="WARNING"
+            ) as logs:
                 access = DataAccess(cfg)
 
-            self.assertTrue(any("Duplicate object id '1'" in line for line in logs.output))
+            self.assertTrue(
+                any("Duplicate object id '1'" in line for line in logs.output)
+            )
             self.assertIn("Scan B", str(access.offline_scans.get("1")))
         finally:
             if temp_path.exists():

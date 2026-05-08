@@ -227,7 +227,9 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
         details = data_access.get_scan_details(scan_id)
         if not details:
-            LOGGER.warning("Skipping scan '%s' because details were not found", scan_name)
+            LOGGER.warning(
+                "Skipping scan '%s' because details were not found", scan_name
+            )
             continue
 
         ip_list = details.get("ipList")
@@ -308,7 +310,9 @@ def build_coverage_data(normalized_ws):
             continue
 
         if inclusion_type == INCLUDE:
-            entry = ScopeRecord(parsed=parsed, scan_name=scan_name, scope_item=scope_item)
+            entry = ScopeRecord(
+                parsed=parsed, scan_name=scan_name, scope_item=scope_item
+            )
             actual_scopes.append(entry)
             actual_by_scan[scan_name].append(entry)
         elif inclusion_type == EXCLUDE:
@@ -442,7 +446,9 @@ def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
     return f"Excluded {exclusion_ip_total} IPs:\n" + "\n".join(exclusion_lines)
 
 
-def determine_coverage_status(covered_count, expected_size, exclusion_ip_total, relevant_exclusions):
+def determine_coverage_status(
+    covered_count, expected_size, exclusion_ip_total, relevant_exclusions
+):
     if covered_count == expected_size:
         return STATUS_OK, "Yes", "Fully contained by scan scope"
 
@@ -584,7 +590,9 @@ def calculate_coverage_result(
     required_scan_value, required_scan_covered = determine_required_scan_coverage(
         required_scan, covering_scans
     )
-    coverage_pct = round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
+    coverage_pct = (
+        round((covered_count / expected_size) * 100, 2) if expected_size else 0.0
+    )
 
     return CoverageResult(
         environment=environment,

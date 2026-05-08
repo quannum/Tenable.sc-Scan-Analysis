@@ -125,7 +125,9 @@ def main(argv=None):
     try:
         config = build_config(argv)
         collector = configure_logging(config.log_level, config.log_file)
-        LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
+        LOGGER.info(
+            "Starting Tenable SC scan coverage analysis in %s mode", config.mode
+        )
 
         output_path = run_analysis(config, warning_records=collector.records)
         LOGGER.info("Workbook saved to %s", output_path)

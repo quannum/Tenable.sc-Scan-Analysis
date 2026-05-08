@@ -105,16 +105,15 @@ def build_config(argv=None):
             missing.append("--expected-scope-file or --no-expected-scope")
 
         if missing:
-            parser.error(
-                "--non-interactive requires: "
-                + ", ".join(missing)
-            )
+            parser.error("--non-interactive requires: " + ", ".join(missing))
 
     if needs_scan_dir or needs_asset_dir or needs_expected_file:
-        prompted_scan_dir, prompted_asset_dir, prompted_expected_file = prompt_for_inputs(
-            ask_scan_dir=needs_scan_dir,
-            ask_asset_dir=needs_asset_dir,
-            ask_expected_file=needs_expected_file,
+        prompted_scan_dir, prompted_asset_dir, prompted_expected_file = (
+            prompt_for_inputs(
+                ask_scan_dir=needs_scan_dir,
+                ask_asset_dir=needs_asset_dir,
+                ask_expected_file=needs_expected_file,
+            )
         )
         scan_json_dir = scan_json_dir or prompted_scan_dir
         asset_json_dir = asset_json_dir or prompted_asset_dir

@@ -3,7 +3,6 @@ from pathlib import Path
 
 from openpyxl.styles import Font, PatternFill
 
-
 VERSION = "0.1.0"
 
 

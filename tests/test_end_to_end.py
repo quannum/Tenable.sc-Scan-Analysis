@@ -51,14 +51,20 @@ class EndToEndTests(unittest.TestCase):
                 "typeFields": {"definedIPs": "10.0.1.0/24"},
             }
 
-            (scan_dir / "1_scan.json").write_text(json.dumps(scan_payload), encoding="utf-8")
-            (asset_dir / "100_asset.json").write_text(json.dumps(asset_payload), encoding="utf-8")
+            (scan_dir / "1_scan.json").write_text(
+                json.dumps(scan_payload), encoding="utf-8"
+            )
+            (asset_dir / "100_asset.json").write_text(
+                json.dumps(asset_payload), encoding="utf-8"
+            )
             (asset_dir / "broken.json").write_text("{not valid json", encoding="utf-8")
 
             expected_wb = Workbook()
             expected_ws = expected_wb.active
             expected_ws.title = "rsg-all"
-            expected_ws.append(["Scope Item", "Location", "Environment", "Required Scan"])
+            expected_ws.append(
+                ["Scope Item", "Location", "Environment", "Required Scan"]
+            )
             expected_ws.append(["10.0.0.0/24", "HQ", "Prod", "Weekly Network Scan"])
             expected_ws.append(["10.0.1.0/25", "HQ", "Prod", "Missing Scan"])
             expected_wb.save(expected_file)
@@ -85,7 +91,9 @@ class EndToEndTests(unittest.TestCase):
 
             with patch("sys.stderr", new=StringIO()):
                 collector = main.configure_logging("INFO")
-                result_path = main.run_analysis(config, warning_records=collector.records)
+                result_path = main.run_analysis(
+                    config, warning_records=collector.records
+                )
 
             self.assertEqual(result_path, output_file)
             self.assertTrue(output_file.exists())
@@ -111,12 +119,20 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(exec_ws["B4"].value, 0)
 
             warning_ws = workbook[SHEET_WARNINGS]
-            warning_messages = [row[2] for row in warning_ws.iter_rows(min_row=2, values_only=True)]
+            warning_messages = [
+                row[2] for row in warning_ws.iter_rows(min_row=2, values_only=True)
+            ]
             self.assertTrue(
-                any("Skipping unreadable JSON file" in message for message in warning_messages)
+                any(
+                    "Skipping unreadable JSON file" in message
+                    for message in warning_messages
+                )
             )
             self.assertTrue(
-                any("references missing asset id '999'" in message for message in warning_messages)
+                any(
+                    "references missing asset id '999'" in message
+                    for message in warning_messages
+                )
             )
 
             metadata_ws = workbook[SHEET_RUN_METADATA]

@@ -1,7 +1,6 @@
 from pathlib import Path
 import sys
 
-
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parent
 SRC_PATH = REPO_ROOT / "src"

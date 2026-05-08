@@ -49,8 +49,7 @@ def append_executive_summary(workbook, totals):
 
     overall_coverage_pct = (
         round(
-            (totals.portfolio_covered_total / totals.portfolio_expected_total)
-            * 100,
+            (totals.portfolio_covered_total / totals.portfolio_expected_total) * 100,
             2,
         )
         if totals.portfolio_expected_total
@@ -59,8 +58,7 @@ def append_executive_summary(workbook, totals):
 
     portfolio_exclusion_loss_pct = (
         round(
-            (totals.portfolio_exclusion_total / totals.portfolio_included_total)
-            * 100,
+            (totals.portfolio_exclusion_total / totals.portfolio_included_total) * 100,
             2,
         )
         if totals.portfolio_included_total
@@ -147,9 +145,7 @@ def build_run_metadata_sheet(workbook, config, output_file):
 
     run_started_at = getattr(config, "run_started_at", None)
     run_started_value = (
-        run_started_at.isoformat(sep=" ", timespec="seconds")
-        if run_started_at
-        else ""
+        run_started_at.isoformat(sep=" ", timespec="seconds") if run_started_at else ""
     )
 
     rows = [
