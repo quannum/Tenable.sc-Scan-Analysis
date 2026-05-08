@@ -146,6 +146,7 @@ Exclusions override inclusions.
 If `EXPECTED_SCOPE_FILE` is selected, the script:
 - Loads expected ranges from sheet `rsg-all`
 - Falls back to `Expected_Ranges` if `rsg-all` is not present
+- Supports case-insensitive matching when `--expected-sheet` is provided
 - Compares expected ranges to actual scan coverage
 - Reports whether the optional `Required Scan` value is one of the scans covering each expected range
 - Performs:
@@ -318,9 +319,16 @@ Live mode does not require offline JSON directory arguments:
 
 `python main.py --mode live --expected-scope-file C:\expected.xlsx`
 
+Live mode requires `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` to be set (for example in `.env`).
+If any are missing, the run exits with a clear validation error before API calls.
+
 Show the installed version:
 
 `python main.py --version`
+
+Write console logs to a file as well:
+
+`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope --log-file C:\logs\tenable-scan-analysis.log`
 
 Output:
 
@@ -330,7 +338,7 @@ The default filename includes the run date and time to avoid overwriting earlier
 
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
 If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
-Each workbook also includes a `Run_Metadata` sheet with the selected inputs, filters, output path, and run timestamp.
+Each workbook also includes a `Run_Metadata` sheet with the selected inputs, filters, output path, optional log path, and run timestamp.
 
 
 ------
@@ -343,7 +351,7 @@ Run the scope and interval math tests with:
 
 Run the full test suite with:
 
-`python -m unittest test_scope_math.py test_analysis.py test_filtering.py test_end_to_end.py test_app_config.py`
+`python -m unittest test_scope_math.py test_analysis.py test_filtering.py test_end_to_end.py test_app_config.py test_data_access.py test_main.py`
 
 
 ------

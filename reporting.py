@@ -161,6 +161,7 @@ def build_run_metadata_sheet(workbook, config, output_file):
         ("Expected Scope File", config.expected_scope_file or ""),
         ("Expected Sheet", config.expected_sheet or ""),
         ("Output File", str(output_file)),
+        ("Log File", str(config.log_file) if config.log_file else ""),
         ("Include Keywords", ", ".join(config.include_keywords)),
         ("Exclude Keywords", ", ".join(config.exclude_keywords)),
         ("Match All Include", str(config.match_all_include)),

@@ -27,6 +27,7 @@ class Config:
     case_sensitive: bool
     filter_disabled_mode: str
     log_level: str
+    log_file: Path | None
     run_started_at: datetime | None = None
 
 
@@ -69,6 +70,10 @@ def build_argument_parser():
         default="ALL",
     )
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument(
+        "--log-file",
+        help="Optional path to write logs (in addition to console output).",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     return parser
 
@@ -121,6 +126,7 @@ def build_config(argv=None):
         if args.output_file
         else default_output_file(run_started_at)
     )
+    log_file = Path(args.log_file) if args.log_file else None
 
     if scan_json_dir:
         os.makedirs(scan_json_dir, exist_ok=True)
@@ -143,5 +149,6 @@ def build_config(argv=None):
         case_sensitive=args.case_sensitive,
         filter_disabled_mode=args.filter_disabled_mode,
         log_level=args.log_level,
+        log_file=log_file,
         run_started_at=run_started_at,
     )

@@ -329,6 +329,21 @@ def resolve_expected_sheet(expected_workbook, expected_sheet=None):
         if expected_sheet in expected_workbook.sheetnames:
             return expected_workbook[expected_sheet]
 
+        lowered = expected_sheet.lower()
+        case_insensitive_matches = [
+            sheet_name
+            for sheet_name in expected_workbook.sheetnames
+            if sheet_name.lower() == lowered
+        ]
+        if len(case_insensitive_matches) == 1:
+            return expected_workbook[case_insensitive_matches[0]]
+        if len(case_insensitive_matches) > 1:
+            matches = ", ".join(case_insensitive_matches)
+            raise KeyError(
+                f"Requested expected sheet '{expected_sheet}' matched multiple sheets "
+                f"case-insensitively: {matches}"
+            )
+
         available = ", ".join(expected_workbook.sheetnames)
         raise KeyError(
             f"Expected scope workbook does not contain requested sheet "

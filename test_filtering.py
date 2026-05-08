@@ -61,6 +61,35 @@ class FilterScanTests(unittest.TestCase):
 
         self.assertEqual([scan["name"] for scan in filtered], ["Prod Weekly"])
 
+    def test_missing_schedule_enabled_defaults_to_true(self):
+        scans = [{"name": "No Schedule Scan"}]
+
+        filtered = filter_scans(scans, config(filter_disabled_mode="ENABLED_ONLY"))
+
+        self.assertEqual([scan["name"] for scan in filtered], ["No Schedule Scan"])
+
+    def test_case_sensitive_filtering_respects_letter_case(self):
+        scans = [{"name": "Prod Weekly"}, {"name": "prod weekly"}]
+
+        filtered = filter_scans(
+            scans,
+            config(include_keywords=["Prod"], case_sensitive=True),
+        )
+
+        self.assertEqual([scan["name"] for scan in filtered], ["Prod Weekly"])
+
+    def test_filtering_uses_info_name_when_present(self):
+        scans = [
+            {"name": "fallback", "info": {"name": "Production Weekly"}},
+            {"name": "fallback", "info": {"name": "Discovery Monthly"}},
+        ]
+
+        filtered = filter_scans(scans, config(include_keywords=["production"]))
+
+        self.assertEqual(
+            [scan["info"]["name"] for scan in filtered], ["Production Weekly"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

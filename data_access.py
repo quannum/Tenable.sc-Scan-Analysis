@@ -39,6 +39,7 @@ class DataAccess:
         self.offline_assets = {}
 
         if config.mode == "live":
+            self._validate_live_config(config)
             try:
                 from tenable.sc import TenableSC
             except ImportError as exc:
@@ -53,9 +54,32 @@ class DataAccess:
             self.offline_scans = load_json_folder(config.scan_json_dir)
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
+    @staticmethod
+    def _validate_live_config(config):
+        missing = []
+        if not config.sc_url:
+            missing.append("SC_URL")
+        if not config.sc_access_key:
+            missing.append("SC_ACCESS_KEY")
+        if not config.sc_secret_key:
+            missing.append("SC_SECRET_KEY")
+
+        if missing:
+            raise ValueError(
+                "Live mode is missing required environment values: "
+                + ", ".join(missing)
+            )
+
     def get_scans(self):
         if self.config.mode == "live":
-            return self.sc.scans.list()["usable"]
+            scans_payload = self.sc.scans.list()
+            usable = scans_payload.get("usable")
+            if isinstance(usable, list):
+                return usable
+            LOGGER.warning(
+                "Unexpected live scan payload shape; expected key 'usable' as list"
+            )
+            return []
         return list(self.offline_scans.values())
 
     def get_scan_details(self, scan_id):

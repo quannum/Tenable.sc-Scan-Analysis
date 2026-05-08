@@ -40,11 +40,22 @@ class WarningCollector(logging.Handler):
         )
 
 
-def configure_logging(level_name):
+def configure_logging(level_name, log_file=None):
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     collector = WarningCollector()
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
-    logging.getLogger().addHandler(collector)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(collector)
+
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(level)
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+        )
+        root_logger.addHandler(file_handler)
+
     return collector
 
 
@@ -90,7 +101,7 @@ def run_analysis(config, warning_records=None):
 
 def main(argv=None):
     config = build_config(argv)
-    collector = configure_logging(config.log_level)
+    collector = configure_logging(config.log_level, config.log_file)
     LOGGER.info("Starting Tenable SC scan coverage analysis in %s mode", config.mode)
 
     output_path = run_analysis(config, warning_records=collector.records)

@@ -78,6 +78,7 @@ class EndToEndTests(unittest.TestCase):
                 case_sensitive=False,
                 filter_disabled_mode="ALL",
                 log_level="INFO",
+                log_file=None,
                 run_started_at=datetime(2026, 5, 7, 13, 2, 3),
             )
 
@@ -125,6 +126,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(metadata["Run Started At"], "2026-05-07 13:02:03")
             self.assertEqual(metadata["Mode"], "offline")
             self.assertEqual(metadata["Output File"], str(output_file))
+            self.assertIsNone(metadata["Log File"])
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)

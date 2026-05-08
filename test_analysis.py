@@ -104,6 +104,15 @@ class AnalysisTests(unittest.TestCase):
 
         self.assertEqual(sheet.title, "CustomSheet")
 
+    def test_resolve_expected_sheet_matches_case_insensitively(self):
+        workbook = Workbook()
+        workbook.active.title = "Default"
+        workbook.create_sheet("CustomSheet")
+
+        sheet = resolve_expected_sheet(workbook, expected_sheet="customsheet")
+
+        self.assertEqual(sheet.title, "CustomSheet")
+
     def test_resolve_expected_sheet_rejects_missing_requested_sheet(self):
         workbook = Workbook()
         workbook.active.title = "Default"
