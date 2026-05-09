@@ -133,10 +133,11 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Config file root must be an object/dictionary.")
 
-    section = data.get("tenable_scan_analysis", data)
+    section = data.get("src", data.get("tenable_scan_analysis", data))
     if not isinstance(section, dict):
         raise ValueError(
-            "Config 'tenable_scan_analysis' section must be an object/dictionary."
+            "Config 'src' (or legacy 'tenable_scan_analysis') section must be "
+            "an object/dictionary."
         )
 
     return _normalize_config_keys(section)

@@ -5,8 +5,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-import tenable_scan_analysis.io.app_config as app_config
-from tenable_scan_analysis.constants import VERSION, default_output_file
+import src.io.app_config as app_config
+from src.constants import VERSION, default_output_file
 
 
 class AppConfigTests(unittest.TestCase):
@@ -32,9 +32,9 @@ class AppConfigTests(unittest.TestCase):
 
         try:
             with (
-                patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+                patch("src.io.app_config.os.makedirs"),
                 patch(
-                    "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                    "src.io.app_config.prompt_for_inputs"
                 ) as prompt_for_inputs,
             ):
                 config = app_config.build_config(["--config-file", str(config_file)])
@@ -72,9 +72,9 @@ class AppConfigTests(unittest.TestCase):
 
         try:
             with (
-                patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+                patch("src.io.app_config.os.makedirs"),
                 patch(
-                    "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                    "src.io.app_config.prompt_for_inputs"
                 ) as prompt_for_inputs,
             ):
                 config = app_config.build_config(
@@ -104,7 +104,7 @@ class AppConfigTests(unittest.TestCase):
 
     def test_live_mode_with_no_expected_scope_does_not_prompt(self):
         with patch(
-            "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+            "src.io.app_config.prompt_for_inputs"
         ) as prompt_for_inputs:
             config = app_config.build_config(["--mode", "live", "--no-expected-scope"])
 
@@ -116,9 +116,9 @@ class AppConfigTests(unittest.TestCase):
 
     def test_missing_offline_paths_prompt_when_interactive(self):
         with (
-            patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+            patch("src.io.app_config.os.makedirs"),
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
         ):
             prompt_for_inputs.return_value = ("picked-scans", "picked-assets", "")
@@ -136,7 +136,7 @@ class AppConfigTests(unittest.TestCase):
         with (
             patch("sys.stderr", new=StringIO()),
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
             self.assertRaises(SystemExit),
         ):
@@ -148,7 +148,7 @@ class AppConfigTests(unittest.TestCase):
         with (
             patch("sys.stderr", new=StringIO()),
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
             self.assertRaises(SystemExit),
         ):
@@ -166,9 +166,9 @@ class AppConfigTests(unittest.TestCase):
 
     def test_offline_mode_with_all_paths_does_not_prompt(self):
         with (
-            patch("tenable_scan_analysis.io.app_config.os.makedirs") as makedirs,
+            patch("src.io.app_config.os.makedirs") as makedirs,
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
         ):
             config = app_config.build_config(
@@ -191,9 +191,9 @@ class AppConfigTests(unittest.TestCase):
 
     def test_expected_sheet_is_configurable(self):
         with (
-            patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+            patch("src.io.app_config.os.makedirs"),
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
         ):
             config = app_config.build_config(
@@ -214,9 +214,9 @@ class AppConfigTests(unittest.TestCase):
 
     def test_log_file_is_configurable(self):
         with (
-            patch("tenable_scan_analysis.io.app_config.os.makedirs"),
+            patch("src.io.app_config.os.makedirs"),
             patch(
-                "tenable_scan_analysis.io.app_config.prompt_for_inputs"
+                "src.io.app_config.prompt_for_inputs"
             ) as prompt_for_inputs,
         ):
             config = app_config.build_config(

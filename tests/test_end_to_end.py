@@ -9,15 +9,15 @@ from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
-from tenable_scan_analysis.constants import (
+from src.constants import (
     SHEET_EXECUTIVE_SUMMARY,
     SHEET_EXPECTED_VS_ACTUAL,
     SHEET_RUN_METADATA,
     SHEET_WARNINGS,
 )
-from tenable_scan_analysis.io.app_config import Config
+from src.io.app_config import Config
 
-main = importlib.import_module("tenable_scan_analysis.cli.main")
+main = importlib.import_module("src.cli.main")
 
 
 class EndToEndTests(unittest.TestCase):

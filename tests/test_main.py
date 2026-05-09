@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-main = importlib.import_module("tenable_scan_analysis.cli.main")
+main = importlib.import_module("src.cli.main")
 
 
 class MainTests(unittest.TestCase):
@@ -95,10 +95,10 @@ class MainTests(unittest.TestCase):
             mode="offline",
         )
         with (
-            patch("tenable_scan_analysis.cli.main.build_config", return_value=cfg),
-            patch("tenable_scan_analysis.cli.main.configure_logging"),
+            patch("src.cli.main.build_config", return_value=cfg),
+            patch("src.cli.main.configure_logging"),
             patch(
-                "tenable_scan_analysis.cli.main.run_analysis",
+                "src.cli.main.run_analysis",
                 side_effect=RuntimeError("boom"),
             ),
         ):

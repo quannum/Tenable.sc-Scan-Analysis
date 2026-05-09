@@ -297,7 +297,7 @@ If installed as a package, run:
 
 You can also run as a module after install:
 
-`python -m tenable_scan_analysis`
+`python -m src`
 
 Optional CLI arguments can be used instead of the file pickers:
 
@@ -377,7 +377,7 @@ Run the full test suite with:
 
 Core application code is in:
 
-`src/tenable_scan_analysis/`
+`src/`
 
 Suggested internal boundaries:
 

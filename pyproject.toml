@@ -30,13 +30,11 @@ dev = [
 ]
 
 [project.scripts]
-tenable-scan-analysis = "tenable_scan_analysis.cli.main:main"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
+tenable-scan-analysis = "src.cli.main:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["src*"]
 
 [tool.black]
 line-length = 88

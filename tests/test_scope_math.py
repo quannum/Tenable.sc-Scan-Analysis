@@ -1,7 +1,7 @@
 import unittest
 
-from tenable_scan_analysis.core.analysis import validate_expected_row
-from tenable_scan_analysis.core.scope_utils import (
+from src.core.analysis import validate_expected_row
+from src.core.scope_utils import (
     merge_intervals,
     parse_scope_item,
     scope_contains,

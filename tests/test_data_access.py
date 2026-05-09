@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tenable_scan_analysis.io.data_access import DataAccess
+from src.io.data_access import DataAccess
 
 
 def make_config(**overrides):
@@ -125,7 +125,7 @@ class DataAccessTests(unittest.TestCase):
                 {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
                 clear=False,
             ),
-            patch("tenable_scan_analysis.io.data_access.time.sleep") as sleep_mock,
+            patch("src.io.data_access.time.sleep") as sleep_mock,
         ):
             access = DataAccess(make_config())
             access.sc.scans._failures_before_success = 2
@@ -161,9 +161,7 @@ class DataAccessTests(unittest.TestCase):
                 scan_json_dir=str(scan_dir),
                 asset_json_dir=str(asset_dir),
             )
-            with self.assertLogs(
-                "tenable_scan_analysis.io.data_access", level="WARNING"
-            ) as logs:
+            with self.assertLogs("src.io.data_access", level="WARNING") as logs:
                 access = DataAccess(cfg)
 
             self.assertTrue(
