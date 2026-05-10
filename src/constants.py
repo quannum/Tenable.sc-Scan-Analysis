@@ -3,7 +3,7 @@ from pathlib import Path
 
 from openpyxl.styles import Font, PatternFill
 
-VERSION = "0.1.0"
+VERSION = "1.8"
 
 
 def default_output_file(run_datetime: datetime | None = None) -> Path:
