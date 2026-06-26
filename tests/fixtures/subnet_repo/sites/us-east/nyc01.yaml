@@ -1,0 +1,40 @@
+name: New York Office
+site_code: NYC01
+description: New York corporate office
+location: New York, NY
+region: US East
+
+public_network_definition:
+  name: NYC01 Public
+  description: Public-facing office range
+  network: 203.0.113.0
+  cidr: 26
+  subnetmask: 255.255.255.192
+
+private_network_definition:
+  name: NYC01 Private
+  description: Internal office supernet
+  network: 10.1.0.0
+  cidr: 16
+  subnetmask: 255.255.0.0
+  vlans:
+    - name: Servers
+      vlan_tag: 120
+      description: Server VLAN
+      network: 10.1.16.0
+      cidr: 24
+      subnetmask: 255.255.255.0
+
+    - name: End User
+      vlan_tag: 130
+      description: Workstation VLAN
+      network: 10.1.32.0
+      cidr: 22
+      subnetmask: 255.255.252.0
+
+    - name: Network Management
+      vlan_tag: 140
+      description: Network device management VLAN
+      network: 10.1.48.0
+      cidr: 24
+      subnetmask: 255.255.255.0

@@ -1,0 +1,320 @@
+import argparse
+import logging
+import os
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+from ..core.analysis import (
+    build_coverage_data,
+    build_scope_sheets,
+    calculate_coverage_result,
+)
+from ..core.scope_utils import parse_scope_item
+from ..io.app_config import parse_csv_list
+from ..io.data_access import DataAccess
+from ..reporting.workbook import build_workbook
+from .audit import AuditLogger, write_proposed_change_audits
+from .models import CoverageTarget, CoverageValidationResult
+from .planning import apply_naming_rules_to_targets, generate_proposed_changes
+from .subnet_source import load_yaml_subnet_repo
+
+LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class CoverageSourceConfig:
+    mode: str
+    scan_json_dir: str | None
+    asset_json_dir: str | None
+    sc_access_key: str | None
+    sc_secret_key: str | None
+    sc_url: str | None
+    include_keywords: list[str]
+    exclude_keywords: list[str]
+    match_all_include: bool
+    case_sensitive: bool
+    filter_disabled_mode: str
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Load subnet-as-code YAML files, validate Tenable.sc coverage, "
+            "and generate detect-and-plan audit outputs."
+        )
+    )
+    parser.add_argument("--subnet-repo-path", required=True)
+    parser.add_argument("--output-dir", default="output")
+    parser.add_argument("--run-id")
+    parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True)
+    parser.add_argument("--no-dry-run", dest="dry_run", action="store_false")
+    parser.add_argument("--mode", choices=["offline", "live"], default="offline")
+    parser.add_argument("--scan-json-dir")
+    parser.add_argument("--asset-json-dir")
+    parser.add_argument("--include-keywords")
+    parser.add_argument("--exclude-keywords")
+    parser.add_argument("--match-all-include", action="store_true", default=False)
+    parser.add_argument("--case-sensitive", action="store_true", default=False)
+    parser.add_argument(
+        "--filter-disabled-mode",
+        choices=["ALL", "ENABLED_ONLY", "DISABLED_ONLY"],
+        default="ALL",
+    )
+    parser.add_argument("--log-level", default="INFO")
+    parser.add_argument(
+        "--sc-url",
+        help="Optional Tenable.sc URL override for live mode. Defaults to SC_URL.",
+    )
+    parser.add_argument(
+        "--sc-access-key",
+        help=(
+            "Optional Tenable.sc access key override for live mode. "
+            "Defaults to SC_ACCESS_KEY."
+        ),
+    )
+    parser.add_argument(
+        "--sc-secret-key",
+        help=(
+            "Optional Tenable.sc secret key override for live mode. "
+            "Defaults to SC_SECRET_KEY."
+        ),
+    )
+    return parser
+
+
+def main(argv=None) -> int:
+    load_dotenv()
+    parser = build_argument_parser()
+    args = parser.parse_args(argv)
+
+    configure_logging(args.log_level)
+
+    run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output_dir = Path(args.output_dir)
+    run_dir = output_dir / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
+    audit_logger.emit(
+        "run_started",
+        subnet_repo_path=args.subnet_repo_path,
+        output_dir=output_dir,
+        dry_run=args.dry_run,
+        mode=args.mode,
+    )
+
+    if not args.dry_run:
+        LOGGER.info(
+            "Mutation is not implemented in this phase; continuing in "
+            "detect-and-plan mode."
+        )
+
+    connector_result = load_yaml_subnet_repo(
+        args.subnet_repo_path,
+        audit_logger=audit_logger,
+    )
+    named_targets = apply_naming_rules_to_targets(connector_result.coverage_targets)
+
+    actual_scopes, actual_by_scan, excluded_by_scan = load_actual_scope_data(
+        build_coverage_source_config(args)
+    )
+    coverage_results = validate_coverage_targets(
+        named_targets,
+        actual_scopes=actual_scopes,
+        actual_by_scan=actual_by_scan,
+        excluded_by_scan=excluded_by_scan,
+        audit_logger=audit_logger,
+    )
+    proposed_changes = generate_proposed_changes(coverage_results, run_id=run_id)
+
+    for change in proposed_changes:
+        audit_logger.emit(
+            "proposed_change_created",
+            site_code=change.site_code,
+            target_type=change.target_type,
+            cidr=change.cidr,
+            current_status=change.current_status,
+            proposed_action=change.proposed_action,
+            source_file=change.source_file,
+        )
+
+    csv_path, md_path = write_proposed_change_audits(
+        run_id=run_id,
+        run_dir=run_dir,
+        proposed_changes=proposed_changes,
+        audit_logger=audit_logger,
+    )
+
+    status_counts = Counter(result.status for result in coverage_results)
+    summary = {
+        "yaml_files_processed": connector_result.files_processed,
+        "yaml_files_failed": connector_result.files_failed,
+        "coverage_targets_created": len(named_targets),
+        "ok_count": status_counts.get("OK", 0),
+        "gap_count": status_counts.get("GAP", 0),
+        "partial_count": status_counts.get("PARTIAL", 0),
+        "excluded_count": status_counts.get("EXCLUDED", 0),
+        "proposed_changes_count": len(proposed_changes),
+        "output_directory": str(run_dir),
+        "audit_log": str(audit_logger.path),
+        "csv_audit": str(csv_path),
+        "markdown_audit": str(md_path),
+    }
+
+    audit_logger.emit("run_completed", **summary)
+    print_run_summary(run_id, summary)
+    return 0
+
+
+def configure_logging(level_name: str) -> None:
+    level = getattr(logging, str(level_name).upper(), logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s: %(message)s",
+        force=True,
+    )
+
+
+def build_coverage_source_config(args) -> CoverageSourceConfig:
+    return CoverageSourceConfig(
+        mode=args.mode,
+        scan_json_dir=args.scan_json_dir,
+        asset_json_dir=args.asset_json_dir,
+        sc_access_key=args.sc_access_key or os.getenv("SC_ACCESS_KEY"),
+        sc_secret_key=args.sc_secret_key or os.getenv("SC_SECRET_KEY"),
+        sc_url=args.sc_url or os.getenv("SC_URL"),
+        include_keywords=parse_csv_list(args.include_keywords),
+        exclude_keywords=parse_csv_list(args.exclude_keywords),
+        match_all_include=bool(args.match_all_include),
+        case_sensitive=bool(args.case_sensitive),
+        filter_disabled_mode=args.filter_disabled_mode,
+    )
+
+
+def load_actual_scope_data(config: CoverageSourceConfig):
+    data_access = DataAccess(config)
+    _, scope_ws, normalized_ws = build_workbook()
+    build_scope_sheets(scope_ws, normalized_ws, data_access, config)
+    actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
+        normalized_ws
+    )
+    return actual_scopes, actual_by_scan, excluded_by_scan
+
+
+def validate_coverage_targets(
+    targets: list[CoverageTarget],
+    actual_scopes,
+    actual_by_scan,
+    excluded_by_scan,
+    audit_logger=None,
+) -> list[CoverageValidationResult]:
+    coverage_results: list[CoverageValidationResult] = []
+    exclusion_impact_by_scan = defaultdict(int)
+
+    for target in targets:
+        expected = parse_scope_item(target.cidr)
+        base_result = calculate_coverage_result(
+            scope_item=target.cidr,
+            location=target.location,
+            environment=target.target_type,
+            required_scan=target.required_scan_name or "",
+            expected=expected,
+            actual_scopes=actual_scopes,
+            actual_by_scan=actual_by_scan,
+            excluded_by_scan=excluded_by_scan,
+            exclusion_impact_by_scan=exclusion_impact_by_scan,
+        )
+
+        status = derive_workflow_status(
+            base_result.status, base_result.exclusion_ip_total
+        )
+        coverage_result = CoverageValidationResult(
+            status=status,
+            target_type=target.target_type,
+            cidr=target.cidr,
+            site_code=target.site_code,
+            site_name=target.site_name,
+            region=target.region,
+            location=target.location,
+            description=target.description,
+            vlan_name=target.vlan_name,
+            vlan_tag=target.vlan_tag,
+            covering_scans=sorted(base_result.covering_scans),
+            reason=base_result.reason,
+            source_file=target.source_file,
+            required_asset_name=target.required_asset_name,
+            required_scan_name=target.required_scan_name,
+            required_policy_name=target.required_policy_name,
+            required_scan_covered=base_result.required_scan_covered,
+            expected_size=base_result.expected_size,
+            covered_count=base_result.covered_count,
+            gap_count=base_result.gap_count,
+            exclusion_ip_total=base_result.exclusion_ip_total,
+            coverage_pct=base_result.coverage_pct,
+        )
+        coverage_results.append(coverage_result)
+
+        if audit_logger and coverage_result.status == "GAP":
+            audit_logger.emit(
+                "coverage_gap_detected",
+                site_code=coverage_result.site_code,
+                target_type=coverage_result.target_type,
+                cidr=coverage_result.cidr,
+                required_scan_name=coverage_result.required_scan_name,
+                source_file=coverage_result.source_file,
+            )
+        elif audit_logger and coverage_result.status == "PARTIAL":
+            audit_logger.emit(
+                "coverage_partial_detected",
+                site_code=coverage_result.site_code,
+                target_type=coverage_result.target_type,
+                cidr=coverage_result.cidr,
+                reason=coverage_result.reason,
+                source_file=coverage_result.source_file,
+            )
+        elif audit_logger and coverage_result.status == "EXCLUDED":
+            audit_logger.emit(
+                "coverage_exclusion_detected",
+                site_code=coverage_result.site_code,
+                target_type=coverage_result.target_type,
+                cidr=coverage_result.cidr,
+                exclusion_ip_total=coverage_result.exclusion_ip_total,
+                reason=coverage_result.reason,
+                source_file=coverage_result.source_file,
+            )
+
+    if audit_logger:
+        status_counts = Counter(result.status for result in coverage_results)
+        audit_logger.emit(
+            "coverage_validation_completed",
+            target_count=len(coverage_results),
+            ok_count=status_counts.get("OK", 0),
+            gap_count=status_counts.get("GAP", 0),
+            partial_count=status_counts.get("PARTIAL", 0),
+            excluded_count=status_counts.get("EXCLUDED", 0),
+        )
+
+    return coverage_results
+
+
+def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
+    if status == "PARTIAL" and exclusion_ip_total > 0:
+        return "EXCLUDED"
+    return status
+
+
+def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
+    print(f"Run ID: {run_id}")
+    print(f"YAML files processed: {summary['yaml_files_processed']}")
+    print(f"YAML files failed: {summary['yaml_files_failed']}")
+    print(f"Coverage targets created: {summary['coverage_targets_created']}")
+    print(f"OK count: {summary['ok_count']}")
+    print(f"GAP count: {summary['gap_count']}")
+    print(f"PARTIAL count: {summary['partial_count']}")
+    print(f"EXCLUDED count: {summary['excluded_count']}")
+    print(f"Proposed changes count: {summary['proposed_changes_count']}")
+    print(f"Output directory: {summary['output_directory']}")

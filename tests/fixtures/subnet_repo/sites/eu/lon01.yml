@@ -1,0 +1,18 @@
+name: London Office
+site_code: LON01
+description: London media office
+location: London, UK
+region: EMEA
+
+private_network_definition:
+  name: LON01 Private
+  description: Internal office supernet
+  network: 10.20.0.0
+  cidr: 16
+  subnetmask: 255.255.0.0
+  vlans:
+    - name: Media / AV
+      description: Media devices VLAN
+      network: 10.20.10.0
+      cidr: 24
+      subnetmask: 255.255.255.0

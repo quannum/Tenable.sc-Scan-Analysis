@@ -1,0 +1,12 @@
+name: Dallas Office
+site_code: DAL01
+description: Dallas branch office
+location: Dallas, TX
+region: US West
+
+public_network_definition:
+  name: DAL01 Public
+  description: Invalid CIDR example
+  network: 203.0.113.128
+  cidr: 35
+  subnetmask: 255.255.255.224
