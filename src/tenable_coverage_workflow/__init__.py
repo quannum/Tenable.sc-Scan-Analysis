@@ -21,15 +21,20 @@ from .models import (
     VlanRange,
     YamlConnectorResult,
 )
+from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
+from .service_config import ScheduledServiceConfig
 
 __all__ = [
     "CoverageTarget",
     "CoverageValidationResult",
+    "DetectAndPlanConfig",
     "NetworkRange",
     "PrivateNetworkRange",
     "ProposedChange",
+    "ScheduledServiceConfig",
     "SiteNetworkDefinition",
     "ValidationIssue",
     "VlanRange",
     "YamlConnectorResult",
+    "run_detect_and_plan",
 ]

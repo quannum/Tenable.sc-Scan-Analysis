@@ -33,6 +33,7 @@ dev = [
 [project.scripts]
 tenable-scan-analysis = "src.cli.main:main"
 tenable-coverage-detect-plan = "src.tenable_coverage_workflow.run_detect_and_plan:main"
+tenable-coverage-scheduled = "src.tenable_coverage_workflow.service_runner:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

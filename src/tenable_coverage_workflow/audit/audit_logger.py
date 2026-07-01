@@ -57,6 +57,19 @@ def atomic_write_text(path: str | Path, content: str) -> Path:
     return destination
 
 
+def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
+    return atomic_write_text(
+        path,
+        json.dumps(
+            _serialize_value(payload),
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+
+
 def _serialize_value(value: Any) -> Any:
     if is_dataclass(value):
         return {key: _serialize_value(item) for key, item in asdict(value).items()}

@@ -18,11 +18,32 @@ from ..io.app_config import parse_csv_list
 from ..io.data_access import DataAccess
 from ..reporting.workbook import build_workbook
 from .audit import AuditLogger, write_proposed_change_audits
+from .audit.audit_logger import atomic_write_json
 from .models import CoverageTarget, CoverageValidationResult
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
 from .subnet_source import load_yaml_subnet_repo
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class DetectAndPlanConfig:
+    subnet_repo_path: str
+    output_dir: Path
+    run_id: str | None
+    dry_run: bool
+    mode: str
+    scan_json_dir: str | None
+    asset_json_dir: str | None
+    sc_access_key: str | None
+    sc_secret_key: str | None
+    sc_url: str | None
+    include_keywords: list[str]
+    exclude_keywords: list[str]
+    match_all_include: bool
+    case_sensitive: bool
+    filter_disabled_mode: str
+    log_level: str = "INFO"
 
 
 @dataclass
@@ -91,36 +112,88 @@ def main(argv=None) -> int:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
 
-    configure_logging(args.log_level)
+    config = build_detect_and_plan_config(args)
+    configure_logging(config.log_level)
+    summary = run_detect_and_plan(config)
+    print_run_summary(summary["run_id"], summary)
+    return 0
 
-    run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    output_dir = Path(args.output_dir)
+
+def configure_logging(level_name: str) -> None:
+    level = getattr(logging, str(level_name).upper(), logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s: %(message)s",
+        force=True,
+    )
+
+
+def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
+    return DetectAndPlanConfig(
+        subnet_repo_path=args.subnet_repo_path,
+        output_dir=Path(args.output_dir),
+        run_id=args.run_id,
+        dry_run=bool(args.dry_run),
+        mode=args.mode,
+        scan_json_dir=args.scan_json_dir,
+        asset_json_dir=args.asset_json_dir,
+        sc_access_key=args.sc_access_key or os.getenv("SC_ACCESS_KEY"),
+        sc_secret_key=args.sc_secret_key or os.getenv("SC_SECRET_KEY"),
+        sc_url=args.sc_url or os.getenv("SC_URL"),
+        include_keywords=parse_csv_list(args.include_keywords),
+        exclude_keywords=parse_csv_list(args.exclude_keywords),
+        match_all_include=bool(args.match_all_include),
+        case_sensitive=bool(args.case_sensitive),
+        filter_disabled_mode=args.filter_disabled_mode,
+        log_level=args.log_level,
+    )
+
+
+def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceConfig:
+    return CoverageSourceConfig(
+        mode=config.mode,
+        scan_json_dir=config.scan_json_dir,
+        asset_json_dir=config.asset_json_dir,
+        sc_access_key=config.sc_access_key,
+        sc_secret_key=config.sc_secret_key,
+        sc_url=config.sc_url,
+        include_keywords=list(config.include_keywords),
+        exclude_keywords=list(config.exclude_keywords),
+        match_all_include=bool(config.match_all_include),
+        case_sensitive=bool(config.case_sensitive),
+        filter_disabled_mode=config.filter_disabled_mode,
+    )
+
+
+def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
+    run_id = config.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output_dir = Path(config.output_dir)
     run_dir = output_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
     audit_logger.emit(
         "run_started",
-        subnet_repo_path=args.subnet_repo_path,
+        subnet_repo_path=config.subnet_repo_path,
         output_dir=output_dir,
-        dry_run=args.dry_run,
-        mode=args.mode,
+        dry_run=config.dry_run,
+        mode=config.mode,
     )
 
-    if not args.dry_run:
+    if not config.dry_run:
         LOGGER.info(
             "Mutation is not implemented in this phase; continuing in "
             "detect-and-plan mode."
         )
 
     connector_result = load_yaml_subnet_repo(
-        args.subnet_repo_path,
+        config.subnet_repo_path,
         audit_logger=audit_logger,
     )
     named_targets = apply_naming_rules_to_targets(connector_result.coverage_targets)
 
     actual_scopes, actual_by_scan, excluded_by_scan = load_actual_scope_data(
-        build_coverage_source_config(args)
+        build_coverage_source_config(config)
     )
     coverage_results = validate_coverage_targets(
         named_targets,
@@ -151,8 +224,13 @@ def main(argv=None) -> int:
 
     status_counts = Counter(result.status for result in coverage_results)
     summary = {
+        "run_id": run_id,
+        "mode": config.mode,
+        "dry_run": config.dry_run,
+        "subnet_repo_path": config.subnet_repo_path,
         "yaml_files_processed": connector_result.files_processed,
         "yaml_files_failed": connector_result.files_failed,
+        "validation_issue_count": len(connector_result.validation_issues),
         "coverage_targets_created": len(named_targets),
         "ok_count": status_counts.get("OK", 0),
         "gap_count": status_counts.get("GAP", 0),
@@ -163,36 +241,12 @@ def main(argv=None) -> int:
         "audit_log": str(audit_logger.path),
         "csv_audit": str(csv_path),
         "markdown_audit": str(md_path),
+        "run_summary_file": str(run_dir / "run_summary.json"),
     }
 
+    atomic_write_json(run_dir / "run_summary.json", summary)
     audit_logger.emit("run_completed", **summary)
-    print_run_summary(run_id, summary)
-    return 0
-
-
-def configure_logging(level_name: str) -> None:
-    level = getattr(logging, str(level_name).upper(), logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s: %(message)s",
-        force=True,
-    )
-
-
-def build_coverage_source_config(args) -> CoverageSourceConfig:
-    return CoverageSourceConfig(
-        mode=args.mode,
-        scan_json_dir=args.scan_json_dir,
-        asset_json_dir=args.asset_json_dir,
-        sc_access_key=args.sc_access_key or os.getenv("SC_ACCESS_KEY"),
-        sc_secret_key=args.sc_secret_key or os.getenv("SC_SECRET_KEY"),
-        sc_url=args.sc_url or os.getenv("SC_URL"),
-        include_keywords=parse_csv_list(args.include_keywords),
-        exclude_keywords=parse_csv_list(args.exclude_keywords),
-        match_all_include=bool(args.match_all_include),
-        case_sensitive=bool(args.case_sensitive),
-        filter_disabled_mode=args.filter_disabled_mode,
-    )
+    return summary
 
 
 def load_actual_scope_data(config: CoverageSourceConfig):

@@ -284,6 +284,10 @@ For an editable local install with the `tenable-scan-analysis` command:
 
 `pip install -e .`
 
+For the scheduled detect-and-plan workflow command:
+
+`tenable-coverage-scheduled --config-file examples/tenable-coverage-service.toml`
+
 
 ------
 
@@ -357,6 +361,47 @@ Each run also writes a machine-readable summary JSON file to `output\run_summary
 Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
 If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
 Each workbook also includes a `Run_Metadata` sheet with selected inputs, filters, output path, log settings, optional CSV path, summary path, and run timestamp.
+
+------
+
+# Scheduled Detect-And-Plan Service
+
+The GitOps subnet-as-code workflow is designed to run as a single-shot scheduled job rather than a permanently running daemon.
+That makes it a good fit for:
+
+- Kubernetes `CronJob`
+- Jenkins or GitHub Actions scheduled pipelines
+- Windows Task Scheduler
+- `systemd` timers
+
+Use the scheduler wrapper:
+
+`tenable-coverage-scheduled --config-file examples/tenable-coverage-service.toml`
+
+What it adds on top of `tenable-coverage-detect-plan`:
+
+- Config-file and environment-driven startup
+- A lock file to prevent overlapping scheduled runs
+- A persisted `latest_run.json` pointer for external monitoring
+- A reusable Docker image entrypoint
+
+Important deployment note:
+
+- The scheduler should clone or refresh the subnet-as-code repository before invoking the container, or mount an already-updated checkout into `subnet_repo_path`.
+- This phase still does not mutate Tenable.sc.
+
+Container example:
+
+```bash
+docker build -t tenable-coverage-service .
+docker run --rm \
+  -v /srv/subnet-repo:/data/subnet-repo \
+  -v /srv/tenable-output:/data/output \
+  -v /srv/tenable-json/scans:/data/tenable/scans \
+  -v /srv/tenable-json/assets:/data/tenable/assets \
+  tenable-coverage-service \
+  --config-file examples/tenable-coverage-service.toml
+```
 
 
 ------

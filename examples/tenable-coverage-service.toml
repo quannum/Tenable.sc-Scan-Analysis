@@ -1,0 +1,22 @@
+[tenable_coverage_workflow_service]
+job_name = "tenable-coverage-nightly"
+subnet_repo_path = "/data/subnet-repo"
+output_dir = "/data/output"
+run_id_prefix = "nightly-"
+latest_summary_file = "/data/output/latest_run.json"
+lock_file = "/data/output/scheduler.lock"
+dry_run = true
+mode = "offline"
+scan_json_dir = "/data/tenable/scans"
+asset_json_dir = "/data/tenable/assets"
+include_keywords = "Assessment,Discovery"
+exclude_keywords = ""
+match_all_include = false
+case_sensitive = false
+filter_disabled_mode = "ALL"
+log_level = "INFO"
+
+# For live mode, switch mode to "live" and provide these via secrets or env:
+# sc_url = "https://tenable-sc.example.internal"
+# sc_access_key = "set-via-secret"
+# sc_secret_key = "set-via-secret"
