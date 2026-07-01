@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 from collections import Counter, defaultdict
@@ -44,6 +45,8 @@ class DetectAndPlanConfig:
     case_sensitive: bool
     filter_disabled_mode: str
     log_level: str = "INFO"
+    log_format: str = "text"
+    log_file: Path | None = None
 
 
 @dataclass
@@ -113,19 +116,76 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     config = build_detect_and_plan_config(args)
-    configure_logging(config.log_level)
+    configure_logging(
+        config.log_level,
+        log_format=config.log_format,
+        log_file=config.log_file,
+    )
     summary = run_detect_and_plan(config)
     print_run_summary(summary["run_id"], summary)
     return 0
 
 
-def configure_logging(level_name: str) -> None:
+class ServiceContextFilter(logging.Filter):
+    def __init__(self, extra_context: dict[str, object] | None = None) -> None:
+        super().__init__()
+        self.extra_context = extra_context or {}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in self.extra_context.items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
+        if not hasattr(record, "run_id"):
+            record.run_id = None
+        if not hasattr(record, "job_name"):
+            record.job_name = None
+        return True
+
+
+class JsonLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.fromtimestamp(
+                record.created, tz=timezone.utc
+            ).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if getattr(record, "run_id", None):
+            payload["run_id"] = record.run_id
+        if getattr(record, "job_name", None):
+            payload["job_name"] = record.job_name
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=True)
+
+
+def configure_logging(
+    level_name: str,
+    log_format: str = "text",
+    log_file: Path | None = None,
+    extra_context: dict[str, object] | None = None,
+) -> None:
     level = getattr(logging, str(level_name).upper(), logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s: %(message)s",
-        force=True,
-    )
+    stream_handler = logging.StreamHandler()
+    if str(log_format).lower() == "json":
+        formatter: logging.Formatter = JsonLogFormatter()
+    else:
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+    stream_handler.setFormatter(formatter)
+    stream_handler.addFilter(ServiceContextFilter(extra_context))
+
+    logging.basicConfig(level=level, handlers=[stream_handler], force=True)
+    root_logger = logging.getLogger()
+
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        file_handler.addFilter(ServiceContextFilter(extra_context))
+        root_logger.addHandler(file_handler)
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
@@ -146,6 +206,8 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         case_sensitive=bool(args.case_sensitive),
         filter_disabled_mode=args.filter_disabled_mode,
         log_level=args.log_level,
+        log_format="text",
+        log_file=None,
     )
 
 
@@ -166,6 +228,7 @@ def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceC
 
 
 def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
+    started_at = datetime.now(timezone.utc)
     run_id = config.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = Path(config.output_dir)
     run_dir = output_dir / "runs" / run_id
@@ -223,8 +286,12 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     )
 
     status_counts = Counter(result.status for result in coverage_results)
+    completed_at = datetime.now(timezone.utc)
     summary = {
         "run_id": run_id,
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "duration_seconds": round((completed_at - started_at).total_seconds(), 3),
         "mode": config.mode,
         "dry_run": config.dry_run,
         "subnet_repo_path": config.subnet_repo_path,

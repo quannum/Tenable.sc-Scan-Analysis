@@ -27,6 +27,7 @@ class ScheduledServiceConfig:
     run_id_prefix: str
     latest_summary_file: Path
     lock_file: Path
+    stale_lock_timeout_seconds: int
     dry_run: bool
     mode: str
     scan_json_dir: str | None
@@ -40,6 +41,8 @@ class ScheduledServiceConfig:
     case_sensitive: bool
     filter_disabled_mode: str
     log_level: str
+    log_format: str
+    log_file: Path | None = None
     config_file: Path | None = None
 
 
@@ -57,6 +60,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id-prefix")
     parser.add_argument("--latest-summary-file")
     parser.add_argument("--lock-file")
+    parser.add_argument("--stale-lock-timeout-seconds")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=None)
     parser.add_argument(
         "--no-dry-run", dest="dry_run", action="store_false", default=None
@@ -73,6 +77,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
         choices=["ALL", "ENABLED_ONLY", "DISABLED_ONLY"],
     )
     parser.add_argument("--log-level")
+    parser.add_argument("--log-format", choices=["text", "json"])
+    parser.add_argument("--log-file")
     parser.add_argument("--sc-url")
     parser.add_argument("--sc-access-key")
     parser.add_argument("--sc-secret-key")
@@ -116,6 +122,10 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         case_sensitive = _parse_bool(
             pick("case_sensitive", False), "case_sensitive"
         )
+        stale_lock_timeout_seconds = _parse_positive_int(
+            pick("stale_lock_timeout_seconds", 21600),
+            "stale_lock_timeout_seconds",
+        )
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -151,6 +161,10 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     sc_url = _optional_string(pick("sc_url"))
     sc_access_key = _optional_string(pick("sc_access_key"))
     sc_secret_key = _optional_string(pick("sc_secret_key"))
+    log_format = str(pick("log_format", "text")).lower()
+    if log_format not in {"text", "json"}:
+        parser.error("--log-format must be 'text' or 'json'")
+    log_file = _as_path(pick("log_file"))
 
     if mode == "offline":
         missing = []
@@ -183,6 +197,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         run_id_prefix=run_id_prefix,
         latest_summary_file=latest_summary_file,
         lock_file=lock_file,
+        stale_lock_timeout_seconds=stale_lock_timeout_seconds,
         dry_run=dry_run,
         mode=mode,
         scan_json_dir=scan_json_dir,
@@ -196,6 +211,8 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         case_sensitive=case_sensitive,
         filter_disabled_mode=filter_disabled_mode,
         log_level=str(pick("log_level", "INFO")),
+        log_format=log_format,
+        log_file=log_file,
         config_file=config_file,
     )
 
@@ -250,6 +267,20 @@ def _parse_bool(value: Any, field_name: str) -> bool:
         if normalized in {"0", "false", "no", "n", "off"}:
             return False
     raise ValueError(f"Invalid boolean value for '{field_name}': {value}")
+
+
+def _parse_positive_int(value: Any, field_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid integer value for '{field_name}': {value}") from exc
+
+    if parsed <= 0:
+        raise ValueError(
+            f"Invalid integer value for '{field_name}': {value}. Must be > 0."
+        )
+
+    return parsed
 
 
 def _as_path(value: str | Path | None) -> Path | None:

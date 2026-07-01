@@ -5,6 +5,7 @@ output_dir = "/data/output"
 run_id_prefix = "nightly-"
 latest_summary_file = "/data/output/latest_run.json"
 lock_file = "/data/output/scheduler.lock"
+stale_lock_timeout_seconds = 21600
 dry_run = true
 mode = "offline"
 scan_json_dir = "/data/tenable/scans"
@@ -15,6 +16,7 @@ match_all_include = false
 case_sensitive = false
 filter_disabled_mode = "ALL"
 log_level = "INFO"
+log_format = "json"
 
 # For live mode, switch mode to "live" and provide these via secrets or env:
 # sc_url = "https://tenable-sc.example.internal"

@@ -382,7 +382,10 @@ What it adds on top of `tenable-coverage-detect-plan`:
 
 - Config-file and environment-driven startup
 - A lock file to prevent overlapping scheduled runs
+- Stale-lock recovery for interrupted jobs
+- `RUNNING`, `SUCCESS`, and `FAILED` lifecycle state in `latest_run.json`
 - A persisted `latest_run.json` pointer for external monitoring
+- Optional JSON log output for SIEM and scheduler ingestion
 - A reusable Docker image entrypoint
 
 Important deployment note:

@@ -1,6 +1,9 @@
 import json
+import logging
+import os
 import shutil
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,6 +55,8 @@ class ServiceConfigTests(unittest.TestCase):
                 temp_path / "output" / "latest_run.json",
             )
             self.assertEqual(config.lock_file, temp_path / "output" / "scheduler.lock")
+            self.assertEqual(config.stale_lock_timeout_seconds, 21600)
+            self.assertEqual(config.log_format, "text")
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)
@@ -125,8 +130,12 @@ class ScheduledServiceTests(unittest.TestCase):
             self.assertEqual(latest_summary["job_name"], "nightly-coverage")
             run_summary = latest_summary["run_summary"]
             self.assertTrue(run_summary["run_id"].startswith("svc-"))
+            self.assertEqual(latest_summary["run_id"], run_summary["run_id"])
+            self.assertIn("started_at", latest_summary)
+            self.assertIn("completed_at", latest_summary)
             self.assertEqual(run_summary["yaml_files_processed"], 6)
             self.assertEqual(run_summary["yaml_files_failed"], 2)
+            self.assertIn("duration_seconds", run_summary)
 
             run_dir = Path(run_summary["output_directory"])
             self.assertTrue((run_dir / "audit.jsonl").exists())
@@ -177,6 +186,131 @@ class ScheduledServiceTests(unittest.TestCase):
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)
+
+    def test_service_main_recovers_stale_lock(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "scheduled_service_stale_lock_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            lock_file = output_dir / "scheduler.lock"
+            lock_file.write_text(
+                "job_name=nightly-coverage\npid=999999\n",
+                encoding="utf-8",
+            )
+            os.utime(lock_file, (1, 1))
+
+            with patch(
+                "src.tenable_coverage_workflow.service_runner.run_detect_and_plan",
+                return_value={
+                    "run_id": "svc-stale",
+                    "output_directory": str(output_dir / "runs" / "svc-stale"),
+                },
+            ) as run_mock:
+                exit_code = service_main(
+                    [
+                        "--job-name",
+                        "nightly-coverage",
+                        "--subnet-repo-path",
+                        "repo",
+                        "--output-dir",
+                        str(output_dir),
+                        "--mode",
+                        "offline",
+                        "--scan-json-dir",
+                        "scans",
+                        "--asset-json-dir",
+                        "assets",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            run_mock.assert_called_once()
+            self.assertFalse(lock_file.exists())
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
+    def test_service_main_writes_running_state_before_work_execution(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "scheduled_service_running_state_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            latest_summary_file = output_dir / "latest_run.json"
+
+            def fake_run(config):
+                latest_summary = json.loads(
+                    latest_summary_file.read_text(encoding="utf-8")
+                )
+                self.assertEqual(latest_summary["status"], "RUNNING")
+                self.assertEqual(latest_summary["job_name"], "nightly-coverage")
+                self.assertEqual(
+                    latest_summary["output_directory"],
+                    str(output_dir / "runs" / latest_summary["run_id"]),
+                )
+                return {
+                    "run_id": latest_summary["run_id"],
+                    "output_directory": str(
+                        output_dir / "runs" / latest_summary["run_id"]
+                    ),
+                }
+
+            with patch(
+                "src.tenable_coverage_workflow.service_runner.run_detect_and_plan",
+                side_effect=fake_run,
+            ):
+                exit_code = service_main(
+                    [
+                        "--job-name",
+                        "nightly-coverage",
+                        "--subnet-repo-path",
+                        "repo",
+                        "--output-dir",
+                        str(output_dir),
+                        "--mode",
+                        "offline",
+                        "--scan-json-dir",
+                        "scans",
+                        "--asset-json-dir",
+                        "assets",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
+
+class ServiceLoggingTests(unittest.TestCase):
+    def test_service_can_emit_json_logs_with_run_context(self):
+        from src.tenable_coverage_workflow.run_detect_and_plan import configure_logging
+
+        stream = StringIO()
+        with patch("sys.stderr", new=stream):
+            configure_logging(
+                "INFO",
+                log_format="json",
+                extra_context={"job_name": "nightly-coverage", "run_id": "svc-123"},
+            )
+            logging.getLogger("service.test").info("hello service log")
+
+        payload = json.loads(stream.getvalue().strip())
+        self.assertEqual(payload["level"], "INFO")
+        self.assertEqual(payload["message"], "hello service log")
+        self.assertEqual(payload["job_name"], "nightly-coverage")
+        self.assertEqual(payload["run_id"], "svc-123")
 
 
 if __name__ == "__main__":
