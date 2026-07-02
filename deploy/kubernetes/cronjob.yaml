@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenable-sc-scan-analysis
+data:
+  service.yaml: |
+    tenable_coverage_workflow_service:
+      job_name: tenable-coverage-nightly
+      source_json_file: /data/network-source/sites.json
+      output_dir: /data/output
+      dry_run: true
+      mode: live
+      log_level: INFO
+      log_format: json
+      sc_timeout_seconds: 60
+      sc_retries: 3
+      sc_backoff_seconds: 1.5
+      sc_ssl_verify: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tenable-sc-scan-analysis
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: analyzer
+              image: registry.example.internal/security/tenable-sc-scan-analysis:2.2
+              imagePullPolicy: IfNotPresent
+              args:
+                - --config-file
+                - /etc/tenable-analysis/service.yaml
+              env:
+                - name: SC_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: tenable-sc-api
+                      key: url
+                - name: SC_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: tenable-sc-api
+                      key: access-key
+                - name: SC_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: tenable-sc-api
+                      key: secret-key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: config
+                  mountPath: /etc/tenable-analysis
+                  readOnly: true
+                - name: network-source
+                  mountPath: /data/network-source
+                  readOnly: true
+                - name: output
+                  mountPath: /data/output
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: config
+              configMap:
+                name: tenable-sc-scan-analysis
+            - name: network-source
+              persistentVolumeClaim:
+                claimName: authoritative-network-source
+            - name: output
+              persistentVolumeClaim:
+                claimName: tenable-coverage-output
+            - name: tmp
+              emptyDir: {}

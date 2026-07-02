@@ -299,6 +299,98 @@ If installed as a package, run:
 
 `tenable-scan-analysis`
 
+The unified enterprise workflow is available as `tenable-sc-scan-analysis` and
+provides the required command surface:
+
+```text
+validate-definitions  Normalize and validate authoritative network scope
+collect-tenable       Collect a redacted Tenable.sc inventory snapshot
+analyze-coverage      Compare authoritative scope with Tenable configuration
+propose-changes       Generate dry-run CSV/Markdown/JSONL change artifacts
+apply-changes         Apply an approved plan (explicit --apply is mandatory)
+export-report         Create a portable report bundle from a completed run
+```
+
+Examples:
+
+```powershell
+tenable-sc-scan-analysis validate-definitions `
+  --source-json-file C:\network\sites.json `
+  --output-file C:\output\normalized-sites.json
+
+tenable-sc-scan-analysis collect-tenable `
+  --mode live `
+  --output-file C:\output\tenable-inventory.json
+
+tenable-sc-scan-analysis propose-changes `
+  --source-json-file C:\network\sites.json `
+  --scan-json-dir C:\tenable\scans `
+  --asset-json-dir C:\tenable\assets `
+  --output-dir C:\output
+```
+
+Live collection reads `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` from the
+environment. The inventory artifact includes repositories, asset groups,
+detailed scan definitions and schedules, policies, credential metadata, and
+observed hosts. Secret-like fields are recursively redacted before the snapshot
+is atomically written. A permission failure for one resource is recorded in
+`collection_errors` without discarding the rest of the snapshot; use
+`--fail-on-partial` when partial collection should fail the job.
+
+Tenable connections default to certificate verification, a 60-second timeout,
+three retries, and 1.5-second exponential backoff. Configure these with
+`sc_ssl_verify`, `sc_timeout_seconds`, `sc_retries`, and `sc_backoff_seconds`.
+Disabling certificate verification requires the explicit
+`--no-sc-ssl-verify` option and is not recommended.
+
+### Applying approved changes
+
+`propose-changes` writes `proposed_changes.csv` with every row initially marked
+`PENDING`. A reviewer must change selected rows to `APPROVED` and populate the
+`Reviewer` column. Automatic application is limited to asset/scan creation and
+target attachment actions; review-only exclusion, partial-coverage, and
+wrong-scan actions are skipped rather than guessed.
+
+Application requires every safety gate below:
+
+- the `apply-changes` command
+- the explicit `--apply` flag
+- `--mode live`
+- an approved CSV plan with one Run ID and a reviewer on every approved row
+- a positive repository ID
+- `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` from the environment
+- unique exact asset, scan, and policy names
+- all referenced policies present before the first mutation
+
+```powershell
+tenable-sc-scan-analysis apply-changes `
+  --mode live `
+  --plan-file C:\output\runs\run-001\proposed_changes.csv `
+  --repository-id 7 `
+  --result-file C:\output\runs\run-001\apply_result.json `
+  --apply
+```
+
+Static assets and scan attachments are reconciled idempotently. Existing target
+ranges and scan assets are retained, and matching reruns report `UNCHANGED`.
+Existing scans are reconciled to the selected repository and named policy.
+Every write is followed by a live details read; verification failure is recorded
+as `FAILED`. The command writes machine-readable JSON plus a human-readable
+Markdown apply audit, including the source plan SHA-256.
+
+Detect-and-plan runs also produce `coverage_results.json`/`.csv`,
+`coverage_summary.json`/`.md`, `extra_scan_targets.json`, and
+`definition_validation_issues.json`. Summaries group expected, covered, and gap
+IPs by region, site, VLAN, required scan type, configured repository, and
+policy. They list missing asset groups, missing required scans, policy
+mismatches, and wholly or partially extra scan target ranges.
+
+All unified commands can load YAML, JSON, or TOML configuration with the global
+`--config-file` option. Settings resolve in this order: explicit CLI flag,
+environment variable, command-specific config, global config, built-in default.
+See `config/example-config.yaml`. Keep credentials in environment variables or
+mounted secrets rather than configuration files.
+
 You can also run as a module after install:
 
 `python -m src`
@@ -388,10 +480,55 @@ What it adds on top of `tenable-coverage-detect-plan`:
 - Optional JSON log output for SIEM and scheduler ingestion
 - A reusable Docker image entrypoint
 
+### Authoritative network sources
+
+The detect-and-plan workflow normalizes every authoritative input into the same
+site and coverage-target models. Configure any combination of these inputs; the
+highest-priority configured source is selected:
+
+1. `--source-api-url` / `NETWORK_SOURCE_API_URL` (normalized internal JSON API)
+2. `--source-json-file` / `NETWORK_SOURCE_JSON_FILE` (local copy of that JSON)
+3. `--github-api-url` plus `--github-repository` (direct GitHub Enterprise YAML)
+4. `--subnet-repo-path` / `SUBNET_REPO_PATH` (local YAML checkout/fallback)
+5. `--source-xlsx-file` / `NETWORK_SOURCE_XLSX_FILE` (legacy/manual workbook)
+
+API bearer credentials are read from `NETWORK_SOURCE_API_TOKEN`. Direct GitHub
+retrieval reads `GITHUB_TOKEN`; tokens are intentionally omitted from the
+unified CLI flags so they do not appear in process listings. Mounted/environment
+secrets are recommended. Requests
+use a bounded timeout and retry transient network and server failures. The JSON
+root may be a site, a list of sites, or an object containing `sites`,
+`locations`, or `data`. CIDRs and explicit `start-end` IP ranges are normalized
+with Python `ipaddress` before analysis.
+
+Example local JSON invocation:
+
+`tenable-coverage-detect-plan --source-json-file C:\network\sites.json --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
+
+The exact strong schema will be finalized against the representative internal
+API/YAML payload. Until then, validation issues are retained in audit output and
+invalid sites or ranges are excluded from coverage planning.
+
+The XLSX connector accepts a row-oriented worksheet with a scope column named
+`Scope Item`, `Scope`, `CIDR`, `IP Range`, or `Network`. Optional columns include
+site code/name, location, region, timezone, tags, environment, business function,
+target type, VLAN name/ID, required asset, required scan, and required policy.
+Explicit IP ranges are summarized into canonical CIDRs. Use
+`--source-xlsx-sheet` when definitions are not on the first worksheet.
+
+For GitHub Enterprise Server, set the REST base URL (typically
+`https://HOSTNAME/api/v3`), repository as `OWNER/REPO`, optional ref, and optional
+repository path. The connector recursively follows the Contents API, requests
+raw YAML, preserves the selected ref on child requests, rejects unsafe paths,
+and retries transient failures. The token needs read-only repository Contents
+permission.
+
 Important deployment note:
 
-- The scheduler should clone or refresh the subnet-as-code repository before invoking the container, or mount an already-updated checkout into `subnet_repo_path`.
-- This phase still does not mutate Tenable.sc.
+- The scheduler can retrieve YAML directly from GitHub Enterprise, or it can
+  analyze an externally refreshed checkout mounted at `subnet_repo_path`.
+- Scheduled detect-and-plan runs remain dry-run only; mutation is isolated to the
+  separately invoked, explicitly gated `apply-changes --apply` command.
 
 Container example:
 
@@ -405,6 +542,12 @@ docker run --rm \
   tenable-coverage-service \
   --config-file examples/tenable-coverage-service.toml
 ```
+
+A hardened Kubernetes CronJob and ConfigMap example is provided at
+`deploy/kubernetes/cronjob.yaml`. It forbids overlapping jobs, runs as a
+non-root user with a read-only root filesystem, mounts credentials from a
+Secret, and keeps authoritative input read-only. Replace the example image,
+Secret, PVC names, and schedule before deployment.
 
 
 ------

@@ -1,0 +1,465 @@
+import csv
+import hashlib
+import ipaddress
+from collections import Counter
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from ..core.scope_utils import split_scope_items
+from ..io.data_access import DataAccess
+from .audit.audit_logger import atomic_write_text
+
+SUPPORTED_ACTIONS = {
+    "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
+    "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
+    "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
+    "UPDATE_SCAN_POLICY_AND_TARGET",
+}
+MANAGED_DESCRIPTION = "Managed by Tenable.sc Scan Analysis"
+
+
+@dataclass(frozen=True)
+class ApprovedChange:
+    run_id: str
+    site_code: str
+    cidr: str
+    proposed_action: str
+    asset_name: str
+    scan_name: str
+    policy_name: str
+    reviewer: str
+    decision_notes: str
+
+
+@dataclass(frozen=True)
+class ApprovedPlan:
+    path: str
+    sha256: str
+    run_id: str
+    total_rows: int
+    approved_changes: list[ApprovedChange]
+
+
+@dataclass(frozen=True)
+class ApplyOperation:
+    site_code: str
+    cidr: str
+    action: str
+    status: str
+    asset_status: str
+    scan_status: str
+    asset_id: int | None
+    scan_id: int | None
+    message: str
+
+
+def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
+    path = Path(path_value)
+    raw_bytes = path.read_bytes()
+    fingerprint = hashlib.sha256(raw_bytes).hexdigest()
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {
+            "Run ID",
+            "Site Code",
+            "CIDR",
+            "Proposed Action",
+            "Proposed Asset Name",
+            "Proposed Scan Name",
+            "Proposed Policy Name",
+            "Approval Status",
+            "Reviewer",
+            "Decision Notes",
+        }
+        missing = sorted(required.difference(reader.fieldnames or []))
+        if missing:
+            raise ValueError(
+                "Approved plan is missing required column(s): " + ", ".join(missing)
+            )
+
+        approved: list[ApprovedChange] = []
+        run_ids: set[str] = set()
+        identities: set[tuple[str, str, str]] = set()
+        total_rows = 0
+        for row_number, row in enumerate(reader, start=2):
+            total_rows += 1
+            approval = _text(row.get("Approval Status")).upper()
+            if approval not in {"PENDING", "APPROVED", "REJECTED", "SKIPPED"}:
+                raise ValueError(
+                    f"Row {row_number} has invalid Approval Status '{approval}'."
+                )
+            if approval != "APPROVED":
+                continue
+            reviewer = _text(row.get("Reviewer"))
+            if not reviewer:
+                raise ValueError(
+                    f"Row {row_number} is APPROVED but has no Reviewer."
+                )
+            run_id = _required_text(row, "Run ID", row_number)
+            change = ApprovedChange(
+                run_id=run_id,
+                site_code=_required_text(row, "Site Code", row_number),
+                cidr=_required_text(row, "CIDR", row_number),
+                proposed_action=_required_text(
+                    row, "Proposed Action", row_number
+                ).upper(),
+                asset_name=_required_text(
+                    row, "Proposed Asset Name", row_number
+                ),
+                scan_name=_required_text(row, "Proposed Scan Name", row_number),
+                policy_name=_required_text(
+                    row, "Proposed Policy Name", row_number
+                ),
+                reviewer=reviewer,
+                decision_notes=_text(row.get("Decision Notes")),
+            )
+            try:
+                canonical_cidr = str(ipaddress.ip_network(change.cidr, strict=False))
+            except ValueError as exc:
+                raise ValueError(
+                    f"Row {row_number} has invalid CIDR '{change.cidr}': {exc}"
+                ) from exc
+            change = ApprovedChange(**{**asdict(change), "cidr": canonical_cidr})
+            identity = (change.asset_name, change.scan_name, change.cidr)
+            if identity in identities:
+                raise ValueError(
+                    f"Row {row_number} duplicates an approved asset/scan/CIDR change."
+                )
+            identities.add(identity)
+            run_ids.add(run_id)
+            approved.append(change)
+
+    if not approved:
+        raise ValueError("Plan contains no APPROVED changes.")
+    if len(run_ids) != 1:
+        raise ValueError("All APPROVED rows must have the same Run ID.")
+    return ApprovedPlan(
+        path=str(path),
+        sha256=fingerprint,
+        run_id=next(iter(run_ids)),
+        total_rows=total_rows,
+        approved_changes=approved,
+    )
+
+
+class ChangeApplier:
+    def __init__(self, data_access: DataAccess, repository_id: int) -> None:
+        if data_access.config.mode != "live":
+            raise ValueError("apply-changes requires --mode live")
+        if int(repository_id) <= 0:
+            raise ValueError("repository_id must be a positive integer")
+        self.data_access = data_access
+        self.repository_id = int(repository_id)
+        self.assets = self._unique_name_index(
+            data_access.get_asset_lists(), "asset group"
+        )
+        self.scans = self._unique_name_index(data_access.get_scans(), "scan")
+        self.policies = self._unique_name_index(data_access.get_policies(), "policy")
+
+    def preflight(self, plan: ApprovedPlan) -> None:
+        errors = []
+        for change in plan.approved_changes:
+            if change.proposed_action not in SUPPORTED_ACTIONS:
+                continue
+            if change.policy_name not in self.policies:
+                errors.append(
+                    f"{change.site_code}: policy '{change.policy_name}' was not found"
+                )
+        if errors:
+            raise ValueError("Apply preflight failed: " + "; ".join(errors))
+
+    def apply(self, plan: ApprovedPlan) -> dict[str, Any]:
+        self.preflight(plan)
+        started_at = datetime.now(timezone.utc)
+        operations = []
+        for change in plan.approved_changes:
+            if change.proposed_action not in SUPPORTED_ACTIONS:
+                operations.append(
+                    ApplyOperation(
+                        site_code=change.site_code,
+                        cidr=change.cidr,
+                        action=change.proposed_action,
+                        status="SKIPPED",
+                        asset_status="SKIPPED",
+                        scan_status="SKIPPED",
+                        asset_id=None,
+                        scan_id=None,
+                        message=(
+                            "Action requires manual review and is not auto-applied."
+                        ),
+                    )
+                )
+                continue
+            try:
+                operations.append(self._apply_change(change))
+            except Exception as exc:
+                operations.append(
+                    ApplyOperation(
+                        site_code=change.site_code,
+                        cidr=change.cidr,
+                        action=change.proposed_action,
+                        status="FAILED",
+                        asset_status="UNKNOWN",
+                        scan_status="UNKNOWN",
+                        asset_id=None,
+                        scan_id=None,
+                        message=str(exc),
+                    )
+                )
+
+        completed_at = datetime.now(timezone.utc)
+        counts = Counter(operation.status for operation in operations)
+        return {
+            "schema_version": 1,
+            "run_id": plan.run_id,
+            "plan_file": plan.path,
+            "plan_sha256": plan.sha256,
+            "started_at": started_at.isoformat(),
+            "completed_at": completed_at.isoformat(),
+            "repository_id": self.repository_id,
+            "approved_change_count": len(plan.approved_changes),
+            "status_counts": dict(sorted(counts.items())),
+            "operations": [asdict(operation) for operation in operations],
+        }
+
+    def _apply_change(self, change: ApprovedChange) -> ApplyOperation:
+        asset, asset_status = self._ensure_asset(change)
+        asset_id = _resource_id(asset, "asset group", change.asset_name)
+        scan, scan_status = self._ensure_scan(change, asset_id)
+        scan_id = _resource_id(scan, "scan", change.scan_name)
+        status = (
+            "UNCHANGED"
+            if asset_status == "UNCHANGED" and scan_status == "UNCHANGED"
+            else "APPLIED"
+        )
+        return ApplyOperation(
+            site_code=change.site_code,
+            cidr=change.cidr,
+            action=change.proposed_action,
+            status=status,
+            asset_status=asset_status,
+            scan_status=scan_status,
+            asset_id=asset_id,
+            scan_id=scan_id,
+            message="Post-change verification passed.",
+        )
+
+    def _ensure_asset(
+        self, change: ApprovedChange
+    ) -> tuple[dict[str, Any], str]:
+        existing = self.assets.get(change.asset_name)
+        if existing is None:
+            created = self.data_access.create_static_asset(
+                change.asset_name,
+                [change.cidr],
+                MANAGED_DESCRIPTION,
+            )
+            asset_id = _resource_id(created, "asset group", change.asset_name)
+            self.assets[change.asset_name] = created
+            self._verify_asset(asset_id, change.cidr)
+            return created, "CREATED"
+
+        asset_id = _resource_id(existing, "asset group", change.asset_name)
+        details = self.data_access.get_asset(asset_id) or existing
+        current_scopes = extract_asset_scopes(details)
+        if change.cidr in current_scopes:
+            return details, "UNCHANGED"
+        updated_scopes = sorted(current_scopes | {change.cidr})
+        updated = self.data_access.update_static_asset(
+            asset_id,
+            updated_scopes,
+            MANAGED_DESCRIPTION,
+        )
+        self._verify_asset(asset_id, change.cidr)
+        merged = updated if isinstance(updated, dict) and updated else details
+        self.assets[change.asset_name] = merged
+        return merged, "UPDATED"
+
+    def _ensure_scan(
+        self, change: ApprovedChange, asset_id: int
+    ) -> tuple[dict[str, Any], str]:
+        existing = self.scans.get(change.scan_name)
+        policy_id = _resource_id(
+            self.policies[change.policy_name], "policy", change.policy_name
+        )
+        if existing is None:
+            created = self.data_access.create_scan(
+                change.scan_name,
+                self.repository_id,
+                [asset_id],
+                policy_id,
+            )
+            scan_id = _resource_id(created, "scan", change.scan_name)
+            self.scans[change.scan_name] = created
+            self._verify_scan(scan_id, asset_id)
+            return created, "CREATED"
+
+        scan_id = _resource_id(existing, "scan", change.scan_name)
+        details = self.data_access.get_scan_details(scan_id) or existing
+        current_asset_ids = extract_scan_asset_ids(details)
+        current_repository_id = extract_nested_id(
+            details, "repository", "repositoryID"
+        )
+        current_policy_id = extract_nested_id(details, "policy", "policyID")
+        if (
+            asset_id in current_asset_ids
+            and current_repository_id == self.repository_id
+            and current_policy_id == policy_id
+        ):
+            return details, "UNCHANGED"
+        updated_ids = sorted(current_asset_ids | {asset_id})
+        updated = self.data_access.update_scan_configuration(
+            scan_id,
+            updated_ids,
+            self.repository_id,
+            policy_id,
+        )
+        self._verify_scan(scan_id, asset_id, policy_id)
+        merged = updated if isinstance(updated, dict) and updated else details
+        self.scans[change.scan_name] = merged
+        return merged, "UPDATED"
+
+    def _verify_asset(self, asset_id: int, expected_cidr: str) -> None:
+        details = self.data_access.get_asset(asset_id)
+        if expected_cidr not in extract_asset_scopes(details):
+            raise RuntimeError(
+                f"Asset {asset_id} verification failed: {expected_cidr} not present"
+            )
+
+    def _verify_scan(
+        self,
+        scan_id: int,
+        expected_asset_id: int,
+        expected_policy_id: int | None = None,
+    ) -> None:
+        details = self.data_access.get_scan_details(scan_id)
+        if expected_asset_id not in extract_scan_asset_ids(details):
+            raise RuntimeError(
+                f"Scan {scan_id} verification failed: asset {expected_asset_id} "
+                "not attached"
+            )
+        if extract_nested_id(details, "repository", "repositoryID") != (
+            self.repository_id
+        ):
+            raise RuntimeError(
+                f"Scan {scan_id} verification failed: repository mismatch"
+            )
+        if expected_policy_id is not None and extract_nested_id(
+            details, "policy", "policyID"
+        ) != expected_policy_id:
+            raise RuntimeError(f"Scan {scan_id} verification failed: policy mismatch")
+
+    @staticmethod
+    def _unique_name_index(
+        records: list[dict[str, Any]], resource_type: str
+    ) -> dict[str, dict[str, Any]]:
+        result = {}
+        for record in records:
+            name = _text(record.get("name"))
+            if not name:
+                continue
+            if name in result:
+                raise ValueError(
+                    f"Ambiguous {resource_type} name '{name}'; exact names "
+                    "must be unique"
+                )
+            result[name] = record
+        return result
+
+
+def extract_asset_scopes(asset: dict[str, Any]) -> set[str]:
+    values = []
+    type_fields = asset.get("typeFields", {})
+    if isinstance(type_fields, dict):
+        values.append(type_fields.get("definedIPs"))
+    values.extend((asset.get("ips"), asset.get("ipList")))
+    scopes = set()
+    for value in values:
+        raw_items = value if isinstance(value, list) else split_scope_items(value or "")
+        for item in raw_items:
+            try:
+                scopes.add(str(ipaddress.ip_network(str(item).strip(), strict=False)))
+            except ValueError:
+                scopes.add(str(item).strip())
+    return {scope for scope in scopes if scope}
+
+
+def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
+    values = scan.get("assets", scan.get("assetLists", []))
+    if not isinstance(values, list):
+        return set()
+    result = set()
+    for value in values:
+        raw_id = value.get("id") if isinstance(value, dict) else value
+        try:
+            result.add(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def extract_nested_id(
+    record: dict[str, Any], nested_key: str, scalar_key: str
+) -> int | None:
+    value = record.get(nested_key)
+    raw_id = value.get("id") if isinstance(value, dict) else record.get(scalar_key)
+    try:
+        return int(raw_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resource_id(record: dict[str, Any], resource_type: str, name: str) -> int:
+    try:
+        return int(record["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"{resource_type.title()} '{name}' response has no numeric id"
+        ) from exc
+
+
+def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
+    value = _text(row.get(column))
+    if not value:
+        raise ValueError(f"Row {row_number} has no {column}.")
+    return value
+
+
+def _text(value: Any) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:
+    lines = [
+        "# Tenable.sc Apply Audit",
+        "",
+        f"- Run ID: `{result['run_id']}`",
+        f"- Plan SHA-256: `{result['plan_sha256']}`",
+        f"- Repository ID: `{result['repository_id']}`",
+        f"- Started: `{result['started_at']}`",
+        f"- Completed: `{result['completed_at']}`",
+        "",
+        "## Status Summary",
+        "",
+    ]
+    for status, count in sorted(result["status_counts"].items()):
+        lines.append(f"- {status}: {count}")
+    lines.extend(("", "## Operations", ""))
+    for operation in result["operations"]:
+        lines.extend(
+            (
+                f"### {operation['site_code']} — `{operation['cidr']}`",
+                "",
+                f"- Action: {operation['action']}",
+                f"- Status: {operation['status']}",
+                f"- Asset: {operation['asset_status']} "
+                f"(ID: {operation['asset_id'] or 'N/A'})",
+                f"- Scan: {operation['scan_status']} "
+                f"(ID: {operation['scan_id'] or 'N/A'})",
+                f"- Result: {operation['message']}",
+                "",
+            )
+        )
+    return atomic_write_text(Path(path_value), "\n".join(lines).rstrip() + "\n")

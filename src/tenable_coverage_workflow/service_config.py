@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
 from dotenv import load_dotenv
 
 from ..io.app_config import parse_csv_list
@@ -22,7 +23,17 @@ ENV_PREFIX = "TCW_"
 @dataclass(frozen=True)
 class ScheduledServiceConfig:
     job_name: str
-    subnet_repo_path: str
+    subnet_repo_path: str | None
+    source_api_url: str | None
+    source_api_token: str | None
+    source_json_file: str | None
+    source_xlsx_file: str | None
+    source_xlsx_sheet: str | None
+    github_api_url: str | None
+    github_repository: str | None
+    github_ref: str
+    github_path: str
+    github_token: str | None
     output_dir: Path
     run_id_prefix: str
     latest_summary_file: Path
@@ -44,6 +55,10 @@ class ScheduledServiceConfig:
     log_format: str
     log_file: Path | None = None
     config_file: Path | None = None
+    sc_timeout_seconds: int = 60
+    sc_retries: int = 3
+    sc_backoff_seconds: float = 1.5
+    sc_ssl_verify: bool = True
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -56,6 +71,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config-file")
     parser.add_argument("--job-name")
     parser.add_argument("--subnet-repo-path")
+    parser.add_argument("--source-api-url")
+    parser.add_argument("--source-api-token")
+    parser.add_argument("--source-json-file")
+    parser.add_argument("--source-xlsx-file")
+    parser.add_argument("--source-xlsx-sheet")
+    parser.add_argument("--github-api-url")
+    parser.add_argument("--github-repository")
+    parser.add_argument("--github-ref")
+    parser.add_argument("--github-path")
     parser.add_argument("--output-dir")
     parser.add_argument("--run-id-prefix")
     parser.add_argument("--latest-summary-file")
@@ -82,6 +106,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sc-url")
     parser.add_argument("--sc-access-key")
     parser.add_argument("--sc-secret-key")
+    parser.add_argument("--sc-timeout-seconds")
+    parser.add_argument("--sc-retries")
+    parser.add_argument("--sc-backoff-seconds")
+    parser.add_argument(
+        "--no-sc-ssl-verify",
+        dest="sc_ssl_verify",
+        action="store_false",
+        default=None,
+    )
     return parser
 
 
@@ -93,7 +126,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     config_file = _as_path(args.config_file)
     try:
         config_data = load_config_file(config_file) if config_file else {}
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError, yaml.YAMLError) as exc:
         parser.error(str(exc))
 
     def pick(name: str, default: Any = None) -> Any:
@@ -111,6 +144,19 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             return os.getenv("SC_SECRET_KEY")
         if name == "sc_url" and os.getenv("SC_URL") is not None:
             return os.getenv("SC_URL")
+        if name == "github_token" and os.getenv("GITHUB_TOKEN") is not None:
+            return os.getenv("GITHUB_TOKEN")
+        network_source_env = {
+            "source_api_url": "NETWORK_SOURCE_API_URL",
+            "source_api_token": "NETWORK_SOURCE_API_TOKEN",
+            "source_json_file": "NETWORK_SOURCE_JSON_FILE",
+            "source_xlsx_file": "NETWORK_SOURCE_XLSX_FILE",
+            "source_xlsx_sheet": "NETWORK_SOURCE_XLSX_SHEET",
+            "subnet_repo_path": "SUBNET_REPO_PATH",
+        }
+        alternate_env = network_source_env.get(name)
+        if alternate_env and os.getenv(alternate_env) is not None:
+            return os.getenv(alternate_env)
 
         return config_data.get(name, default)
 
@@ -122,10 +168,20 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         case_sensitive = _parse_bool(
             pick("case_sensitive", False), "case_sensitive"
         )
+        sc_ssl_verify = _parse_bool(
+            pick("sc_ssl_verify", True), "sc_ssl_verify"
+        )
         stale_lock_timeout_seconds = _parse_positive_int(
             pick("stale_lock_timeout_seconds", 21600),
             "stale_lock_timeout_seconds",
         )
+        sc_timeout_seconds = _parse_positive_int(
+            pick("sc_timeout_seconds", 60), "sc_timeout_seconds"
+        )
+        sc_retries = _parse_positive_int(pick("sc_retries", 3), "sc_retries")
+        sc_backoff_seconds = float(pick("sc_backoff_seconds", 1.5))
+        if sc_backoff_seconds < 0:
+            raise ValueError("sc_backoff_seconds must be >= 0")
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -139,11 +195,30 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             "--filter-disabled-mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY"
         )
 
-    subnet_repo_path = str(pick("subnet_repo_path", "")).strip()
-    if not subnet_repo_path:
+    subnet_repo_path = _optional_string(pick("subnet_repo_path"))
+    source_api_url = _optional_string(pick("source_api_url"))
+    source_api_token = _optional_string(pick("source_api_token"))
+    source_json_file = _optional_string(pick("source_json_file"))
+    source_xlsx_file = _optional_string(pick("source_xlsx_file"))
+    source_xlsx_sheet = _optional_string(pick("source_xlsx_sheet"))
+    github_api_url = _optional_string(pick("github_api_url"))
+    github_repository = _optional_string(pick("github_repository"))
+    github_ref = _optional_string(pick("github_ref", "main")) or "main"
+    github_path = _optional_string(pick("github_path", "")) or ""
+    github_token = _optional_string(pick("github_token"))
+    if not any(
+        (
+            source_api_url,
+            source_json_file,
+            github_api_url and github_repository,
+            subnet_repo_path,
+            source_xlsx_file,
+        )
+    ):
         parser.error(
-            "A subnet repo path is required. Set --subnet-repo-path or "
-            "TCW_SUBNET_REPO_PATH."
+            "An authoritative source is required. Configure source_api_url, "
+            "source_json_file, GitHub Enterprise settings, subnet_repo_path, "
+            "or source_xlsx_file."
         )
 
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
@@ -193,6 +268,16 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     return ScheduledServiceConfig(
         job_name=job_name,
         subnet_repo_path=subnet_repo_path,
+        source_api_url=source_api_url,
+        source_api_token=source_api_token,
+        source_json_file=source_json_file,
+        source_xlsx_file=source_xlsx_file,
+        source_xlsx_sheet=source_xlsx_sheet,
+        github_api_url=github_api_url,
+        github_repository=github_repository,
+        github_ref=github_ref,
+        github_path=github_path,
+        github_token=github_token,
         output_dir=output_dir,
         run_id_prefix=run_id_prefix,
         latest_summary_file=latest_summary_file,
@@ -214,6 +299,10 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         log_format=log_format,
         log_file=log_file,
         config_file=config_file,
+        sc_timeout_seconds=sc_timeout_seconds,
+        sc_retries=sc_retries,
+        sc_backoff_seconds=sc_backoff_seconds,
+        sc_ssl_verify=sc_ssl_verify,
     )
 
 
@@ -228,8 +317,12 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
     elif suffix in {".toml", ".tml"}:
         with config_file_path.open("rb") as handle:
             data = tomllib.load(handle)
+    elif suffix in {".yaml", ".yml"}:
+        data = yaml.safe_load(config_file_path.read_text(encoding="utf-8"))
     else:
-        raise ValueError("Unsupported config file type. Use .json or .toml.")
+        raise ValueError(
+            "Unsupported config file type. Use .yaml, .json, or .toml."
+        )
 
     if not isinstance(data, dict):
         raise ValueError("Config file root must be an object/dictionary.")

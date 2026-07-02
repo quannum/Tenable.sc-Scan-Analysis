@@ -12,6 +12,42 @@ from src.tenable_coverage_workflow.service_runner import main as service_main
 
 
 class ServiceConfigTests(unittest.TestCase):
+    def test_service_config_loads_yaml_and_transport_controls(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "service_yaml_config_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True)
+        try:
+            config_file = temp_path / "service.yaml"
+            config_file.write_text(
+                "\n".join(
+                    [
+                        "tenable_coverage_workflow_service:",
+                        "  source_json_file: sites.json",
+                        "  mode: offline",
+                        "  scan_json_dir: scans",
+                        "  asset_json_dir: assets",
+                        "  sc_timeout_seconds: 45",
+                        "  sc_retries: 4",
+                        "  sc_backoff_seconds: 2.0",
+                        "  sc_ssl_verify: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = build_service_config(["--config-file", str(config_file)])
+
+            self.assertEqual(config.source_json_file, "sites.json")
+            self.assertEqual(config.sc_timeout_seconds, 45)
+            self.assertEqual(config.sc_retries, 4)
+            self.assertEqual(config.sc_backoff_seconds, 2.0)
+            self.assertTrue(config.sc_ssl_verify)
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
     def test_service_config_loads_from_toml(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "service_config_case"

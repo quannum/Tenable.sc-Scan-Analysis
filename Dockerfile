@@ -11,7 +11,7 @@ COPY requirements.txt pyproject.toml readme.md LICENSE main.py ./
 COPY src ./src
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir ".[live]"
 
 RUN mkdir -p /data/output && chown -R appuser:appuser /app /data
 

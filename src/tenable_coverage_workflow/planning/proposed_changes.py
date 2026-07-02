@@ -39,6 +39,18 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         gap_count=int(getter("gap_count", 0) or 0),
         exclusion_ip_total=int(getter("exclusion_ip_total", 0) or 0),
         coverage_pct=float(getter("coverage_pct", 0.0) or 0.0),
+        required_asset_present=str(getter("required_asset_present", "")),
+        required_scan_present=str(getter("required_scan_present", "")),
+        configured_repository=getter("configured_repository"),
+        configured_policy=getter("configured_policy"),
+        required_policy_configured=str(
+            getter("required_policy_configured", "")
+        ),
+        timezone=getter("timezone"),
+        tags=list(getter("tags", []) or []),
+        environment=getter("environment"),
+        business_function=getter("business_function"),
+        scan_classification=dict(getter("scan_classification", {}) or {}),
     )
 
 
@@ -79,6 +91,15 @@ def generate_proposed_changes(
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
     if (
+        result.required_asset_present == "No"
+        or result.required_scan_present == "No"
+    ):
+        return _create_or_update_action(result.target_type)
+
+    if result.required_policy_configured == "No":
+        return "UPDATE_SCAN_POLICY_AND_TARGET"
+
+    if (
         result.required_scan_name
         and result.required_scan_covered == "No"
         and result.covering_scans
@@ -92,13 +113,18 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
     if result.status == "PARTIAL":
         return "REVIEW_PARTIAL_COVERAGE"
     if result.status == "GAP":
-        if result.target_type == "PUBLIC":
-            return "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN"
-        if result.target_type == "PRIVATE_SUPERNET":
-            return "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN"
-        if result.target_type == "VLAN":
-            return "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN"
+        return _create_or_update_action(result.target_type)
 
+    return "REVIEW_COVERAGE"
+
+
+def _create_or_update_action(target_type: str) -> str:
+    if target_type == "PUBLIC":
+        return "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN"
+    if target_type == "PRIVATE_SUPERNET":
+        return "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN"
+    if target_type == "VLAN":
+        return "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN"
     return "REVIEW_COVERAGE"
 
 

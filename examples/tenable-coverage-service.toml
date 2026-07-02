@@ -1,6 +1,17 @@
 [tenable_coverage_workflow_service]
 job_name = "tenable-coverage-nightly"
 subnet_repo_path = "/data/subnet-repo"
+# Higher-priority authoritative sources can replace the YAML repository:
+# source_api_url = "https://network-source.example.internal/api/v1/sites"
+# source_api_token = "set-via-mounted-secret-or-TCW_SOURCE_API_TOKEN"
+# source_json_file = "/data/network-source/sites.json"
+# github_api_url = "https://github.example.internal/api/v3"
+# github_repository = "network/subnet-definitions"
+# github_ref = "main"
+# github_path = "sites"
+# Provide GITHUB_TOKEN via a mounted/environment secret.
+# source_xlsx_file = "/data/network-source/networks.xlsx"
+# source_xlsx_sheet = "Networks"
 output_dir = "/data/output"
 run_id_prefix = "nightly-"
 latest_summary_file = "/data/output/latest_run.json"
@@ -17,6 +28,10 @@ case_sensitive = false
 filter_disabled_mode = "ALL"
 log_level = "INFO"
 log_format = "json"
+sc_timeout_seconds = 60
+sc_retries = 3
+sc_backoff_seconds = 1.5
+sc_ssl_verify = true
 
 # For live mode, switch mode to "live" and provide these via secrets or env:
 # sc_url = "https://tenable-sc.example.internal"

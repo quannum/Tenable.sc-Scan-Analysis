@@ -267,7 +267,10 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 and row["Target Type"] == "PRIVATE_SUPERNET"
             )
             self.assertEqual(private_row["Current Status"], "OK")
-            self.assertEqual(private_row["Proposed Action"], "NO_ACTION")
+            self.assertEqual(
+                private_row["Proposed Action"],
+                "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
+            )
 
             end_user_vlan_row = next(
                 row
@@ -276,7 +279,8 @@ class DetectAndPlanCliTests(unittest.TestCase):
             )
             self.assertEqual(end_user_vlan_row["Current Status"], "OK")
             self.assertEqual(
-                end_user_vlan_row["Proposed Action"], "REVIEW_WRONG_SCAN"
+                end_user_vlan_row["Proposed Action"],
+                "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
             )
             self.assertEqual(end_user_vlan_row["VLAN Tag"], "130")
             self.assertEqual(
@@ -287,6 +291,22 @@ class DetectAndPlanCliTests(unittest.TestCase):
             markdown = md_path.read_text(encoding="utf-8")
             self.assertIn("## NYC01 - New York Office", markdown)
             self.assertIn("### PUBLIC: `203.0.113.0/26`", markdown)
+
+            coverage_summary = json.loads(
+                (run_dir / "coverage_summary.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("region", coverage_summary["dimensions"])
+            self.assertIn(
+                "NYC01_Private_Discovery",
+                coverage_summary["missing_asset_groups"],
+            )
+            self.assertTrue((run_dir / "coverage_results.csv").is_file())
+            self.assertTrue((run_dir / "extra_scan_targets.json").is_file())
+            self.assertTrue((run_dir / "proposed_exclusions.csv").is_file())
+            self.assertIn(
+                "Final Audit Report",
+                (run_dir / "final_audit_report.md").read_text(encoding="utf-8"),
+            )
 
             summary = stdout.getvalue()
             self.assertIn("YAML files processed: 6", summary)

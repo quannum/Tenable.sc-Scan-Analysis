@@ -99,9 +99,15 @@ def build_required_policy_name(target: CoverageTarget) -> str:
 def apply_naming_rules(target: CoverageTarget) -> CoverageTarget:
     return replace(
         target,
-        required_asset_name=build_required_asset_name(target),
-        required_scan_name=build_required_scan_name(target),
-        required_policy_name=build_required_policy_name(target),
+        required_asset_name=(
+            target.required_asset_name or build_required_asset_name(target)
+        ),
+        required_scan_name=(
+            target.required_scan_name or build_required_scan_name(target)
+        ),
+        required_policy_name=(
+            target.required_policy_name or build_required_policy_name(target)
+        ),
     )
 
 

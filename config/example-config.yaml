@@ -1,0 +1,42 @@
+tenable_sc_scan_analysis:
+  # Source priority: API, local JSON, GitHub, local YAML, XLSX.
+  # Keep NETWORK_SOURCE_API_TOKEN in an environment variable or mounted secret.
+  source_api_url: null
+  source_json_file: /data/network-source/sites.json
+  # github_api_url: https://github.example.internal/api/v3
+  # github_repository: network/subnet-definitions
+  # github_ref: main
+  # github_path: sites
+  # Keep GITHUB_TOKEN in an environment variable or mounted secret.
+  subnet_repo_path: /data/subnet-repo
+  # Lowest-priority legacy fallback:
+  # source_xlsx_file: /data/network-source/networks.xlsx
+  # source_xlsx_sheet: Networks
+
+  # Tenable secrets are read from SC_ACCESS_KEY and SC_SECRET_KEY.
+  mode: offline
+  scan_json_dir: /data/tenable/scans
+  asset_json_dir: /data/tenable/assets
+  sc_timeout_seconds: 60
+  sc_retries: 3
+  sc_backoff_seconds: 1.5
+  sc_ssl_verify: true
+
+  commands:
+    validate_definitions:
+      output_file: /data/output/normalized-definitions.json
+    collect_tenable:
+      output_file: /data/output/tenable-inventory.json
+      fail_on_partial: true
+    analyze_coverage:
+      output_dir: /data/output
+    propose_changes:
+      output_dir: /data/output
+    apply_changes:
+      mode: live
+      plan_file: /data/output/runs/approved-run-id/proposed_changes.csv
+      repository_id: 7
+      result_file: /data/output/runs/approved-run-id/apply_result.json
+    export_report:
+      run_dir: /data/output/runs/approved-run-id
+      output_dir: /data/output/report-bundle

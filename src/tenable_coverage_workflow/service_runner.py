@@ -90,6 +90,16 @@ def build_detect_config(
 ) -> DetectAndPlanConfig:
     return DetectAndPlanConfig(
         subnet_repo_path=config.subnet_repo_path,
+        source_api_url=config.source_api_url,
+        source_api_token=config.source_api_token,
+        source_json_file=config.source_json_file,
+        source_xlsx_file=config.source_xlsx_file,
+        source_xlsx_sheet=config.source_xlsx_sheet,
+        github_api_url=config.github_api_url,
+        github_repository=config.github_repository,
+        github_ref=config.github_ref,
+        github_path=config.github_path,
+        github_token=config.github_token,
         output_dir=config.output_dir,
         run_id=run_id,
         dry_run=config.dry_run,
@@ -107,6 +117,10 @@ def build_detect_config(
         log_level=config.log_level,
         log_format=config.log_format,
         log_file=config.log_file,
+        sc_timeout_seconds=config.sc_timeout_seconds,
+        sc_retries=config.sc_retries,
+        sc_backoff_seconds=config.sc_backoff_seconds,
+        sc_ssl_verify=config.sc_ssl_verify,
     )
 
 

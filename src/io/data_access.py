@@ -57,10 +57,24 @@ class DataAccess:
             except ImportError as exc:
                 raise RuntimeError("pyTenable is required for live mode") from exc
 
+            timeout = int(getattr(config, "sc_timeout_seconds", 60))
+            retries = int(getattr(config, "sc_retries", 3))
+            backoff = float(getattr(config, "sc_backoff_seconds", 1.5))
+            ssl_verify = bool(getattr(config, "sc_ssl_verify", True))
+            if timeout <= 0 or retries <= 0 or backoff < 0:
+                raise ValueError(
+                    "Tenable timeout/retries must be positive and backoff non-negative"
+                )
+            self.live_call_max_retries = retries
+            self.live_retry_backoff_seconds = backoff
             self.sc = TenableSC(
                 url=config.sc_url,
                 access_key=config.sc_access_key,
                 secret_key=config.sc_secret_key,
+                timeout=timeout,
+                retries=retries,
+                backoff=backoff,
+                ssl_verify=ssl_verify,
             )
         else:
             self.offline_scans = load_json_folder(config.scan_json_dir)
@@ -117,8 +131,106 @@ class DataAccess:
             )
         return self.offline_assets.get(str(asset_id), {})
 
+    def get_repositories(self) -> list[dict[str, Any]]:
+        return self._list_live_resource("repositories")
+
+    def get_asset_lists(self) -> list[dict[str, Any]]:
+        if self.config.mode != "live":
+            return list(self.offline_assets.values())
+        return self._list_live_resource("asset_lists")
+
+    def get_policies(self) -> list[dict[str, Any]]:
+        return self._list_live_resource("policies")
+
+    def get_credentials(self) -> list[dict[str, Any]]:
+        return self._list_live_resource("credentials")
+
+    def get_observed_hosts(self) -> list[dict[str, Any]]:
+        return self._list_live_resource("hosts")
+
+    def create_static_asset(
+        self, name: str, ips: list[str], description: str
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.asset_lists.create(
+                name,
+                "static",
+                ips=ips,
+                description=description,
+            ),
+            operation_name=f"asset_lists.create({name})",
+        )
+
+    def update_static_asset(
+        self, asset_id: int, ips: list[str], description: str | None = None
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        kwargs: dict[str, Any] = {"ips": ips}
+        if description:
+            kwargs["description"] = description
+        return self._call_live(
+            lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
+            operation_name=f"asset_lists.edit({asset_id})",
+        )
+
+    def create_scan(
+        self,
+        name: str,
+        repository_id: int,
+        asset_ids: list[int],
+        policy_id: int,
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.scans.create(
+                name,
+                repository_id,
+                asset_lists=asset_ids,
+                policy_id=policy_id,
+            ),
+            operation_name=f"scans.create({name})",
+        )
+
+    def update_scan_configuration(
+        self,
+        scan_id: int,
+        asset_ids: list[int],
+        repository_id: int,
+        policy_id: int,
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.scans.edit(
+                scan_id,
+                asset_lists=asset_ids,
+                repo=repository_id,
+                policy_id=policy_id,
+            ),
+            operation_name=f"scans.edit({scan_id})",
+        )
+
+    def _require_live_mutation(self) -> None:
+        if self.config.mode != "live":
+            raise RuntimeError("Tenable.sc mutations require live mode")
+
+    def _list_live_resource(self, resource_name: str) -> list[dict[str, Any]]:
+        if self.config.mode != "live":
+            return []
+        endpoint = getattr(self.sc, resource_name, None)
+        list_method = getattr(endpoint, "list", None)
+        if not callable(list_method):
+            raise RuntimeError(
+                f"Installed pyTenable does not expose sc.{resource_name}.list"
+            )
+        payload = self._call_live(
+            list_method,
+            operation_name=f"{resource_name}.list",
+        )
+        return normalize_resource_list(payload)
+
     def _call_live(self, call_fn: Callable[[], Any], operation_name: str) -> Any:
-        attempts = self.LIVE_CALL_MAX_RETRIES
+        attempts = getattr(self, "live_call_max_retries", self.LIVE_CALL_MAX_RETRIES)
 
         for attempt in range(1, attempts + 1):
             try:
@@ -127,7 +239,12 @@ class DataAccess:
                 if not self._is_retryable_exception(exc) or attempt >= attempts:
                     raise
 
-                delay = self.LIVE_RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                backoff = getattr(
+                    self,
+                    "live_retry_backoff_seconds",
+                    self.LIVE_RETRY_BACKOFF_SECONDS,
+                )
+                delay = backoff * (2 ** (attempt - 1))
                 LOGGER.warning(
                     "Live API call '%s' failed on attempt %s/%s: %s. Retrying in %.1fs",
                     operation_name,
@@ -161,3 +278,29 @@ class DataAccess:
             return True
 
         return False
+
+
+def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
+    """Normalize the list and usable/manageable response shapes used by pyTenable."""
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for key in ("usable", "manageable", "repositories", "hosts", "response"):
+        values = payload.get(key)
+        if isinstance(values, dict):
+            values = values.get("results", values.get("items"))
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            identity = str(item.get("id", item.get("uuid", repr(sorted(item.items())))))
+            if identity in seen:
+                continue
+            seen.add(identity)
+            records.append(item)
+    return records

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tenable-sc-scan-analysis"
-version = "2.1"
-description = "Analyze Tenable.sc scan scope coverage and generate Excel reports."
+version = "2.2"
+description = "Validate Tenable.sc scan and asset coverage against authoritative networks."
 readme = "readme.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -34,6 +34,7 @@ dev = [
 tenable-scan-analysis = "src.cli.main:main"
 tenable-coverage-detect-plan = "src.tenable_coverage_workflow.run_detect_and_plan:main"
 tenable-coverage-scheduled = "src.tenable_coverage_workflow.service_runner:main"
+tenable-sc-scan-analysis = "src.tenable_coverage_workflow.application_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

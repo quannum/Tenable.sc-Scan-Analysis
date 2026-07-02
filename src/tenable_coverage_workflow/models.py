@@ -9,6 +9,8 @@ class NetworkRange:
     network: str
     prefix_length: int
     subnetmask: str | None
+    tags: list[str] = field(default_factory=list)
+    source_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,13 @@ class VlanRange:
     network: str
     prefix_length: int
     subnetmask: str | None
+    tags: list[str] = field(default_factory=list)
+    routing: str | None = None
+    gateway: str | None = None
+    dhcp_start: str | None = None
+    dhcp_end: str | None = None
+    ip_addresses: list[dict[str, object]] = field(default_factory=list)
+    source_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -35,8 +44,16 @@ class SiteNetworkDefinition:
     description: str | None
     location: str | None
     region: str | None
+    timezone: str | None = None
+    site_type: str | None = None
+    utc_offset: str | None = None
+    tags: list[str] = field(default_factory=list)
+    environment: str | None = None
+    business_function: str | None = None
+    scan_classification: dict[str, object] = field(default_factory=dict)
     public_ranges: list[NetworkRange] = field(default_factory=list)
     private_ranges: list[PrivateNetworkRange] = field(default_factory=list)
+    source_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -54,6 +71,11 @@ class CoverageTarget:
     required_asset_name: str | None = None
     required_scan_name: str | None = None
     required_policy_name: str | None = None
+    timezone: str | None = None
+    tags: list[str] = field(default_factory=list)
+    environment: str | None = None
+    business_function: str | None = None
+    scan_classification: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -72,6 +94,11 @@ class YamlConnectorResult:
     validation_issues: list[ValidationIssue] = field(default_factory=list)
     files_processed: int = 0
     files_failed: int = 0
+
+
+# All authoritative connectors return the same shape.  Keep the historical name as
+# an alias so existing callers remain compatible while new code can be source-neutral.
+SourceLoadResult = YamlConnectorResult
 
 
 @dataclass(frozen=True)
@@ -98,6 +125,16 @@ class CoverageValidationResult:
     gap_count: int = 0
     exclusion_ip_total: int = 0
     coverage_pct: float = 0.0
+    required_asset_present: str = ""
+    required_scan_present: str = ""
+    configured_repository: str | None = None
+    configured_policy: str | None = None
+    required_policy_configured: str = ""
+    timezone: str | None = None
+    tags: list[str] = field(default_factory=list)
+    environment: str | None = None
+    business_function: str | None = None
+    scan_classification: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

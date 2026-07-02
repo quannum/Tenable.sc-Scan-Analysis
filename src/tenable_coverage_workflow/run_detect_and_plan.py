@@ -20,16 +20,27 @@ from ..io.data_access import DataAccess
 from ..reporting.workbook import build_workbook
 from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
+from .coverage_reporting import write_coverage_reports, write_final_audit_report
 from .models import CoverageTarget, CoverageValidationResult
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
-from .subnet_source import load_yaml_subnet_repo
+from .subnet_source import AuthoritativeSourceConfig, load_authoritative_source
 
 LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
 class DetectAndPlanConfig:
-    subnet_repo_path: str
+    subnet_repo_path: str | None
+    source_api_url: str | None
+    source_api_token: str | None
+    source_json_file: str | None
+    source_xlsx_file: str | None
+    source_xlsx_sheet: str | None
+    github_api_url: str | None
+    github_repository: str | None
+    github_ref: str
+    github_path: str
+    github_token: str | None
     output_dir: Path
     run_id: str | None
     dry_run: bool
@@ -47,6 +58,10 @@ class DetectAndPlanConfig:
     log_level: str = "INFO"
     log_format: str = "text"
     log_file: Path | None = None
+    sc_timeout_seconds: int = 60
+    sc_retries: int = 3
+    sc_backoff_seconds: float = 1.5
+    sc_ssl_verify: bool = True
 
 
 @dataclass
@@ -62,6 +77,10 @@ class CoverageSourceConfig:
     match_all_include: bool
     case_sensitive: bool
     filter_disabled_mode: str
+    sc_timeout_seconds: int = 60
+    sc_retries: int = 3
+    sc_backoff_seconds: float = 1.5
+    sc_ssl_verify: bool = True
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -71,7 +90,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
             "and generate detect-and-plan audit outputs."
         )
     )
-    parser.add_argument("--subnet-repo-path", required=True)
+    parser.add_argument("--subnet-repo-path")
+    parser.add_argument("--source-api-url")
+    parser.add_argument("--source-api-token")
+    parser.add_argument("--source-json-file")
+    parser.add_argument("--source-xlsx-file")
+    parser.add_argument("--source-xlsx-sheet")
+    parser.add_argument("--github-api-url")
+    parser.add_argument("--github-repository")
+    parser.add_argument("--github-ref")
+    parser.add_argument("--github-path")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--run-id")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True)
@@ -89,6 +117,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="ALL",
     )
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--sc-timeout-seconds", type=int, default=60)
+    parser.add_argument("--sc-retries", type=int, default=3)
+    parser.add_argument("--sc-backoff-seconds", type=float, default=1.5)
+    parser.add_argument(
+        "--no-sc-ssl-verify",
+        dest="sc_ssl_verify",
+        action="store_false",
+        default=True,
+    )
     parser.add_argument(
         "--sc-url",
         help="Optional Tenable.sc URL override for live mode. Defaults to SC_URL.",
@@ -189,8 +226,47 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
+    source_api_url = args.source_api_url or os.getenv("NETWORK_SOURCE_API_URL")
+    source_api_token = args.source_api_token or os.getenv("NETWORK_SOURCE_API_TOKEN")
+    source_json_file = args.source_json_file or os.getenv("NETWORK_SOURCE_JSON_FILE")
+    source_xlsx_file = args.source_xlsx_file or os.getenv(
+        "NETWORK_SOURCE_XLSX_FILE"
+    )
+    source_xlsx_sheet = args.source_xlsx_sheet or os.getenv(
+        "NETWORK_SOURCE_XLSX_SHEET"
+    )
+    github_api_url = args.github_api_url or os.getenv("GITHUB_API_URL")
+    github_repository = args.github_repository or os.getenv("GITHUB_REPOSITORY")
+    github_ref = args.github_ref or os.getenv("GITHUB_REF") or "main"
+    github_path = args.github_path or os.getenv("GITHUB_PATH") or ""
+    github_token = os.getenv("GITHUB_TOKEN")
+    subnet_repo_path = args.subnet_repo_path or os.getenv("SUBNET_REPO_PATH")
+    if not any(
+        (
+            source_api_url,
+            source_json_file,
+            github_api_url and github_repository,
+            subnet_repo_path,
+            source_xlsx_file,
+        )
+    ):
+        raise ValueError(
+            "An authoritative source is required: --source-api-url, "
+            "--source-json-file, GitHub Enterprise configuration, "
+            "--subnet-repo-path, or --source-xlsx-file."
+        )
     return DetectAndPlanConfig(
-        subnet_repo_path=args.subnet_repo_path,
+        subnet_repo_path=subnet_repo_path,
+        source_api_url=source_api_url,
+        source_api_token=source_api_token,
+        source_json_file=source_json_file,
+        source_xlsx_file=source_xlsx_file,
+        source_xlsx_sheet=source_xlsx_sheet,
+        github_api_url=github_api_url,
+        github_repository=github_repository,
+        github_ref=github_ref,
+        github_path=github_path,
+        github_token=github_token,
         output_dir=Path(args.output_dir),
         run_id=args.run_id,
         dry_run=bool(args.dry_run),
@@ -208,6 +284,10 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         log_level=args.log_level,
         log_format="text",
         log_file=None,
+        sc_timeout_seconds=args.sc_timeout_seconds,
+        sc_retries=args.sc_retries,
+        sc_backoff_seconds=args.sc_backoff_seconds,
+        sc_ssl_verify=args.sc_ssl_verify,
     )
 
 
@@ -224,6 +304,10 @@ def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceC
         match_all_include=bool(config.match_all_include),
         case_sensitive=bool(config.case_sensitive),
         filter_disabled_mode=config.filter_disabled_mode,
+        sc_timeout_seconds=config.sc_timeout_seconds,
+        sc_retries=config.sc_retries,
+        sc_backoff_seconds=config.sc_backoff_seconds,
+        sc_ssl_verify=config.sc_ssl_verify,
     )
 
 
@@ -238,6 +322,13 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     audit_logger.emit(
         "run_started",
         subnet_repo_path=config.subnet_repo_path,
+        source_api_url=config.source_api_url,
+        source_json_file=config.source_json_file,
+        source_xlsx_file=config.source_xlsx_file,
+        github_api_url=config.github_api_url,
+        github_repository=config.github_repository,
+        github_ref=config.github_ref,
+        github_path=config.github_path,
         output_dir=output_dir,
         dry_run=config.dry_run,
         mode=config.mode,
@@ -249,20 +340,35 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
             "detect-and-plan mode."
         )
 
-    connector_result = load_yaml_subnet_repo(
-        config.subnet_repo_path,
+    source_type, connector_result = load_authoritative_source(
+        AuthoritativeSourceConfig(
+            api_url=config.source_api_url,
+            api_token=config.source_api_token,
+            json_file=config.source_json_file,
+            yaml_repo_path=config.subnet_repo_path,
+            xlsx_file=config.source_xlsx_file,
+            xlsx_sheet=config.source_xlsx_sheet,
+            github_api_url=config.github_api_url,
+            github_repository=config.github_repository,
+            github_ref=config.github_ref,
+            github_path=config.github_path,
+            github_token=config.github_token,
+        ),
         audit_logger=audit_logger,
     )
     named_targets = apply_naming_rules_to_targets(connector_result.coverage_targets)
 
-    actual_scopes, actual_by_scan, excluded_by_scan = load_actual_scope_data(
-        build_coverage_source_config(config)
+    actual_scopes, actual_by_scan, excluded_by_scan, configuration_index = (
+        load_actual_scope_data(
+            build_coverage_source_config(config)
+        )
     )
     coverage_results = validate_coverage_targets(
         named_targets,
         actual_scopes=actual_scopes,
         actual_by_scan=actual_by_scan,
         excluded_by_scan=excluded_by_scan,
+        configuration_index=configuration_index,
         audit_logger=audit_logger,
     )
     proposed_changes = generate_proposed_changes(coverage_results, run_id=run_id)
@@ -284,6 +390,13 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         proposed_changes=proposed_changes,
         audit_logger=audit_logger,
     )
+    coverage_report_paths = write_coverage_reports(
+        run_dir=run_dir,
+        coverage_results=coverage_results,
+        targets=named_targets,
+        actual_scopes=actual_scopes,
+        validation_issues=connector_result.validation_issues,
+    )
 
     status_counts = Counter(result.status for result in coverage_results)
     completed_at = datetime.now(timezone.utc)
@@ -295,8 +408,22 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "mode": config.mode,
         "dry_run": config.dry_run,
         "subnet_repo_path": config.subnet_repo_path,
+        "authoritative_source_type": source_type,
+        "authoritative_source": (
+            config.source_api_url
+            or config.source_json_file
+            or (
+                f"{config.github_repository}@{config.github_ref}"
+                if config.github_repository
+                else None
+            )
+            or config.subnet_repo_path
+            or config.source_xlsx_file
+        ),
         "yaml_files_processed": connector_result.files_processed,
         "yaml_files_failed": connector_result.files_failed,
+        "authoritative_units_processed": connector_result.files_processed,
+        "authoritative_units_failed": connector_result.files_failed,
         "validation_issue_count": len(connector_result.validation_issues),
         "coverage_targets_created": len(named_targets),
         "ok_count": status_counts.get("OK", 0),
@@ -304,13 +431,31 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "partial_count": status_counts.get("PARTIAL", 0),
         "excluded_count": status_counts.get("EXCLUDED", 0),
         "proposed_changes_count": len(proposed_changes),
+        "missing_asset_group_count": sum(
+            result.required_asset_present == "No" for result in coverage_results
+        ),
+        "missing_required_scan_count": sum(
+            result.required_scan_present == "No" for result in coverage_results
+        ),
+        "scan_policy_mismatch_count": sum(
+            result.required_policy_configured == "No"
+            for result in coverage_results
+        ),
         "output_directory": str(run_dir),
         "audit_log": str(audit_logger.path),
         "csv_audit": str(csv_path),
         "markdown_audit": str(md_path),
+        **coverage_report_paths,
         "run_summary_file": str(run_dir / "run_summary.json"),
     }
 
+    final_audit_path = write_final_audit_report(
+        run_dir / "final_audit_report.md",
+        summary,
+        connector_result.validation_issues,
+        coverage_results,
+    )
+    summary["final_audit_report"] = str(final_audit_path)
     atomic_write_json(run_dir / "run_summary.json", summary)
     audit_logger.emit("run_completed", **summary)
     return summary
@@ -323,7 +468,37 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws
     )
-    return actual_scopes, actual_by_scan, excluded_by_scan
+    return (
+        actual_scopes,
+        actual_by_scan,
+        excluded_by_scan,
+        build_configuration_index(data_access),
+    )
+
+
+def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
+    assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for asset in data_access.get_asset_lists():
+        name = str(asset.get("name") or "").strip()
+        if name:
+            assets_by_name[name].append(asset)
+
+    scans_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for scan in data_access.get_scans():
+        name = str(scan.get("name") or "").strip()
+        scan_id = scan.get("id")
+        details = (
+            data_access.get_scan_details(scan_id)
+            if scan_id not in (None, "")
+            else scan
+        )
+        record = details if isinstance(details, dict) and details else scan
+        if name:
+            scans_by_name[name].append(record)
+    return {
+        "assets_by_name": dict(assets_by_name),
+        "scans_by_name": dict(scans_by_name),
+    }
 
 
 def validate_coverage_targets(
@@ -331,10 +506,14 @@ def validate_coverage_targets(
     actual_scopes,
     actual_by_scan,
     excluded_by_scan,
+    configuration_index=None,
     audit_logger=None,
 ) -> list[CoverageValidationResult]:
     coverage_results: list[CoverageValidationResult] = []
     exclusion_impact_by_scan = defaultdict(int)
+    configuration_index = configuration_index or {}
+    assets_by_name = configuration_index.get("assets_by_name", {})
+    scans_by_name = configuration_index.get("scans_by_name", {})
 
     for target in targets:
         expected = parse_scope_item(target.cidr)
@@ -353,6 +532,26 @@ def validate_coverage_targets(
         status = derive_workflow_status(
             base_result.status, base_result.exclusion_ip_total
         )
+        matching_assets = assets_by_name.get(target.required_asset_name, [])
+        matching_scans = scans_by_name.get(target.required_scan_name, [])
+        required_asset_present = "Yes" if matching_assets else "No"
+        required_scan_present = "Yes" if matching_scans else "No"
+        required_scan = matching_scans[0] if len(matching_scans) == 1 else {}
+        configured_repository = _resource_label(
+            required_scan.get("repository"), required_scan.get("repositoryID")
+        )
+        configured_policy = _resource_label(
+            required_scan.get("policy"), required_scan.get("policyID")
+        )
+        if not matching_scans:
+            required_policy_configured = ""
+        elif len(matching_scans) > 1:
+            required_policy_configured = "No"
+        else:
+            policy_name = _resource_name(required_scan.get("policy"))
+            required_policy_configured = (
+                "Yes" if policy_name == target.required_policy_name else "No"
+            )
         coverage_result = CoverageValidationResult(
             status=status,
             target_type=target.target_type,
@@ -376,6 +575,16 @@ def validate_coverage_targets(
             gap_count=base_result.gap_count,
             exclusion_ip_total=base_result.exclusion_ip_total,
             coverage_pct=base_result.coverage_pct,
+            required_asset_present=required_asset_present,
+            required_scan_present=required_scan_present,
+            configured_repository=configured_repository,
+            configured_policy=configured_policy,
+            required_policy_configured=required_policy_configured,
+            timezone=target.timezone,
+            tags=list(target.tags),
+            environment=target.environment,
+            business_function=target.business_function,
+            scan_classification=dict(target.scan_classification),
         )
         coverage_results.append(coverage_result)
 
@@ -422,6 +631,24 @@ def validate_coverage_targets(
     return coverage_results
 
 
+def _resource_name(value) -> str | None:
+    if isinstance(value, dict):
+        name = str(value.get("name") or "").strip()
+        return name or None
+    return None
+
+
+def _resource_label(value, fallback_id=None) -> str | None:
+    if isinstance(value, dict):
+        name = str(value.get("name") or "").strip()
+        if name:
+            return name
+        fallback_id = value.get("id", fallback_id)
+    if fallback_id not in (None, ""):
+        return str(fallback_id)
+    return None
+
+
 def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
     if status == "PARTIAL" and exclusion_ip_total > 0:
         return "EXCLUDED"
@@ -430,8 +657,18 @@ def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
 
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
     print(f"Run ID: {run_id}")
-    print(f"YAML files processed: {summary['yaml_files_processed']}")
-    print(f"YAML files failed: {summary['yaml_files_failed']}")
+    print(f"Authoritative source: {summary['authoritative_source_type']}")
+    if summary["authoritative_source_type"] == "yaml_repo":
+        print(f"YAML files processed: {summary['yaml_files_processed']}")
+        print(f"YAML files failed: {summary['yaml_files_failed']}")
+    else:
+        print(
+            "Authoritative units processed: "
+            f"{summary['authoritative_units_processed']}"
+        )
+        print(
+            f"Authoritative units failed: {summary['authoritative_units_failed']}"
+        )
     print(f"Coverage targets created: {summary['coverage_targets_created']}")
     print(f"OK count: {summary['ok_count']}")
     print(f"GAP count: {summary['gap_count']}")
