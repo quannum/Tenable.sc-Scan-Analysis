@@ -60,6 +60,143 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         )
         sleep.assert_called_once()
 
+    def test_subnet_as_code_module_invokes_method_with_readme_query_params(self):
+        calls = []
+
+        class Module:
+            @staticmethod
+            def get_sites_properties(**kwargs):
+                calls.append(kwargs)
+                return {
+                    "site_definition": [
+                        {
+                            "site_code": "API01",
+                            "site_name": "Module Site",
+                            "private_ranges": ["10.9.0.0/24"],
+                        }
+                    ]
+                }
+
+        with patch(
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
+            "importlib.import_module",
+            return_value=Module,
+        ):
+            source_type, result = load_authoritative_source(
+                AuthoritativeSourceConfig(
+                    subnet_as_code_method="get_sites_properties",
+                    subnet_as_code_reference_id="ref-001",
+                    subnet_as_code_sites=["NYC", "LON"],
+                    subnet_as_code_tags=["production"],
+                    subnet_as_code_name="New York",
+                    subnet_as_code_network_type="private",
+                    subnet_as_code_routing_type="core",
+                    subnet_as_code_desired_properties=[
+                        "site_code",
+                        "private_ranges",
+                    ],
+                )
+            )
+
+        self.assertEqual(source_type, "subnet_as_code")
+        self.assertEqual(result.site_definitions[0].site_code, "API01")
+        self.assertEqual(
+            calls[0],
+            {
+                "referenceId": "ref-001",
+                "sites": ["NYC", "LON"],
+                "tags": ["production"],
+                "name": "New York",
+                "networkType": "private",
+                "routingType": "core",
+                "desiredProperties": ["site_code", "private_ranges"],
+            },
+        )
+
+    def test_subnet_as_code_get_ipaddress_example_is_normalized(self):
+        class Module:
+            @staticmethod
+            def get_ipaddress(**kwargs):
+                self.assertEqual(
+                    kwargs,
+                    {"sites": ["NYC", "LON"], "tags": ["production"]},
+                )
+                return [
+                    {
+                        "name": "lonw-camdev1",
+                        "ip": "192.41.32.55",
+                        "tags": ["production"],
+                        "site_code": "lon",
+                    },
+                    {
+                        "name": "nycw-jsmith",
+                        "ip": "192.1.57.130",
+                        "tags": ["production"],
+                        "site_code": "nyc",
+                    },
+                    {
+                        "name": "smith-test",
+                        "ip": "187.1.1.1",
+                        "tags": ["production"],
+                        "site_code": "nyc",
+                    },
+                ]
+
+        with patch(
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
+            "importlib.import_module",
+            return_value=Module,
+        ):
+            source_type, result = load_authoritative_source(
+                AuthoritativeSourceConfig(
+                    subnet_as_code_method="get_ipaddress",
+                    subnet_as_code_sites=["NYC", "LON"],
+                    subnet_as_code_tags=["production"],
+                )
+        )
+
+        self.assertEqual(source_type, "subnet_as_code")
+        self.assertEqual(
+            {site.site_code for site in result.site_definitions},
+            {"LON", "NYC"},
+        )
+        targets = {
+            (target.site_code, target.target_type, target.cidr): target
+            for target in result.coverage_targets
+        }
+        self.assertIn(("LON", "PUBLIC", "192.41.32.55/32"), targets)
+        self.assertIn(("NYC", "PUBLIC", "192.1.57.130/32"), targets)
+        self.assertIn(("NYC", "PUBLIC", "187.1.1.1/32"), targets)
+        self.assertEqual(
+            targets[("LON", "PUBLIC", "192.41.32.55/32")].tags,
+            ["production"],
+        )
+
+    def test_subnet_as_code_has_priority_over_raw_api_url(self):
+        expected = SourceLoadResult(files_processed=1)
+        with (
+            patch(
+                "src.tenable_coverage_workflow.subnet_source.source_loader."
+                "_load_subnet_as_code",
+                return_value=expected,
+            ) as module_loader,
+            patch(
+                "src.tenable_coverage_workflow.subnet_source.source_loader."
+                "load_json_api"
+            ) as api_loader,
+        ):
+            source_type, result = load_authoritative_source(
+                AuthoritativeSourceConfig(
+                    subnet_as_code_method="get_sites",
+                    api_url="https://unused.example/api",
+                )
+            )
+
+        self.assertEqual(source_type, "subnet_as_code")
+        self.assertIs(result, expected)
+        module_loader.assert_called_once()
+        api_loader.assert_not_called()
+
     def test_normalized_json_preserves_metadata_and_flattens_ranges(self):
         payload = {
             "sites": [

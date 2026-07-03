@@ -80,6 +80,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--subnet-as-code-method")
+    parser.add_argument("--source-reference-id")
+    parser.add_argument("--source-sites")
+    parser.add_argument("--source-tags")
+    parser.add_argument("--source-name")
+    parser.add_argument("--source-network-type")
+    parser.add_argument("--source-routing-type")
+    parser.add_argument("--source-desired-properties")
+    parser.add_argument("--source-address-type")
     parser.add_argument("--source-api-url")
     parser.add_argument("--source-json-file")
     parser.add_argument("--source-xlsx-file")
@@ -130,6 +139,51 @@ def main(argv=None) -> int:
 
 def _source_config(args) -> AuthoritativeSourceConfig:
     return AuthoritativeSourceConfig(
+        subnet_as_code_method=_setting(
+            args,
+            "subnet_as_code_method",
+            "SUBNET_AS_CODE_METHOD",
+        ),
+        subnet_as_code_reference_id=_setting(
+            args,
+            "source_reference_id",
+            "SUBNET_AS_CODE_REFERENCE_ID",
+        ),
+        subnet_as_code_sites=_csv_setting(
+            args,
+            "source_sites",
+            "SUBNET_AS_CODE_SITES",
+        ),
+        subnet_as_code_tags=_csv_setting(
+            args,
+            "source_tags",
+            "SUBNET_AS_CODE_TAGS",
+        ),
+        subnet_as_code_name=_setting(
+            args,
+            "source_name",
+            "SUBNET_AS_CODE_NAME",
+        ),
+        subnet_as_code_network_type=_setting(
+            args,
+            "source_network_type",
+            "SUBNET_AS_CODE_NETWORK_TYPE",
+        ),
+        subnet_as_code_routing_type=_setting(
+            args,
+            "source_routing_type",
+            "SUBNET_AS_CODE_ROUTING_TYPE",
+        ),
+        subnet_as_code_desired_properties=_csv_setting(
+            args,
+            "source_desired_properties",
+            "SUBNET_AS_CODE_DESIRED_PROPERTIES",
+        ),
+        subnet_as_code_address_type=_setting(
+            args,
+            "source_address_type",
+            "SUBNET_AS_CODE_ADDRESS_TYPE",
+        ),
         api_url=_setting(args, "source_api_url", "NETWORK_SOURCE_API_URL"),
         api_token=_setting(args, "source_api_token", "NETWORK_SOURCE_API_TOKEN"),
         json_file=_setting(args, "source_json_file", "NETWORK_SOURCE_JSON_FILE"),
@@ -216,6 +270,15 @@ def _analyze_or_propose(args) -> int:
     tenable = _tenable_config(args)
     config = DetectAndPlanConfig(
         subnet_repo_path=str(source.yaml_repo_path) if source.yaml_repo_path else None,
+        subnet_as_code_method=source.subnet_as_code_method,
+        subnet_as_code_reference_id=source.subnet_as_code_reference_id,
+        subnet_as_code_sites=source.subnet_as_code_sites,
+        subnet_as_code_tags=source.subnet_as_code_tags,
+        subnet_as_code_name=source.subnet_as_code_name,
+        subnet_as_code_network_type=source.subnet_as_code_network_type,
+        subnet_as_code_routing_type=source.subnet_as_code_routing_type,
+        subnet_as_code_desired_properties=source.subnet_as_code_desired_properties,
+        subnet_as_code_address_type=source.subnet_as_code_address_type,
         source_api_url=source.api_url,
         source_api_token=source.api_token,
         source_json_file=str(source.json_file) if source.json_file else None,
@@ -391,6 +454,25 @@ def _as_bool(value: Any) -> bool:
         if normalized in {"false", "no", "0", "off", ""}:
             return False
     return bool(value)
+
+
+def _csv_setting(
+    args,
+    name: str,
+    environment_name: str | None = None,
+    default: Any = None,
+) -> list[str] | None:
+    value = _setting(args, name, environment_name, default)
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, tuple):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    if not text:
+        return None
+    return [item.strip() for item in text.split(",") if item.strip()]
 
 
 if __name__ == "__main__":

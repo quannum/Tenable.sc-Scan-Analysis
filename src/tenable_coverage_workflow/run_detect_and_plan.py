@@ -31,6 +31,15 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class DetectAndPlanConfig:
     subnet_repo_path: str | None
+    subnet_as_code_method: str | None
+    subnet_as_code_reference_id: str | None
+    subnet_as_code_sites: list[str] | None
+    subnet_as_code_tags: list[str] | None
+    subnet_as_code_name: str | None
+    subnet_as_code_network_type: str | None
+    subnet_as_code_routing_type: str | None
+    subnet_as_code_desired_properties: list[str] | None
+    subnet_as_code_address_type: str | None
     source_api_url: str | None
     source_api_token: str | None
     source_json_file: str | None
@@ -91,6 +100,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--subnet-repo-path")
+    parser.add_argument("--subnet-as-code-method")
+    parser.add_argument("--source-reference-id")
+    parser.add_argument("--source-sites")
+    parser.add_argument("--source-tags")
+    parser.add_argument("--source-name")
+    parser.add_argument("--source-network-type")
+    parser.add_argument("--source-routing-type")
+    parser.add_argument("--source-desired-properties")
+    parser.add_argument("--source-address-type")
     parser.add_argument("--source-api-url")
     parser.add_argument("--source-api-token")
     parser.add_argument("--source-json-file")
@@ -226,6 +244,32 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
+    subnet_as_code_method = args.subnet_as_code_method or os.getenv(
+        "SUBNET_AS_CODE_METHOD"
+    )
+    subnet_as_code_reference_id = args.source_reference_id or os.getenv(
+        "SUBNET_AS_CODE_REFERENCE_ID"
+    )
+    subnet_as_code_sites = parse_csv_list(
+        args.source_sites or os.getenv("SUBNET_AS_CODE_SITES")
+    )
+    subnet_as_code_tags = parse_csv_list(
+        args.source_tags or os.getenv("SUBNET_AS_CODE_TAGS")
+    )
+    subnet_as_code_name = args.source_name or os.getenv("SUBNET_AS_CODE_NAME")
+    subnet_as_code_network_type = args.source_network_type or os.getenv(
+        "SUBNET_AS_CODE_NETWORK_TYPE"
+    )
+    subnet_as_code_routing_type = args.source_routing_type or os.getenv(
+        "SUBNET_AS_CODE_ROUTING_TYPE"
+    )
+    subnet_as_code_desired_properties = parse_csv_list(
+        args.source_desired_properties
+        or os.getenv("SUBNET_AS_CODE_DESIRED_PROPERTIES")
+    )
+    subnet_as_code_address_type = args.source_address_type or os.getenv(
+        "SUBNET_AS_CODE_ADDRESS_TYPE"
+    )
     source_api_url = args.source_api_url or os.getenv("NETWORK_SOURCE_API_URL")
     source_api_token = args.source_api_token or os.getenv("NETWORK_SOURCE_API_TOKEN")
     source_json_file = args.source_json_file or os.getenv("NETWORK_SOURCE_JSON_FILE")
@@ -243,6 +287,15 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     subnet_repo_path = args.subnet_repo_path or os.getenv("SUBNET_REPO_PATH")
     if not any(
         (
+            subnet_as_code_method,
+            subnet_as_code_reference_id,
+            subnet_as_code_sites,
+            subnet_as_code_tags,
+            subnet_as_code_name,
+            subnet_as_code_network_type,
+            subnet_as_code_routing_type,
+            subnet_as_code_desired_properties,
+            subnet_as_code_address_type,
             source_api_url,
             source_json_file,
             github_api_url and github_repository,
@@ -251,12 +304,22 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         )
     ):
         raise ValueError(
-            "An authoritative source is required: --source-api-url, "
-            "--source-json-file, GitHub Enterprise configuration, "
-            "--subnet-repo-path, or --source-xlsx-file."
+            "An authoritative source is required: subnet_as_code method/filter, "
+            "--source-api-url, --source-json-file, GitHub Enterprise "
+            "configuration, --subnet-repo-path, or --source-xlsx-file."
         )
     return DetectAndPlanConfig(
         subnet_repo_path=subnet_repo_path,
+        subnet_as_code_method=subnet_as_code_method,
+        subnet_as_code_reference_id=subnet_as_code_reference_id,
+        subnet_as_code_sites=subnet_as_code_sites or None,
+        subnet_as_code_tags=subnet_as_code_tags or None,
+        subnet_as_code_name=subnet_as_code_name,
+        subnet_as_code_network_type=subnet_as_code_network_type,
+        subnet_as_code_routing_type=subnet_as_code_routing_type,
+        subnet_as_code_desired_properties=subnet_as_code_desired_properties
+        or None,
+        subnet_as_code_address_type=subnet_as_code_address_type,
         source_api_url=source_api_url,
         source_api_token=source_api_token,
         source_json_file=source_json_file,
@@ -322,6 +385,15 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     audit_logger.emit(
         "run_started",
         subnet_repo_path=config.subnet_repo_path,
+        subnet_as_code_method=config.subnet_as_code_method,
+        subnet_as_code_reference_id=config.subnet_as_code_reference_id,
+        subnet_as_code_sites=config.subnet_as_code_sites,
+        subnet_as_code_tags=config.subnet_as_code_tags,
+        subnet_as_code_name=config.subnet_as_code_name,
+        subnet_as_code_network_type=config.subnet_as_code_network_type,
+        subnet_as_code_routing_type=config.subnet_as_code_routing_type,
+        subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
+        subnet_as_code_address_type=config.subnet_as_code_address_type,
         source_api_url=config.source_api_url,
         source_json_file=config.source_json_file,
         source_xlsx_file=config.source_xlsx_file,
@@ -342,6 +414,15 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
 
     source_type, connector_result = load_authoritative_source(
         AuthoritativeSourceConfig(
+            subnet_as_code_method=config.subnet_as_code_method,
+            subnet_as_code_reference_id=config.subnet_as_code_reference_id,
+            subnet_as_code_sites=config.subnet_as_code_sites,
+            subnet_as_code_tags=config.subnet_as_code_tags,
+            subnet_as_code_name=config.subnet_as_code_name,
+            subnet_as_code_network_type=config.subnet_as_code_network_type,
+            subnet_as_code_routing_type=config.subnet_as_code_routing_type,
+            subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
+            subnet_as_code_address_type=config.subnet_as_code_address_type,
             api_url=config.source_api_url,
             api_token=config.source_api_token,
             json_file=config.source_json_file,
@@ -410,6 +491,11 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "subnet_repo_path": config.subnet_repo_path,
         "authoritative_source_type": source_type,
         "authoritative_source": (
+            f"subnet_as_code.{config.subnet_as_code_method}"
+            if config.subnet_as_code_method
+            else None
+        )
+        or (
             config.source_api_url
             or config.source_json_file
             or (

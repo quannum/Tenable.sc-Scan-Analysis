@@ -24,6 +24,15 @@ ENV_PREFIX = "TCW_"
 class ScheduledServiceConfig:
     job_name: str
     subnet_repo_path: str | None
+    subnet_as_code_method: str | None
+    subnet_as_code_reference_id: str | None
+    subnet_as_code_sites: list[str] | None
+    subnet_as_code_tags: list[str] | None
+    subnet_as_code_name: str | None
+    subnet_as_code_network_type: str | None
+    subnet_as_code_routing_type: str | None
+    subnet_as_code_desired_properties: list[str] | None
+    subnet_as_code_address_type: str | None
     source_api_url: str | None
     source_api_token: str | None
     source_json_file: str | None
@@ -71,6 +80,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config-file")
     parser.add_argument("--job-name")
     parser.add_argument("--subnet-repo-path")
+    parser.add_argument("--subnet-as-code-method")
+    parser.add_argument("--source-reference-id")
+    parser.add_argument("--source-sites")
+    parser.add_argument("--source-tags")
+    parser.add_argument("--source-name")
+    parser.add_argument("--source-network-type")
+    parser.add_argument("--source-routing-type")
+    parser.add_argument("--source-desired-properties")
+    parser.add_argument("--source-address-type")
     parser.add_argument("--source-api-url")
     parser.add_argument("--source-api-token")
     parser.add_argument("--source-json-file")
@@ -147,6 +165,15 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         if name == "github_token" and os.getenv("GITHUB_TOKEN") is not None:
             return os.getenv("GITHUB_TOKEN")
         network_source_env = {
+            "subnet_as_code_method": "SUBNET_AS_CODE_METHOD",
+            "source_reference_id": "SUBNET_AS_CODE_REFERENCE_ID",
+            "source_sites": "SUBNET_AS_CODE_SITES",
+            "source_tags": "SUBNET_AS_CODE_TAGS",
+            "source_name": "SUBNET_AS_CODE_NAME",
+            "source_network_type": "SUBNET_AS_CODE_NETWORK_TYPE",
+            "source_routing_type": "SUBNET_AS_CODE_ROUTING_TYPE",
+            "source_desired_properties": "SUBNET_AS_CODE_DESIRED_PROPERTIES",
+            "source_address_type": "SUBNET_AS_CODE_ADDRESS_TYPE",
             "source_api_url": "NETWORK_SOURCE_API_URL",
             "source_api_token": "NETWORK_SOURCE_API_TOKEN",
             "source_json_file": "NETWORK_SOURCE_JSON_FILE",
@@ -196,6 +223,17 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         )
 
     subnet_repo_path = _optional_string(pick("subnet_repo_path"))
+    subnet_as_code_method = _optional_string(pick("subnet_as_code_method"))
+    subnet_as_code_reference_id = _optional_string(pick("source_reference_id"))
+    subnet_as_code_sites = parse_csv_list(pick("source_sites"))
+    subnet_as_code_tags = parse_csv_list(pick("source_tags"))
+    subnet_as_code_name = _optional_string(pick("source_name"))
+    subnet_as_code_network_type = _optional_string(pick("source_network_type"))
+    subnet_as_code_routing_type = _optional_string(pick("source_routing_type"))
+    subnet_as_code_desired_properties = parse_csv_list(
+        pick("source_desired_properties")
+    )
+    subnet_as_code_address_type = _optional_string(pick("source_address_type"))
     source_api_url = _optional_string(pick("source_api_url"))
     source_api_token = _optional_string(pick("source_api_token"))
     source_json_file = _optional_string(pick("source_json_file"))
@@ -208,6 +246,15 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     github_token = _optional_string(pick("github_token"))
     if not any(
         (
+            subnet_as_code_method,
+            subnet_as_code_reference_id,
+            subnet_as_code_sites,
+            subnet_as_code_tags,
+            subnet_as_code_name,
+            subnet_as_code_network_type,
+            subnet_as_code_routing_type,
+            subnet_as_code_desired_properties,
+            subnet_as_code_address_type,
             source_api_url,
             source_json_file,
             github_api_url and github_repository,
@@ -216,9 +263,9 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         )
     ):
         parser.error(
-            "An authoritative source is required. Configure source_api_url, "
-            "source_json_file, GitHub Enterprise settings, subnet_repo_path, "
-            "or source_xlsx_file."
+            "An authoritative source is required. Configure subnet_as_code "
+            "method/query settings, source_api_url, source_json_file, GitHub "
+            "Enterprise settings, subnet_repo_path, or source_xlsx_file."
         )
 
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
@@ -268,6 +315,15 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     return ScheduledServiceConfig(
         job_name=job_name,
         subnet_repo_path=subnet_repo_path,
+        subnet_as_code_method=subnet_as_code_method,
+        subnet_as_code_reference_id=subnet_as_code_reference_id,
+        subnet_as_code_sites=subnet_as_code_sites or None,
+        subnet_as_code_tags=subnet_as_code_tags or None,
+        subnet_as_code_name=subnet_as_code_name,
+        subnet_as_code_network_type=subnet_as_code_network_type,
+        subnet_as_code_routing_type=subnet_as_code_routing_type,
+        subnet_as_code_desired_properties=subnet_as_code_desired_properties or None,
+        subnet_as_code_address_type=subnet_as_code_address_type,
         source_api_url=source_api_url,
         source_api_token=source_api_token,
         source_json_file=source_json_file,

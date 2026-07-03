@@ -90,6 +90,15 @@ def build_detect_config(
 ) -> DetectAndPlanConfig:
     return DetectAndPlanConfig(
         subnet_repo_path=config.subnet_repo_path,
+        subnet_as_code_method=config.subnet_as_code_method,
+        subnet_as_code_reference_id=config.subnet_as_code_reference_id,
+        subnet_as_code_sites=config.subnet_as_code_sites,
+        subnet_as_code_tags=config.subnet_as_code_tags,
+        subnet_as_code_name=config.subnet_as_code_name,
+        subnet_as_code_network_type=config.subnet_as_code_network_type,
+        subnet_as_code_routing_type=config.subnet_as_code_routing_type,
+        subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
+        subnet_as_code_address_type=config.subnet_as_code_address_type,
         source_api_url=config.source_api_url,
         source_api_token=config.source_api_token,
         source_json_file=config.source_json_file,

@@ -1,8 +1,16 @@
 # Authoritative Network Schema
 
-Production input is the subnet-as-code API JSON, not raw YAML. The YAML files in
-GitHub Enterprise are the backing store for that API and remain supported only
-for fallback, testing, and local development.
+Production input is the subnet-as-code API JSON, typically obtained by calling
+the internal `subnet_as_code` Python module with query parameters such as
+`sites`, `tags`, `referenceId`, `networkType`, `routingType`, and
+`desiredProperties`. Raw YAML remains supported only for fallback, testing, and
+local development. A direct URL-based JSON fetch path is still available as a
+compatibility fallback, but the preferred transport is the internal module.
+
+When `subnet_as_code.get_ipaddress(...)` is used, its flat host-record response
+is normalized into site-scoped `/32` targets using each record's `site_code`,
+`ip`, `name`, and `tags`. For full range-oriented coverage analysis, the richer
+site/subnet/range methods remain the better fit when available.
 
 The loader accepts:
 
