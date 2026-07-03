@@ -88,7 +88,7 @@ class ValidationIssue:
 
 
 @dataclass
-class YamlConnectorResult:
+class SourceLoadResult:
     site_definitions: list[SiteNetworkDefinition] = field(default_factory=list)
     coverage_targets: list[CoverageTarget] = field(default_factory=list)
     validation_issues: list[ValidationIssue] = field(default_factory=list)
@@ -96,9 +96,8 @@ class YamlConnectorResult:
     files_failed: int = 0
 
 
-# All authoritative connectors return the same shape.  Keep the historical name as
-# an alias so existing callers remain compatible while new code can be source-neutral.
-SourceLoadResult = YamlConnectorResult
+# Historical compatibility alias from when authoritative inputs were YAML-centric.
+YamlConnectorResult = SourceLoadResult
 
 
 @dataclass(frozen=True)

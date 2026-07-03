@@ -7,11 +7,55 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+from openpyxl import Workbook
+
 from src.tenable_coverage_workflow.service_config import build_service_config
 from src.tenable_coverage_workflow.service_runner import main as service_main
 
 
 class ServiceConfigTests(unittest.TestCase):
+    def _write_xlsx_source(self, path: Path) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Networks"
+        sheet.append(
+            [
+                "Site Code",
+                "Site Name",
+                "Region",
+                "Target Type",
+                "Scope Item",
+                "VLAN Name",
+                "VLAN ID",
+            ]
+        )
+        sheet.append(
+            ["NYC01", "New York Office", "US East", "PUBLIC", "203.0.113.0/26"]
+        )
+        sheet.append(
+            [
+                "NYC01",
+                "New York Office",
+                "US East",
+                "PRIVATE_SUPERNET",
+                "10.1.0.0/16",
+                None,
+                None,
+            ]
+        )
+        sheet.append(
+            [
+                "NYC01",
+                "New York Office",
+                "US East",
+                "VLAN",
+                "10.1.32.0/22",
+                "End User",
+                130,
+            ]
+        )
+        workbook.save(path)
+
     def test_service_config_loads_yaml_and_transport_controls(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "service_yaml_config_case"
@@ -24,7 +68,7 @@ class ServiceConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_coverage_workflow_service:",
-                        "  source_json_file: sites.json",
+                        "  source_xlsx_file: sites.xlsx",
                         "  mode: offline",
                         "  scan_json_dir: scans",
                         "  asset_json_dir: assets",
@@ -39,8 +83,8 @@ class ServiceConfigTests(unittest.TestCase):
 
             config = build_service_config(["--config-file", str(config_file)])
 
-            self.assertEqual(config.source_json_file, "sites.json")
-            self.assertEqual(str(config.source_config.json_file), "sites.json")
+            self.assertEqual(config.source_xlsx_file, "sites.xlsx")
+            self.assertEqual(str(config.source_config.xlsx_file), "sites.xlsx")
             self.assertEqual(config.sc_timeout_seconds, 45)
             self.assertEqual(config.sc_retries, 4)
             self.assertEqual(config.sc_backoff_seconds, 2.0)
@@ -63,7 +107,7 @@ class ServiceConfigTests(unittest.TestCase):
                 (
                     "[tenable_coverage_workflow_service]\n"
                     'job_name = "nightly coverage"\n'
-                    'subnet_repo_path = "repo"\n'
+                    'subnet_as_code_method = "get_sites"\n'
                     f'output_dir = "{(temp_path / "output").as_posix()}"\n'
                     'run_id_prefix = "nightly-"\n'
                     'dry_run = true\n'
@@ -83,8 +127,8 @@ class ServiceConfigTests(unittest.TestCase):
             config = build_service_config(["--config-file", str(config_file)])
 
             self.assertEqual(config.job_name, "nightly coverage")
-            self.assertEqual(config.subnet_repo_path, "repo")
-            self.assertEqual(str(config.source_config.yaml_repo_path), "repo")
+            self.assertEqual(config.subnet_as_code_method, "get_sites")
+            self.assertEqual(config.source_config.subnet_as_code_method, "get_sites")
             self.assertEqual(config.run_id_prefix, "nightly-")
             self.assertEqual(config.include_keywords, ["Discovery", "Assessment"])
             self.assertEqual(config.exclude_keywords, ["Deprecated"])
@@ -104,7 +148,6 @@ class ScheduledServiceTests(unittest.TestCase):
     def test_service_main_writes_latest_summary_and_run_artifacts(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "scheduled_service_case"
-        fixture_repo = Path("tests") / "fixtures" / "subnet_repo"
 
         if temp_path.exists():
             shutil.rmtree(temp_path)
@@ -112,9 +155,8 @@ class ScheduledServiceTests(unittest.TestCase):
         temp_path.mkdir(parents=True, exist_ok=True)
 
         try:
-            subnet_repo = temp_path / "subnet_repo"
-            shutil.copytree(fixture_repo, subnet_repo)
-
+            source_xlsx = temp_path / "expected_ranges.xlsx"
+            ServiceConfigTests()._write_xlsx_source(source_xlsx)
             scan_dir = temp_path / "scans"
             asset_dir = temp_path / "assets"
             output_dir = temp_path / "output"
@@ -145,8 +187,8 @@ class ScheduledServiceTests(unittest.TestCase):
                 [
                     "--job-name",
                     "nightly-coverage",
-                    "--subnet-repo-path",
-                    str(subnet_repo),
+                    "--source-xlsx-file",
+                    str(source_xlsx),
                     "--output-dir",
                     str(output_dir),
                     "--run-id-prefix",
@@ -171,8 +213,8 @@ class ScheduledServiceTests(unittest.TestCase):
             self.assertEqual(latest_summary["run_id"], run_summary["run_id"])
             self.assertIn("started_at", latest_summary)
             self.assertIn("completed_at", latest_summary)
-            self.assertEqual(run_summary["yaml_files_processed"], 6)
-            self.assertEqual(run_summary["yaml_files_failed"], 2)
+            self.assertEqual(run_summary["authoritative_units_processed"], 1)
+            self.assertEqual(run_summary["authoritative_units_failed"], 0)
             self.assertIn("duration_seconds", run_summary)
 
             run_dir = Path(run_summary["output_directory"])
@@ -206,8 +248,8 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-repo-path",
-                        "repo",
+                        "--subnet-as-code-method",
+                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
@@ -254,8 +296,8 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-repo-path",
-                        "repo",
+                        "--subnet-as-code-method",
+                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
@@ -312,8 +354,8 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-repo-path",
-                        "repo",
+                        "--subnet-as-code-method",
+                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",

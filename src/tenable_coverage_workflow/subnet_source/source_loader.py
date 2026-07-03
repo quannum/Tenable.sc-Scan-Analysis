@@ -11,10 +11,9 @@ from ..models import (
     SourceLoadResult,
     ValidationIssue,
 )
-from .github_connector import load_github_yaml_repo
-from .json_connector import load_json_api, load_json_file, load_json_payload
+from .json_connector import load_json_payload
 from .xlsx_connector import load_xlsx_definitions
-from .yaml_connector import flatten_site_definition, load_yaml_subnet_repo
+from .yaml_connector import flatten_site_definition
 
 _SUBNET_AS_CODE_METHOD_PARAMETER_MAP: dict[str, dict[str, str]] = {
     "get_ipaddress": {
@@ -91,21 +90,8 @@ class AuthoritativeSourceConfig:
     subnet_as_code_routing_type: str | None = None
     subnet_as_code_desired_properties: list[str] | None = None
     subnet_as_code_address_type: str | None = None
-    api_url: str | None = None
-    api_token: str | None = None
-    json_file: str | Path | None = None
-    yaml_repo_path: str | Path | None = None
     xlsx_file: str | Path | None = None
     xlsx_sheet: str | None = None
-    github_api_url: str | None = None
-    github_repository: str | None = None
-    github_ref: str = "main"
-    github_path: str = ""
-    github_token: str | None = None
-    github_timeout_seconds: float = 30.0
-    github_max_retries: int = 3
-    api_timeout_seconds: float = 30.0
-    api_max_retries: int = 3
 
 
 class AuthoritativeSourceConfigMixin:
@@ -113,10 +99,6 @@ class AuthoritativeSourceConfigMixin:
 
     def as_authoritative_source_config(self) -> AuthoritativeSourceConfig:
         return self.source_config
-
-    @property
-    def subnet_repo_path(self) -> str | None:
-        return _stringify_pathlike(self.source_config.yaml_repo_path)
 
     @property
     def subnet_as_code_method(self) -> str | None:
@@ -155,18 +137,6 @@ class AuthoritativeSourceConfigMixin:
         return self.source_config.subnet_as_code_address_type
 
     @property
-    def source_api_url(self) -> str | None:
-        return self.source_config.api_url
-
-    @property
-    def source_api_token(self) -> str | None:
-        return self.source_config.api_token
-
-    @property
-    def source_json_file(self) -> str | None:
-        return _stringify_pathlike(self.source_config.json_file)
-
-    @property
     def source_xlsx_file(self) -> str | None:
         return _stringify_pathlike(self.source_config.xlsx_file)
 
@@ -174,63 +144,18 @@ class AuthoritativeSourceConfigMixin:
     def source_xlsx_sheet(self) -> str | None:
         return self.source_config.xlsx_sheet
 
-    @property
-    def github_api_url(self) -> str | None:
-        return self.source_config.github_api_url
-
-    @property
-    def github_repository(self) -> str | None:
-        return self.source_config.github_repository
-
-    @property
-    def github_ref(self) -> str:
-        return self.source_config.github_ref
-
-    @property
-    def github_path(self) -> str:
-        return self.source_config.github_path
-
-    @property
-    def github_token(self) -> str | None:
-        return self.source_config.github_token
-
 
 def load_authoritative_source(
     config: AuthoritativeSourceConfig, audit_logger=None
 ) -> tuple[str, SourceLoadResult]:
     """Load the highest-priority configured source.
 
-    XLSX remains supported by the legacy expected-scope workflow. This loader owns
-    the normalized API/JSON/YAML paths used by detect-and-plan.
+    Expected-range input is intentionally limited to subnet_as_code and the
+    legacy XLSX workflow.
     """
     validate_authoritative_source_config(config)
     if _uses_subnet_as_code(config):
         return "subnet_as_code", _load_subnet_as_code(config, audit_logger=audit_logger)
-    if config.api_url:
-        return "json_api", load_json_api(
-            config.api_url,
-            token=config.api_token,
-            timeout_seconds=config.api_timeout_seconds,
-            max_retries=config.api_max_retries,
-            audit_logger=audit_logger,
-        )
-    if config.json_file:
-        return "json_file", load_json_file(config.json_file, audit_logger=audit_logger)
-    if config.github_api_url or config.github_repository:
-        return "github_yaml", load_github_yaml_repo(
-            api_url=config.github_api_url,
-            repository=config.github_repository,
-            ref=config.github_ref,
-            source_path=config.github_path,
-            token=config.github_token,
-            timeout_seconds=config.github_timeout_seconds,
-            max_retries=config.github_max_retries,
-            audit_logger=audit_logger,
-        )
-    if config.yaml_repo_path:
-        return "yaml_repo", load_yaml_subnet_repo(
-            config.yaml_repo_path, audit_logger=audit_logger
-        )
     if config.xlsx_file:
         return "xlsx_file", load_xlsx_definitions(
             config.xlsx_file,
@@ -238,9 +163,8 @@ def load_authoritative_source(
             audit_logger=audit_logger,
         )
     raise ValueError(
-        "No authoritative source configured. Set a subnet_as_code method, API "
-        "URL, local JSON file, GitHub repository, YAML repository path, or "
-        "XLSX file."
+        "No supported authoritative source configured. Use subnet_as_code "
+        "query settings or a legacy XLSX file."
     )
 
 
@@ -248,24 +172,12 @@ def has_configured_authoritative_source(config: AuthoritativeSourceConfig) -> bo
     return any(
         (
             _uses_subnet_as_code(config),
-            config.api_url,
-            config.json_file,
-            config.github_api_url,
-            config.github_repository,
-            config.yaml_repo_path,
             config.xlsx_file,
         )
     )
 
 
 def validate_authoritative_source_config(config: AuthoritativeSourceConfig) -> None:
-    if (
-        bool(config.github_api_url) or bool(config.github_repository)
-    ) and not (config.github_api_url and config.github_repository):
-        raise ValueError(
-            "GitHub YAML source requires both github_api_url and "
-            "github_repository."
-        )
     if _uses_subnet_as_code(config):
         _validate_subnet_as_code_config(config)
 

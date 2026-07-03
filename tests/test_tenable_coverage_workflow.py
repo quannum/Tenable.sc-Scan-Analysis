@@ -6,6 +6,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+from openpyxl import Workbook
+
 from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
@@ -17,46 +19,6 @@ from src.tenable_coverage_workflow.planning.proposed_changes import (
 from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
 )
-from src.tenable_coverage_workflow.subnet_source.yaml_connector import (
-    load_yaml_subnet_repo,
-)
-
-
-class YamlConnectorTests(unittest.TestCase):
-    def test_yaml_connector_loads_nested_repo_and_collects_validation_errors(self):
-        fixture_repo = Path("tests") / "fixtures" / "subnet_repo"
-
-        result = load_yaml_subnet_repo(fixture_repo)
-
-        self.assertEqual(result.files_processed, 6)
-        self.assertEqual(result.files_failed, 2)
-        self.assertEqual(
-            {site.site_code for site in result.site_definitions},
-            {"ATL01", "CHI01", "LON01", "NYC01"},
-        )
-        self.assertEqual(len(result.coverage_targets), 10)
-
-        nyc_vlan = next(
-            target
-            for target in result.coverage_targets
-            if target.site_code == "NYC01" and target.vlan_name == "End User"
-        )
-        self.assertEqual(nyc_vlan.target_type, "VLAN")
-        self.assertEqual(nyc_vlan.vlan_tag, 130)
-        self.assertEqual(nyc_vlan.cidr, "10.1.32.0/22")
-
-        lon_vlan = next(
-            target
-            for target in result.coverage_targets
-            if target.site_code == "LON01" and target.vlan_name == "Media / AV"
-        )
-        self.assertIsNone(lon_vlan.vlan_tag)
-
-        issue_messages = [issue.message for issue in result.validation_issues]
-        self.assertTrue(
-            any("outside parent private range" in message for message in issue_messages)
-        )
-        self.assertTrue(any("Invalid CIDR" in message for message in issue_messages))
 
 
 class PlanningTests(unittest.TestCase):
@@ -154,10 +116,50 @@ class PlanningTests(unittest.TestCase):
 
 
 class DetectAndPlanCliTests(unittest.TestCase):
-    def test_detect_and_plan_cli_writes_audits_and_continues_past_bad_yaml(self):
+    def _write_xlsx_source(self, path: Path) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Networks"
+        sheet.append(
+            [
+                "Site Code",
+                "Site Name",
+                "Region",
+                "Target Type",
+                "Scope Item",
+                "VLAN Name",
+                "VLAN ID",
+            ]
+        )
+        sheet.append(
+            ["NYC01", "New York Office", "US East", "PUBLIC", "203.0.113.0/26"]
+        )
+        sheet.append(
+            [
+                "NYC01",
+                "New York Office",
+                "US East",
+                "PRIVATE_SUPERNET",
+                "10.1.0.0/16",
+            ]
+        )
+        sheet.append(
+            [
+                "NYC01",
+                "New York Office",
+                "US East",
+                "VLAN",
+                "10.1.32.0/22",
+                "End User",
+                130,
+            ]
+        )
+        sheet.append(["BAD01", "Broken Site", "US East", "PUBLIC", "not-a-network"])
+        workbook.save(path)
+
+    def test_detect_and_plan_cli_writes_audits_and_continues_past_bad_xlsx_rows(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "detect_and_plan_case"
-        fixture_repo = Path("tests") / "fixtures" / "subnet_repo"
 
         if temp_path.exists():
             shutil.rmtree(temp_path)
@@ -165,9 +167,8 @@ class DetectAndPlanCliTests(unittest.TestCase):
         temp_path.mkdir(parents=True, exist_ok=True)
 
         try:
-            subnet_repo = temp_path / "subnet_repo"
-            shutil.copytree(fixture_repo, subnet_repo)
-
+            source_xlsx = temp_path / "expected_ranges.xlsx"
+            self._write_xlsx_source(source_xlsx)
             scan_dir = temp_path / "scans"
             asset_dir = temp_path / "assets"
             output_dir = temp_path / "output"
@@ -207,8 +208,8 @@ class DetectAndPlanCliTests(unittest.TestCase):
             with patch("sys.stdout", new=stdout):
                 exit_code = detect_and_plan_main(
                     [
-                        "--subnet-repo-path",
-                        str(subnet_repo),
+                        "--source-xlsx-file",
+                        str(source_xlsx),
                         "--output-dir",
                         str(output_dir),
                         "--run-id",
@@ -238,7 +239,6 @@ class DetectAndPlanCliTests(unittest.TestCase):
             ]
             event_types = {event["event_type"] for event in audit_events}
             self.assertIn("run_started", event_types)
-            self.assertIn("yaml_file_failed", event_types)
             self.assertIn("coverage_target_created", event_types)
             self.assertIn("proposed_change_audit_written", event_types)
             self.assertIn("run_completed", event_types)
@@ -309,8 +309,8 @@ class DetectAndPlanCliTests(unittest.TestCase):
             )
 
             summary = stdout.getvalue()
-            self.assertIn("YAML files processed: 6", summary)
-            self.assertIn("YAML files failed: 2", summary)
+            self.assertIn("Authoritative units processed: 1", summary)
+            self.assertIn("Authoritative units failed: 0", summary)
             self.assertIn(f"Output directory: {run_dir}", summary)
         finally:
             if temp_path.exists():

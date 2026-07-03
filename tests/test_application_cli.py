@@ -6,6 +6,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+from openpyxl import Workbook
+
 from src.tenable_coverage_workflow.application_cli import (
     EXIT_APPLY_REQUIRED,
     EXIT_OK,
@@ -15,6 +17,14 @@ from tests.test_change_application import FakeDataAccess, approved_row, write_pl
 
 
 class ApplicationCliTests(unittest.TestCase):
+    def _write_xlsx_source(self, path: Path, site_code: str, scope: str) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Networks"
+        sheet.append(["Site Code", "Site Name", "Target Type", "Scope Item"])
+        sheet.append([site_code, site_code, "PRIVATE_SUPERNET", scope])
+        workbook.save(path)
+
     def test_help_exposes_all_required_commands(self):
         stdout = StringIO()
         with self.assertRaises(SystemExit) as context, redirect_stdout(stdout):
@@ -35,19 +45,14 @@ class ApplicationCliTests(unittest.TestCase):
     def test_validate_definitions_writes_normalized_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "sites.json"
+            source = root / "sites.xlsx"
             output = root / "normalized.json"
-            source.write_text(
-                json.dumps(
-                    {"site_code": "LAB01", "private_ranges": ["10.0.0.0/24"]}
-                ),
-                encoding="utf-8",
-            )
+            self._write_xlsx_source(source, "LAB01", "10.0.0.0/24")
 
             exit_code = main(
                 [
                     "validate-definitions",
-                    "--source-json-file",
+                    "--source-xlsx-file",
                     str(source),
                     "--output-file",
                     str(output),
@@ -110,18 +115,15 @@ class ApplicationCliTests(unittest.TestCase):
     def test_yaml_config_supplies_command_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "sites.json"
+            source = root / "sites.xlsx"
             output = root / "normalized.json"
             config = root / "config.yaml"
-            source.write_text(
-                json.dumps({"site_code": "CFG01", "public_ranges": ["192.0.2.0/30"]}),
-                encoding="utf-8",
-            )
+            self._write_xlsx_source(source, "CFG01", "192.0.2.0/30")
             config.write_text(
                 "\n".join(
                     [
                         "tenable_sc_scan_analysis:",
-                        f"  source_json_file: '{source.as_posix()}'",
+                        f"  source_xlsx_file: '{source.as_posix()}'",
                         "  commands:",
                         "    validate_definitions:",
                         f"      output_file: '{output.as_posix()}'",

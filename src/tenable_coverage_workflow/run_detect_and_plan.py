@@ -88,8 +88,8 @@ class CoverageSourceConfig:
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Load subnet-as-code YAML files, validate Tenable.sc coverage, "
-            "and generate detect-and-plan audit outputs."
+            "Load subnet_as_code or legacy XLSX scope definitions, validate "
+            "Tenable.sc coverage, and generate detect-and-plan audit outputs."
         )
     )
     add_authoritative_source_arguments(parser)
@@ -242,9 +242,8 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     )
     if not has_configured_authoritative_source(source_config):
         raise ValueError(
-            "An authoritative source is required: subnet_as_code method/filter, "
-            "--source-api-url, --source-json-file, GitHub Enterprise "
-            "configuration, --subnet-repo-path, or --source-xlsx-file."
+            "An authoritative source is required: subnet_as_code "
+            "method/filter settings or --source-xlsx-file."
         )
     validate_authoritative_source_config(source_config)
     return DetectAndPlanConfig(
@@ -303,7 +302,6 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
     audit_logger.emit(
         "run_started",
-        subnet_repo_path=config.subnet_repo_path,
         subnet_as_code_method=config.subnet_as_code_method,
         subnet_as_code_reference_id=config.subnet_as_code_reference_id,
         subnet_as_code_sites=config.subnet_as_code_sites,
@@ -313,13 +311,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         subnet_as_code_routing_type=config.subnet_as_code_routing_type,
         subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
         subnet_as_code_address_type=config.subnet_as_code_address_type,
-        source_api_url=config.source_api_url,
-        source_json_file=config.source_json_file,
         source_xlsx_file=config.source_xlsx_file,
-        github_api_url=config.github_api_url,
-        github_repository=config.github_repository,
-        github_ref=config.github_ref,
-        github_path=config.github_path,
         output_dir=output_dir,
         dry_run=config.dry_run,
         mode=config.mode,
@@ -386,26 +378,13 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "duration_seconds": round((completed_at - started_at).total_seconds(), 3),
         "mode": config.mode,
         "dry_run": config.dry_run,
-        "subnet_repo_path": config.subnet_repo_path,
         "authoritative_source_type": source_type,
         "authoritative_source": (
             f"subnet_as_code.{config.subnet_as_code_method}"
             if config.subnet_as_code_method
             else None
         )
-        or (
-            config.source_api_url
-            or config.source_json_file
-            or (
-                f"{config.github_repository}@{config.github_ref}"
-                if config.github_repository
-                else None
-            )
-            or config.subnet_repo_path
-            or config.source_xlsx_file
-        ),
-        "yaml_files_processed": connector_result.files_processed,
-        "yaml_files_failed": connector_result.files_failed,
+        or config.source_xlsx_file,
         "authoritative_units_processed": connector_result.files_processed,
         "authoritative_units_failed": connector_result.files_failed,
         "validation_issue_count": len(connector_result.validation_issues),
@@ -642,17 +621,13 @@ def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
     print(f"Run ID: {run_id}")
     print(f"Authoritative source: {summary['authoritative_source_type']}")
-    if summary["authoritative_source_type"] == "yaml_repo":
-        print(f"YAML files processed: {summary['yaml_files_processed']}")
-        print(f"YAML files failed: {summary['yaml_files_failed']}")
-    else:
-        print(
-            "Authoritative units processed: "
-            f"{summary['authoritative_units_processed']}"
-        )
-        print(
-            f"Authoritative units failed: {summary['authoritative_units_failed']}"
-        )
+    print(
+        "Authoritative units processed: "
+        f"{summary['authoritative_units_processed']}"
+    )
+    print(
+        f"Authoritative units failed: {summary['authoritative_units_failed']}"
+    )
     print(f"Coverage targets created: {summary['coverage_targets_created']}")
     print(f"OK count: {summary['ok_count']}")
     print(f"GAP count: {summary['gap_count']}")

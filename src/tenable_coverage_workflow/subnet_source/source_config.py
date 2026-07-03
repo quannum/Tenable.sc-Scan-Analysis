@@ -13,16 +13,8 @@ AUTHORITATIVE_SOURCE_ARGUMENTS: tuple[tuple[str, str], ...] = (
     ("source_routing_type", "--source-routing-type"),
     ("source_desired_properties", "--source-desired-properties"),
     ("source_address_type", "--source-address-type"),
-    ("source_api_url", "--source-api-url"),
-    ("source_api_token", "--source-api-token"),
-    ("source_json_file", "--source-json-file"),
     ("source_xlsx_file", "--source-xlsx-file"),
     ("source_xlsx_sheet", "--source-xlsx-sheet"),
-    ("github_api_url", "--github-api-url"),
-    ("github_repository", "--github-repository"),
-    ("github_ref", "--github-ref"),
-    ("github_path", "--github-path"),
-    ("subnet_repo_path", "--subnet-repo-path"),
 )
 
 CSV_SOURCE_FIELDS = {
@@ -41,17 +33,8 @@ SOURCE_ENVIRONMENT_MAP = {
     "source_routing_type": "SUBNET_AS_CODE_ROUTING_TYPE",
     "source_desired_properties": "SUBNET_AS_CODE_DESIRED_PROPERTIES",
     "source_address_type": "SUBNET_AS_CODE_ADDRESS_TYPE",
-    "source_api_url": "NETWORK_SOURCE_API_URL",
-    "source_api_token": "NETWORK_SOURCE_API_TOKEN",
-    "source_json_file": "NETWORK_SOURCE_JSON_FILE",
     "source_xlsx_file": "NETWORK_SOURCE_XLSX_FILE",
     "source_xlsx_sheet": "NETWORK_SOURCE_XLSX_SHEET",
-    "subnet_repo_path": "SUBNET_REPO_PATH",
-    "github_api_url": "GITHUB_API_URL",
-    "github_repository": "GITHUB_REPOSITORY",
-    "github_ref": "GITHUB_REF",
-    "github_path": "GITHUB_PATH",
-    "github_token": "GITHUB_TOKEN",
 }
 
 
@@ -110,26 +93,6 @@ def build_authoritative_source_config(
             SOURCE_ENVIRONMENT_MAP["source_address_type"],
             None,
         ),
-        api_url=scalar_getter(
-            "source_api_url",
-            SOURCE_ENVIRONMENT_MAP["source_api_url"],
-            None,
-        ),
-        api_token=scalar_getter(
-            "source_api_token",
-            SOURCE_ENVIRONMENT_MAP["source_api_token"],
-            None,
-        ),
-        json_file=scalar_getter(
-            "source_json_file",
-            SOURCE_ENVIRONMENT_MAP["source_json_file"],
-            None,
-        ),
-        yaml_repo_path=scalar_getter(
-            "subnet_repo_path",
-            SOURCE_ENVIRONMENT_MAP["subnet_repo_path"],
-            None,
-        ),
         xlsx_file=scalar_getter(
             "source_xlsx_file",
             SOURCE_ENVIRONMENT_MAP["source_xlsx_file"],
@@ -138,33 +101,6 @@ def build_authoritative_source_config(
         xlsx_sheet=scalar_getter(
             "source_xlsx_sheet",
             SOURCE_ENVIRONMENT_MAP["source_xlsx_sheet"],
-            None,
-        ),
-        github_api_url=scalar_getter(
-            "github_api_url",
-            SOURCE_ENVIRONMENT_MAP["github_api_url"],
-            None,
-        ),
-        github_repository=scalar_getter(
-            "github_repository",
-            SOURCE_ENVIRONMENT_MAP["github_repository"],
-            None,
-        ),
-        github_ref=scalar_getter(
-            "github_ref",
-            SOURCE_ENVIRONMENT_MAP["github_ref"],
-            "main",
-        )
-        or "main",
-        github_path=scalar_getter(
-            "github_path",
-            SOURCE_ENVIRONMENT_MAP["github_path"],
-            "",
-        )
-        or "",
-        github_token=scalar_getter(
-            "github_token",
-            SOURCE_ENVIRONMENT_MAP["github_token"],
             None,
         ),
     )

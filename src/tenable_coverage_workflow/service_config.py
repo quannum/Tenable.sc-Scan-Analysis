@@ -142,8 +142,6 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             return os.getenv("SC_SECRET_KEY")
         if name == "sc_url" and os.getenv("SC_URL") is not None:
             return os.getenv("SC_URL")
-        if name == "github_token" and os.getenv("GITHUB_TOKEN") is not None:
-            return os.getenv("GITHUB_TOKEN")
         return config_data.get(name, default)
 
     try:
@@ -195,8 +193,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     if not has_configured_authoritative_source(source_config):
         parser.error(
             "An authoritative source is required. Configure subnet_as_code "
-            "method/query settings, source_api_url, source_json_file, GitHub "
-            "Enterprise settings, subnet_repo_path, or source_xlsx_file."
+            "method/query settings or source_xlsx_file."
         )
     try:
         validate_authoritative_source_config(source_config)
