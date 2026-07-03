@@ -70,6 +70,14 @@ _SUBNET_AS_CODE_METHOD_PARAMETER_MAP: dict[str, dict[str, str]] = {
     },
     "get_tags": {},
 }
+_SUBNET_AS_CODE_DEFAULT_METHOD = "get_sites"
+_SUBNET_AS_CODE_REQUIRES_EXPLICIT_METHOD = {
+    "subnet_as_code_name",
+    "subnet_as_code_network_type",
+    "subnet_as_code_routing_type",
+    "subnet_as_code_desired_properties",
+    "subnet_as_code_address_type",
+}
 
 
 @dataclass(frozen=True)
@@ -100,6 +108,93 @@ class AuthoritativeSourceConfig:
     api_max_retries: int = 3
 
 
+class AuthoritativeSourceConfigMixin:
+    source_config: AuthoritativeSourceConfig
+
+    def as_authoritative_source_config(self) -> AuthoritativeSourceConfig:
+        return self.source_config
+
+    @property
+    def subnet_repo_path(self) -> str | None:
+        return _stringify_pathlike(self.source_config.yaml_repo_path)
+
+    @property
+    def subnet_as_code_method(self) -> str | None:
+        return self.source_config.subnet_as_code_method
+
+    @property
+    def subnet_as_code_reference_id(self) -> str | None:
+        return self.source_config.subnet_as_code_reference_id
+
+    @property
+    def subnet_as_code_sites(self) -> list[str] | None:
+        return self.source_config.subnet_as_code_sites
+
+    @property
+    def subnet_as_code_tags(self) -> list[str] | None:
+        return self.source_config.subnet_as_code_tags
+
+    @property
+    def subnet_as_code_name(self) -> str | None:
+        return self.source_config.subnet_as_code_name
+
+    @property
+    def subnet_as_code_network_type(self) -> str | None:
+        return self.source_config.subnet_as_code_network_type
+
+    @property
+    def subnet_as_code_routing_type(self) -> str | None:
+        return self.source_config.subnet_as_code_routing_type
+
+    @property
+    def subnet_as_code_desired_properties(self) -> list[str] | None:
+        return self.source_config.subnet_as_code_desired_properties
+
+    @property
+    def subnet_as_code_address_type(self) -> str | None:
+        return self.source_config.subnet_as_code_address_type
+
+    @property
+    def source_api_url(self) -> str | None:
+        return self.source_config.api_url
+
+    @property
+    def source_api_token(self) -> str | None:
+        return self.source_config.api_token
+
+    @property
+    def source_json_file(self) -> str | None:
+        return _stringify_pathlike(self.source_config.json_file)
+
+    @property
+    def source_xlsx_file(self) -> str | None:
+        return _stringify_pathlike(self.source_config.xlsx_file)
+
+    @property
+    def source_xlsx_sheet(self) -> str | None:
+        return self.source_config.xlsx_sheet
+
+    @property
+    def github_api_url(self) -> str | None:
+        return self.source_config.github_api_url
+
+    @property
+    def github_repository(self) -> str | None:
+        return self.source_config.github_repository
+
+    @property
+    def github_ref(self) -> str:
+        return self.source_config.github_ref
+
+    @property
+    def github_path(self) -> str:
+        return self.source_config.github_path
+
+    @property
+    def github_token(self) -> str | None:
+        return self.source_config.github_token
+
+
 def load_authoritative_source(
     config: AuthoritativeSourceConfig, audit_logger=None
 ) -> tuple[str, SourceLoadResult]:
@@ -108,19 +203,9 @@ def load_authoritative_source(
     XLSX remains supported by the legacy expected-scope workflow. This loader owns
     the normalized API/JSON/YAML paths used by detect-and-plan.
     """
+    validate_authoritative_source_config(config)
     if _uses_subnet_as_code(config):
-        return "subnet_as_code", _load_subnet_as_code(
-            method=config.subnet_as_code_method or "get_sites",
-            reference_id=config.subnet_as_code_reference_id,
-            sites=config.subnet_as_code_sites,
-            tags=config.subnet_as_code_tags,
-            name=config.subnet_as_code_name,
-            network_type=config.subnet_as_code_network_type,
-            routing_type=config.subnet_as_code_routing_type,
-            desired_properties=config.subnet_as_code_desired_properties,
-            address_type=config.subnet_as_code_address_type,
-            audit_logger=audit_logger,
-        )
+        return "subnet_as_code", _load_subnet_as_code(config, audit_logger=audit_logger)
     if config.api_url:
         return "json_api", load_json_api(
             config.api_url,
@@ -132,11 +217,6 @@ def load_authoritative_source(
     if config.json_file:
         return "json_file", load_json_file(config.json_file, audit_logger=audit_logger)
     if config.github_api_url or config.github_repository:
-        if not config.github_api_url or not config.github_repository:
-            raise ValueError(
-                "GitHub YAML source requires both github_api_url and "
-                "github_repository."
-            )
         return "github_yaml", load_github_yaml_repo(
             api_url=config.github_api_url,
             repository=config.github_repository,
@@ -164,6 +244,32 @@ def load_authoritative_source(
     )
 
 
+def has_configured_authoritative_source(config: AuthoritativeSourceConfig) -> bool:
+    return any(
+        (
+            _uses_subnet_as_code(config),
+            config.api_url,
+            config.json_file,
+            config.github_api_url,
+            config.github_repository,
+            config.yaml_repo_path,
+            config.xlsx_file,
+        )
+    )
+
+
+def validate_authoritative_source_config(config: AuthoritativeSourceConfig) -> None:
+    if (
+        bool(config.github_api_url) or bool(config.github_repository)
+    ) and not (config.github_api_url and config.github_repository):
+        raise ValueError(
+            "GitHub YAML source requires both github_api_url and "
+            "github_repository."
+        )
+    if _uses_subnet_as_code(config):
+        _validate_subnet_as_code_config(config)
+
+
 def _uses_subnet_as_code(config: AuthoritativeSourceConfig) -> bool:
     return any(
         (
@@ -181,38 +287,11 @@ def _uses_subnet_as_code(config: AuthoritativeSourceConfig) -> bool:
 
 
 def _load_subnet_as_code(
-    method: str = "get_sites",
-    reference_id: str | None = None,
-    sites: list[str] | None = None,
-    tags: list[str] | None = None,
-    name: str | None = None,
-    network_type: str | None = None,
-    routing_type: str | None = None,
-    desired_properties: list[str] | None = None,
-    address_type: str | None = None,
+    config: AuthoritativeSourceConfig,
     audit_logger=None,
     module: Any = None,
 ) -> SourceLoadResult:
-    method_name = str(method or "get_sites").strip()
-    if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
-        raise ValueError(
-            "Unsupported subnet_as_code method. Supported methods: "
-            + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
-        )
-
-    kwargs = _build_subnet_as_code_kwargs(
-        method_name,
-        {
-            "reference_id": reference_id,
-            "sites": list(sites or []),
-            "tags": list(tags or []),
-            "name": name,
-            "network_type": network_type,
-            "routing_type": routing_type,
-            "desired_properties": list(desired_properties or []),
-            "address_type": address_type,
-        },
-    )
+    method_name, kwargs = _build_subnet_as_code_request(config)
     if module is None:
         try:
             module = importlib.import_module("subnet_as_code")
@@ -232,6 +311,27 @@ def _load_subnet_as_code(
         method_name=method_name,
         payload=payload,
         audit_logger=audit_logger,
+    )
+
+
+def _build_subnet_as_code_request(
+    config: AuthoritativeSourceConfig,
+) -> tuple[str, dict[str, Any]]:
+    method_name = _resolve_subnet_as_code_method(config)
+    return method_name, _build_subnet_as_code_kwargs(
+        method_name,
+        {
+            "reference_id": config.subnet_as_code_reference_id,
+            "sites": list(config.subnet_as_code_sites or []),
+            "tags": list(config.subnet_as_code_tags or []),
+            "name": config.subnet_as_code_name,
+            "network_type": config.subnet_as_code_network_type,
+            "routing_type": config.subnet_as_code_routing_type,
+            "desired_properties": list(
+                config.subnet_as_code_desired_properties or []
+            ),
+            "address_type": config.subnet_as_code_address_type,
+        },
     )
 
 
@@ -268,6 +368,47 @@ def _subnet_as_code_has_value(value: Any) -> bool:
     if isinstance(value, list):
         return bool(value)
     return True
+
+
+def _stringify_pathlike(value: str | Path | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _resolve_subnet_as_code_method(config: AuthoritativeSourceConfig) -> str:
+    method_name = str(config.subnet_as_code_method or "").strip()
+    if method_name:
+        if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
+            raise ValueError(
+                "Unsupported subnet_as_code method. Supported methods: "
+                + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
+            )
+        return method_name
+    return _SUBNET_AS_CODE_DEFAULT_METHOD
+
+
+def _validate_subnet_as_code_config(config: AuthoritativeSourceConfig) -> None:
+    method_name = str(config.subnet_as_code_method or "").strip()
+    if method_name:
+        if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
+            raise ValueError(
+                "Unsupported subnet_as_code method. Supported methods: "
+                + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
+            )
+        return
+
+    explicit_method_fields = [
+        field_name
+        for field_name in sorted(_SUBNET_AS_CODE_REQUIRES_EXPLICIT_METHOD)
+        if _subnet_as_code_has_value(getattr(config, field_name))
+    ]
+    if explicit_method_fields:
+        pretty = ", ".join(explicit_method_fields)
+        raise ValueError(
+            "subnet_as_code_method is required when using method-specific "
+            f"filters: {pretty}."
+        )
 
 
 def _normalize_subnet_as_code_payload(

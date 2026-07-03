@@ -18,7 +18,11 @@ from .change_application import (
     write_apply_markdown,
 )
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
-from .subnet_source import AuthoritativeSourceConfig, load_authoritative_source
+from .subnet_source import load_authoritative_source
+from .subnet_source.source_config import (
+    add_authoritative_source_arguments,
+    build_authoritative_source_config,
+)
 from .tenable_inventory import collect_tenable_inventory, write_inventory_snapshot
 
 try:
@@ -80,24 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--subnet-as-code-method")
-    parser.add_argument("--source-reference-id")
-    parser.add_argument("--source-sites")
-    parser.add_argument("--source-tags")
-    parser.add_argument("--source-name")
-    parser.add_argument("--source-network-type")
-    parser.add_argument("--source-routing-type")
-    parser.add_argument("--source-desired-properties")
-    parser.add_argument("--source-address-type")
-    parser.add_argument("--source-api-url")
-    parser.add_argument("--source-json-file")
-    parser.add_argument("--source-xlsx-file")
-    parser.add_argument("--source-xlsx-sheet")
-    parser.add_argument("--github-api-url")
-    parser.add_argument("--github-repository")
-    parser.add_argument("--github-ref")
-    parser.add_argument("--github-path")
-    parser.add_argument("--subnet-repo-path")
+    add_authoritative_source_arguments(parser)
 
 
 def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
@@ -137,68 +124,14 @@ def main(argv=None) -> int:
     return EXIT_CONFIG
 
 
-def _source_config(args) -> AuthoritativeSourceConfig:
-    return AuthoritativeSourceConfig(
-        subnet_as_code_method=_setting(
-            args,
-            "subnet_as_code_method",
-            "SUBNET_AS_CODE_METHOD",
+def _source_config(args):
+    return build_authoritative_source_config(
+        scalar_getter=lambda name, environment_name, default=None: _setting(
+            args, name, environment_name, default
         ),
-        subnet_as_code_reference_id=_setting(
-            args,
-            "source_reference_id",
-            "SUBNET_AS_CODE_REFERENCE_ID",
+        csv_getter=lambda name, environment_name, default=None: _csv_setting(
+            args, name, environment_name, default
         ),
-        subnet_as_code_sites=_csv_setting(
-            args,
-            "source_sites",
-            "SUBNET_AS_CODE_SITES",
-        ),
-        subnet_as_code_tags=_csv_setting(
-            args,
-            "source_tags",
-            "SUBNET_AS_CODE_TAGS",
-        ),
-        subnet_as_code_name=_setting(
-            args,
-            "source_name",
-            "SUBNET_AS_CODE_NAME",
-        ),
-        subnet_as_code_network_type=_setting(
-            args,
-            "source_network_type",
-            "SUBNET_AS_CODE_NETWORK_TYPE",
-        ),
-        subnet_as_code_routing_type=_setting(
-            args,
-            "source_routing_type",
-            "SUBNET_AS_CODE_ROUTING_TYPE",
-        ),
-        subnet_as_code_desired_properties=_csv_setting(
-            args,
-            "source_desired_properties",
-            "SUBNET_AS_CODE_DESIRED_PROPERTIES",
-        ),
-        subnet_as_code_address_type=_setting(
-            args,
-            "source_address_type",
-            "SUBNET_AS_CODE_ADDRESS_TYPE",
-        ),
-        api_url=_setting(args, "source_api_url", "NETWORK_SOURCE_API_URL"),
-        api_token=_setting(args, "source_api_token", "NETWORK_SOURCE_API_TOKEN"),
-        json_file=_setting(args, "source_json_file", "NETWORK_SOURCE_JSON_FILE"),
-        yaml_repo_path=_setting(args, "subnet_repo_path", "SUBNET_REPO_PATH"),
-        xlsx_file=_setting(args, "source_xlsx_file", "NETWORK_SOURCE_XLSX_FILE"),
-        xlsx_sheet=_setting(
-            args, "source_xlsx_sheet", "NETWORK_SOURCE_XLSX_SHEET"
-        ),
-        github_api_url=_setting(args, "github_api_url", "GITHUB_API_URL"),
-        github_repository=_setting(
-            args, "github_repository", "GITHUB_REPOSITORY"
-        ),
-        github_ref=_setting(args, "github_ref", "GITHUB_REF", "main"),
-        github_path=_setting(args, "github_path", "GITHUB_PATH", ""),
-        github_token=_setting(args, "github_token", "GITHUB_TOKEN"),
     )
 
 
@@ -269,26 +202,7 @@ def _analyze_or_propose(args) -> int:
     source = _source_config(args)
     tenable = _tenable_config(args)
     config = DetectAndPlanConfig(
-        subnet_repo_path=str(source.yaml_repo_path) if source.yaml_repo_path else None,
-        subnet_as_code_method=source.subnet_as_code_method,
-        subnet_as_code_reference_id=source.subnet_as_code_reference_id,
-        subnet_as_code_sites=source.subnet_as_code_sites,
-        subnet_as_code_tags=source.subnet_as_code_tags,
-        subnet_as_code_name=source.subnet_as_code_name,
-        subnet_as_code_network_type=source.subnet_as_code_network_type,
-        subnet_as_code_routing_type=source.subnet_as_code_routing_type,
-        subnet_as_code_desired_properties=source.subnet_as_code_desired_properties,
-        subnet_as_code_address_type=source.subnet_as_code_address_type,
-        source_api_url=source.api_url,
-        source_api_token=source.api_token,
-        source_json_file=str(source.json_file) if source.json_file else None,
-        source_xlsx_file=str(source.xlsx_file) if source.xlsx_file else None,
-        source_xlsx_sheet=source.xlsx_sheet,
-        github_api_url=source.github_api_url,
-        github_repository=source.github_repository,
-        github_ref=source.github_ref,
-        github_path=source.github_path,
-        github_token=source.github_token,
+        source_config=source,
         output_dir=Path(_setting(args, "output_dir", default="output")),
         run_id=_setting(args, "run_id"),
         dry_run=True,

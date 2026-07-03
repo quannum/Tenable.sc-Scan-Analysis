@@ -197,6 +197,16 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         module_loader.assert_called_once()
         api_loader.assert_not_called()
 
+    def test_subnet_as_code_method_specific_filters_require_explicit_method(self):
+        with self.assertRaisesRegex(
+            ValueError, "subnet_as_code_method is required"
+        ):
+            load_authoritative_source(
+                AuthoritativeSourceConfig(
+                    subnet_as_code_desired_properties=["site_code"]
+                )
+            )
+
     def test_normalized_json_preserves_metadata_and_flattens_ranges(self):
         payload = {
             "sites": [

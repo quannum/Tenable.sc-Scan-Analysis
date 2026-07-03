@@ -10,6 +10,16 @@ import yaml
 from dotenv import load_dotenv
 
 from ..io.app_config import parse_csv_list
+from .subnet_source.source_config import (
+    add_authoritative_source_arguments,
+    build_authoritative_source_config,
+)
+from .subnet_source.source_loader import (
+    AuthoritativeSourceConfig,
+    AuthoritativeSourceConfigMixin,
+    has_configured_authoritative_source,
+    validate_authoritative_source_config,
+)
 
 try:
     import tomllib
@@ -21,28 +31,9 @@ ENV_PREFIX = "TCW_"
 
 
 @dataclass(frozen=True)
-class ScheduledServiceConfig:
+class ScheduledServiceConfig(AuthoritativeSourceConfigMixin):
     job_name: str
-    subnet_repo_path: str | None
-    subnet_as_code_method: str | None
-    subnet_as_code_reference_id: str | None
-    subnet_as_code_sites: list[str] | None
-    subnet_as_code_tags: list[str] | None
-    subnet_as_code_name: str | None
-    subnet_as_code_network_type: str | None
-    subnet_as_code_routing_type: str | None
-    subnet_as_code_desired_properties: list[str] | None
-    subnet_as_code_address_type: str | None
-    source_api_url: str | None
-    source_api_token: str | None
-    source_json_file: str | None
-    source_xlsx_file: str | None
-    source_xlsx_sheet: str | None
-    github_api_url: str | None
-    github_repository: str | None
-    github_ref: str
-    github_path: str
-    github_token: str | None
+    source_config: AuthoritativeSourceConfig
     output_dir: Path
     run_id_prefix: str
     latest_summary_file: Path
@@ -79,25 +70,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config-file")
     parser.add_argument("--job-name")
-    parser.add_argument("--subnet-repo-path")
-    parser.add_argument("--subnet-as-code-method")
-    parser.add_argument("--source-reference-id")
-    parser.add_argument("--source-sites")
-    parser.add_argument("--source-tags")
-    parser.add_argument("--source-name")
-    parser.add_argument("--source-network-type")
-    parser.add_argument("--source-routing-type")
-    parser.add_argument("--source-desired-properties")
-    parser.add_argument("--source-address-type")
-    parser.add_argument("--source-api-url")
-    parser.add_argument("--source-api-token")
-    parser.add_argument("--source-json-file")
-    parser.add_argument("--source-xlsx-file")
-    parser.add_argument("--source-xlsx-sheet")
-    parser.add_argument("--github-api-url")
-    parser.add_argument("--github-repository")
-    parser.add_argument("--github-ref")
-    parser.add_argument("--github-path")
+    add_authoritative_source_arguments(parser)
     parser.add_argument("--output-dir")
     parser.add_argument("--run-id-prefix")
     parser.add_argument("--latest-summary-file")
@@ -147,7 +120,11 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     except (OSError, ValueError, json.JSONDecodeError, yaml.YAMLError) as exc:
         parser.error(str(exc))
 
-    def pick(name: str, default: Any = None) -> Any:
+    def pick(
+        name: str,
+        default: Any = None,
+        environment_name: str | None = None,
+    ) -> Any:
         cli_value = getattr(args, name, None)
         if cli_value is not None:
             return cli_value
@@ -155,6 +132,9 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         env_value = os.getenv(f"{ENV_PREFIX}{name.upper()}")
         if env_value is not None:
             return env_value
+
+        if environment_name and os.getenv(environment_name) is not None:
+            return os.getenv(environment_name)
 
         if name == "sc_access_key" and os.getenv("SC_ACCESS_KEY") is not None:
             return os.getenv("SC_ACCESS_KEY")
@@ -164,27 +144,6 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             return os.getenv("SC_URL")
         if name == "github_token" and os.getenv("GITHUB_TOKEN") is not None:
             return os.getenv("GITHUB_TOKEN")
-        network_source_env = {
-            "subnet_as_code_method": "SUBNET_AS_CODE_METHOD",
-            "source_reference_id": "SUBNET_AS_CODE_REFERENCE_ID",
-            "source_sites": "SUBNET_AS_CODE_SITES",
-            "source_tags": "SUBNET_AS_CODE_TAGS",
-            "source_name": "SUBNET_AS_CODE_NAME",
-            "source_network_type": "SUBNET_AS_CODE_NETWORK_TYPE",
-            "source_routing_type": "SUBNET_AS_CODE_ROUTING_TYPE",
-            "source_desired_properties": "SUBNET_AS_CODE_DESIRED_PROPERTIES",
-            "source_address_type": "SUBNET_AS_CODE_ADDRESS_TYPE",
-            "source_api_url": "NETWORK_SOURCE_API_URL",
-            "source_api_token": "NETWORK_SOURCE_API_TOKEN",
-            "source_json_file": "NETWORK_SOURCE_JSON_FILE",
-            "source_xlsx_file": "NETWORK_SOURCE_XLSX_FILE",
-            "source_xlsx_sheet": "NETWORK_SOURCE_XLSX_SHEET",
-            "subnet_repo_path": "SUBNET_REPO_PATH",
-        }
-        alternate_env = network_source_env.get(name)
-        if alternate_env and os.getenv(alternate_env) is not None:
-            return os.getenv(alternate_env)
-
         return config_data.get(name, default)
 
     try:
@@ -222,51 +181,27 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             "--filter-disabled-mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY"
         )
 
-    subnet_repo_path = _optional_string(pick("subnet_repo_path"))
-    subnet_as_code_method = _optional_string(pick("subnet_as_code_method"))
-    subnet_as_code_reference_id = _optional_string(pick("source_reference_id"))
-    subnet_as_code_sites = parse_csv_list(pick("source_sites"))
-    subnet_as_code_tags = parse_csv_list(pick("source_tags"))
-    subnet_as_code_name = _optional_string(pick("source_name"))
-    subnet_as_code_network_type = _optional_string(pick("source_network_type"))
-    subnet_as_code_routing_type = _optional_string(pick("source_routing_type"))
-    subnet_as_code_desired_properties = parse_csv_list(
-        pick("source_desired_properties")
-    )
-    subnet_as_code_address_type = _optional_string(pick("source_address_type"))
-    source_api_url = _optional_string(pick("source_api_url"))
-    source_api_token = _optional_string(pick("source_api_token"))
-    source_json_file = _optional_string(pick("source_json_file"))
-    source_xlsx_file = _optional_string(pick("source_xlsx_file"))
-    source_xlsx_sheet = _optional_string(pick("source_xlsx_sheet"))
-    github_api_url = _optional_string(pick("github_api_url"))
-    github_repository = _optional_string(pick("github_repository"))
-    github_ref = _optional_string(pick("github_ref", "main")) or "main"
-    github_path = _optional_string(pick("github_path", "")) or ""
-    github_token = _optional_string(pick("github_token"))
-    if not any(
-        (
-            subnet_as_code_method,
-            subnet_as_code_reference_id,
-            subnet_as_code_sites,
-            subnet_as_code_tags,
-            subnet_as_code_name,
-            subnet_as_code_network_type,
-            subnet_as_code_routing_type,
-            subnet_as_code_desired_properties,
-            subnet_as_code_address_type,
-            source_api_url,
-            source_json_file,
-            github_api_url and github_repository,
-            subnet_repo_path,
-            source_xlsx_file,
+    source_config = build_authoritative_source_config(
+        scalar_getter=lambda name, environment_name, default=None: pick(
+            name,
+            default,
+            environment_name,
+        ),
+        csv_getter=lambda name, environment_name, default=None: parse_csv_list(
+            pick(name, default, environment_name)
         )
-    ):
+        or None,
+    )
+    if not has_configured_authoritative_source(source_config):
         parser.error(
             "An authoritative source is required. Configure subnet_as_code "
             "method/query settings, source_api_url, source_json_file, GitHub "
             "Enterprise settings, subnet_repo_path, or source_xlsx_file."
         )
+    try:
+        validate_authoritative_source_config(source_config)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
     output_dir = _as_path(pick("output_dir")) or Path("output")
@@ -314,26 +249,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
 
     return ScheduledServiceConfig(
         job_name=job_name,
-        subnet_repo_path=subnet_repo_path,
-        subnet_as_code_method=subnet_as_code_method,
-        subnet_as_code_reference_id=subnet_as_code_reference_id,
-        subnet_as_code_sites=subnet_as_code_sites or None,
-        subnet_as_code_tags=subnet_as_code_tags or None,
-        subnet_as_code_name=subnet_as_code_name,
-        subnet_as_code_network_type=subnet_as_code_network_type,
-        subnet_as_code_routing_type=subnet_as_code_routing_type,
-        subnet_as_code_desired_properties=subnet_as_code_desired_properties or None,
-        subnet_as_code_address_type=subnet_as_code_address_type,
-        source_api_url=source_api_url,
-        source_api_token=source_api_token,
-        source_json_file=source_json_file,
-        source_xlsx_file=source_xlsx_file,
-        source_xlsx_sheet=source_xlsx_sheet,
-        github_api_url=github_api_url,
-        github_repository=github_repository,
-        github_ref=github_ref,
-        github_path=github_path,
-        github_token=github_token,
+        source_config=source_config,
         output_dir=output_dir,
         run_id_prefix=run_id_prefix,
         latest_summary_file=latest_summary_file,

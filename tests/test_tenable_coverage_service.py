@@ -40,6 +40,7 @@ class ServiceConfigTests(unittest.TestCase):
             config = build_service_config(["--config-file", str(config_file)])
 
             self.assertEqual(config.source_json_file, "sites.json")
+            self.assertEqual(str(config.source_config.json_file), "sites.json")
             self.assertEqual(config.sc_timeout_seconds, 45)
             self.assertEqual(config.sc_retries, 4)
             self.assertEqual(config.sc_backoff_seconds, 2.0)
@@ -83,6 +84,7 @@ class ServiceConfigTests(unittest.TestCase):
 
             self.assertEqual(config.job_name, "nightly coverage")
             self.assertEqual(config.subnet_repo_path, "repo")
+            self.assertEqual(str(config.source_config.yaml_repo_path), "repo")
             self.assertEqual(config.run_id_prefix, "nightly-")
             self.assertEqual(config.include_keywords, ["Discovery", "Assessment"])
             self.assertEqual(config.exclude_keywords, ["Deprecated"])
