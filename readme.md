@@ -270,11 +270,14 @@ Environment and location columns are gathered from IP address tracker data (expe
 - Python 3.10+
 - openpyxl
 - python-dotenv
+- subnet_as_code>=0.0.1 (required for authoritative expected-range input; install from the internal package repository)
 - pyTenable (only required for live mode)
 
 Install:
 
 pip install -r requirements.txt
+
+Note: `subnet_as_code>=0.0.1` is a required internal dependency for the coverage workflow. Make sure your environment can install it from the internal package repository before running the authoritative expected-range commands.
 
 For live Tenable.sc API mode:
 
