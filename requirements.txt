@@ -1,6 +1,7 @@
 openpyxl>=3.1
 PyYAML>=6.0
 python-dotenv>=1.0
+subnet_as_code>=0.0.1
 tomli>=2.0; python_version < "3.11"
 
 # Optional for live Tenable.sc API mode:
