@@ -17,12 +17,6 @@ AUTHORITATIVE_SOURCE_ARGUMENTS: tuple[tuple[str, str], ...] = (
     ("source_xlsx_sheet", "--source-xlsx-sheet"),
 )
 
-CSV_SOURCE_FIELDS = {
-    "source_sites",
-    "source_tags",
-    "source_desired_properties",
-}
-
 SOURCE_ENVIRONMENT_MAP = {
     "subnet_as_code_method": "SUBNET_AS_CODE_METHOD",
     "source_reference_id": "SUBNET_AS_CODE_REFERENCE_ID",

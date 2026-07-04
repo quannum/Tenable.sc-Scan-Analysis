@@ -70,6 +70,27 @@ _SUBNET_AS_CODE_METHOD_PARAMETER_MAP: dict[str, dict[str, str]] = {
     "get_tags": {},
 }
 _SUBNET_AS_CODE_DEFAULT_METHOD = "get_sites"
+_SUBNET_AS_CODE_CONFIG_FIELDS = (
+    "subnet_as_code_method",
+    "subnet_as_code_reference_id",
+    "subnet_as_code_sites",
+    "subnet_as_code_tags",
+    "subnet_as_code_name",
+    "subnet_as_code_network_type",
+    "subnet_as_code_routing_type",
+    "subnet_as_code_desired_properties",
+    "subnet_as_code_address_type",
+)
+_SUBNET_AS_CODE_QUERY_VALUE_FIELDS = {
+    "reference_id": "subnet_as_code_reference_id",
+    "sites": "subnet_as_code_sites",
+    "tags": "subnet_as_code_tags",
+    "name": "subnet_as_code_name",
+    "network_type": "subnet_as_code_network_type",
+    "routing_type": "subnet_as_code_routing_type",
+    "desired_properties": "subnet_as_code_desired_properties",
+    "address_type": "subnet_as_code_address_type",
+}
 _SUBNET_AS_CODE_REQUIRES_EXPLICIT_METHOD = {
     "subnet_as_code_name",
     "subnet_as_code_network_type",
@@ -184,17 +205,8 @@ def validate_authoritative_source_config(config: AuthoritativeSourceConfig) -> N
 
 def _uses_subnet_as_code(config: AuthoritativeSourceConfig) -> bool:
     return any(
-        (
-            config.subnet_as_code_method,
-            config.subnet_as_code_reference_id,
-            config.subnet_as_code_sites,
-            config.subnet_as_code_tags,
-            config.subnet_as_code_name,
-            config.subnet_as_code_network_type,
-            config.subnet_as_code_routing_type,
-            config.subnet_as_code_desired_properties,
-            config.subnet_as_code_address_type,
-        )
+        getattr(config, field_name)
+        for field_name in _SUBNET_AS_CODE_CONFIG_FIELDS
     )
 
 
@@ -232,19 +244,21 @@ def _build_subnet_as_code_request(
     method_name = _resolve_subnet_as_code_method(config)
     return method_name, _build_subnet_as_code_kwargs(
         method_name,
-        {
-            "reference_id": config.subnet_as_code_reference_id,
-            "sites": list(config.subnet_as_code_sites or []),
-            "tags": list(config.subnet_as_code_tags or []),
-            "name": config.subnet_as_code_name,
-            "network_type": config.subnet_as_code_network_type,
-            "routing_type": config.subnet_as_code_routing_type,
-            "desired_properties": list(
-                config.subnet_as_code_desired_properties or []
-            ),
-            "address_type": config.subnet_as_code_address_type,
-        },
+        _build_subnet_as_code_query_values(config),
     )
+
+
+def _build_subnet_as_code_query_values(
+    config: AuthoritativeSourceConfig,
+) -> dict[str, Any]:
+    query_values: dict[str, Any] = {}
+    for query_name, config_field in _SUBNET_AS_CODE_QUERY_VALUE_FIELDS.items():
+        value = getattr(config, config_field)
+        if isinstance(value, list):
+            query_values[query_name] = list(value)
+            continue
+        query_values[query_name] = value
+    return query_values
 
 
 def _build_subnet_as_code_kwargs(
@@ -291,11 +305,7 @@ def _stringify_pathlike(value: str | Path | None) -> str | None:
 def _resolve_subnet_as_code_method(config: AuthoritativeSourceConfig) -> str:
     method_name = str(config.subnet_as_code_method or "").strip()
     if method_name:
-        if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
-            raise ValueError(
-                "Unsupported subnet_as_code method. Supported methods: "
-                + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
-            )
+        _validate_supported_subnet_as_code_method(method_name)
         return method_name
     return _SUBNET_AS_CODE_DEFAULT_METHOD
 
@@ -303,11 +313,7 @@ def _resolve_subnet_as_code_method(config: AuthoritativeSourceConfig) -> str:
 def _validate_subnet_as_code_config(config: AuthoritativeSourceConfig) -> None:
     method_name = str(config.subnet_as_code_method or "").strip()
     if method_name:
-        if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
-            raise ValueError(
-                "Unsupported subnet_as_code method. Supported methods: "
-                + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
-            )
+        _validate_supported_subnet_as_code_method(method_name)
         return
 
     explicit_method_fields = [
@@ -320,6 +326,14 @@ def _validate_subnet_as_code_config(config: AuthoritativeSourceConfig) -> None:
         raise ValueError(
             "subnet_as_code_method is required when using method-specific "
             f"filters: {pretty}."
+        )
+
+
+def _validate_supported_subnet_as_code_method(method_name: str) -> None:
+    if method_name not in _SUBNET_AS_CODE_METHOD_PARAMETER_MAP:
+        raise ValueError(
+            "Unsupported subnet_as_code method. Supported methods: "
+            + ", ".join(sorted(_SUBNET_AS_CODE_METHOD_PARAMETER_MAP))
         )
 
 
