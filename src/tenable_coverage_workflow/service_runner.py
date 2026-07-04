@@ -205,9 +205,7 @@ def _lock_is_stale(lock_file: Path, stale_timeout_seconds: int) -> bool:
     except OSError:
         return False
 
-    age_seconds = (
-        datetime.now(timezone.utc).timestamp() - stat.st_mtime
-    )
+    age_seconds = datetime.now(timezone.utc).timestamp() - stat.st_mtime
     if age_seconds >= stale_timeout_seconds:
         return True
 

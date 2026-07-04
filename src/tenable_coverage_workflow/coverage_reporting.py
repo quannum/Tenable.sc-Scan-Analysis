@@ -66,12 +66,8 @@ def write_coverage_reports(
         {"schema_version": 1, "results": details},
     )
     details_csv = _write_details_csv(output_dir / "coverage_results.csv", details)
-    summary_json = atomic_write_json(
-        output_dir / "coverage_summary.json", summary
-    )
-    summary_md = _write_summary_markdown(
-        output_dir / "coverage_summary.md", summary
-    )
+    summary_json = atomic_write_json(output_dir / "coverage_summary.json", summary)
+    summary_md = _write_summary_markdown(output_dir / "coverage_summary.md", summary)
     extras_json = atomic_write_json(
         output_dir / "extra_scan_targets.json",
         {"schema_version": 1, "findings": extras},
@@ -120,9 +116,7 @@ def build_proposed_exclusions(extras: list[dict[str, Any]]) -> list[dict[str, An
                     "scan_name": finding["scan_name"],
                     "configured_scope": finding["configured_scope"],
                     "proposed_exclusion": cidr,
-                    "proposed_action": (
-                        "REVIEW_ADD_EXCLUSION_OR_REMOVE_STALE_TARGET"
-                    ),
+                    "proposed_action": ("REVIEW_ADD_EXCLUSION_OR_REMOVE_STALE_TARGET"),
                     "approval_status": "PENDING",
                 }
             )
@@ -138,16 +132,10 @@ def build_coverage_summary(
         "site": _group_summary(results, lambda item: item.site_code),
         "vlan": _group_summary(
             results,
-            lambda item: (
-                f"{item.site_code}/{item.vlan_name or item.target_type}"
-            ),
+            lambda item: (f"{item.site_code}/{item.vlan_name or item.target_type}"),
         ),
-        "scan_type": _group_summary(
-            results, lambda item: item.required_scan_name
-        ),
-        "repository": _group_summary(
-            results, lambda item: item.configured_repository
-        ),
+        "scan_type": _group_summary(results, lambda item: item.required_scan_name),
+        "repository": _group_summary(results, lambda item: item.configured_repository),
         "policy": _group_summary(
             results,
             lambda item: item.required_policy_name,
@@ -161,16 +149,14 @@ def build_coverage_summary(
             {
                 result.required_asset_name
                 for result in results
-                if result.required_asset_present == "No"
-                and result.required_asset_name
+                if result.required_asset_present == "No" and result.required_asset_name
             }
         ),
         "missing_scans": sorted(
             {
                 result.required_scan_name
                 for result in results
-                if result.required_scan_present == "No"
-                and result.required_scan_name
+                if result.required_scan_present == "No" and result.required_scan_name
             }
         ),
         "policy_mismatches": [
@@ -192,8 +178,7 @@ def _group_summary(results, key_fn) -> list[dict[str, Any]]:
     for result in results:
         grouped[str(key_fn(result) or "UNASSIGNED")].append(result)
     return [
-        {"name": name, **_aggregate(items)}
-        for name, items in sorted(grouped.items())
+        {"name": name, **_aggregate(items)} for name, items in sorted(grouped.items())
     ]
 
 
@@ -230,7 +215,7 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
         )
         if not extras:
             continue
-        extra_cidrs = []
+        extra_cidrs: list[str] = []
         for start, end in extras:
             extra_cidrs.extend(
                 str(network)
@@ -267,9 +252,7 @@ def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
     return atomic_write_text(path, buffer.getvalue())
 
 
-def _write_dict_csv(
-    path: Path, rows: list[dict[str, Any]], columns: list[str]
-) -> Path:
+def _write_dict_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Path:
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
@@ -363,9 +346,7 @@ def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
             )
         lines.append("")
     lines.extend(("## Missing Asset Groups", ""))
-    lines.extend(
-        f"- {name}" for name in summary["missing_asset_groups"]
-    )
+    lines.extend(f"- {name}" for name in summary["missing_asset_groups"])
     if not summary["missing_asset_groups"]:
         lines.append("- None")
     lines.extend(("", "## Missing Scans", ""))

@@ -49,8 +49,7 @@ def collect_tenable_inventory(data_access: DataAccess) -> dict[str, Any]:
             inventory["collection_errors"][name] = str(exc)
 
     inventory["resource_counts"] = {
-        name: len(records)
-        for name, records in inventory["resources"].items()
+        name: len(records) for name, records in inventory["resources"].items()
     }
     return inventory
 

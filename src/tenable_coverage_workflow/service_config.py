@@ -149,12 +149,8 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         match_all_include = _parse_bool(
             pick("match_all_include", False), "match_all_include"
         )
-        case_sensitive = _parse_bool(
-            pick("case_sensitive", False), "case_sensitive"
-        )
-        sc_ssl_verify = _parse_bool(
-            pick("sc_ssl_verify", True), "sc_ssl_verify"
-        )
+        case_sensitive = _parse_bool(pick("case_sensitive", False), "case_sensitive")
+        sc_ssl_verify = _parse_bool(pick("sc_ssl_verify", True), "sc_ssl_verify")
         stale_lock_timeout_seconds = _parse_positive_int(
             pick("stale_lock_timeout_seconds", 21600),
             "stale_lock_timeout_seconds",
@@ -179,16 +175,19 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
             "--filter-disabled-mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY"
         )
 
+    def scalar_getter(
+        name: str, environment_name: str | None, default: Any = None
+    ) -> Any:
+        return pick(name, default, environment_name)
+
+    def csv_getter(
+        name: str, environment_name: str | None, default: Any = None
+    ) -> list[str] | None:
+        return parse_csv_list(pick(name, default, environment_name)) or None
+
     source_config = build_authoritative_source_config(
-        scalar_getter=lambda name, environment_name, default=None: pick(
-            name,
-            default,
-            environment_name,
-        ),
-        csv_getter=lambda name, environment_name, default=None: parse_csv_list(
-            pick(name, default, environment_name)
-        )
-        or None,
+        scalar_getter=scalar_getter,
+        csv_getter=csv_getter,
     )
     if not has_configured_authoritative_source(source_config):
         parser.error(
@@ -227,9 +226,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         if not asset_json_dir:
             missing.append("asset_json_dir")
         if missing:
-            parser.error(
-                "Offline scheduled runs require: " + ", ".join(missing)
-            )
+            parser.error("Offline scheduled runs require: " + ", ".join(missing))
 
     if mode == "live":
         missing = []
@@ -240,9 +237,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         if not sc_secret_key:
             missing.append("SC_SECRET_KEY")
         if missing:
-            parser.error(
-                "Live scheduled runs require: " + ", ".join(missing)
-            )
+            parser.error("Live scheduled runs require: " + ", ".join(missing))
 
     return ScheduledServiceConfig(
         job_name=job_name,
@@ -289,9 +284,7 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
     elif suffix in {".yaml", ".yml"}:
         data = yaml.safe_load(config_file_path.read_text(encoding="utf-8"))
     else:
-        raise ValueError(
-            "Unsupported config file type. Use .yaml, .json, or .toml."
-        )
+        raise ValueError("Unsupported config file type. Use .yaml, .json, or .toml.")
 
     if not isinstance(data, dict):
         raise ValueError("Config file root must be an object/dictionary.")

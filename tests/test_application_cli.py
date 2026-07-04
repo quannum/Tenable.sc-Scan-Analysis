@@ -107,9 +107,7 @@ class ApplicationCliTests(unittest.TestCase):
                 "    plan_file: ignored.csv\n",
                 encoding="utf-8",
             )
-            exit_code = main(
-                ["--config-file", str(config), "apply-changes"]
-            )
+            exit_code = main(["--config-file", str(config), "apply-changes"])
         self.assertEqual(exit_code, EXIT_APPLY_REQUIRED)
 
     def test_yaml_config_supplies_command_settings(self):
@@ -132,9 +130,7 @@ class ApplicationCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            exit_code = main(
-                ["--config-file", str(config), "validate-definitions"]
-            )
+            exit_code = main(["--config-file", str(config), "validate-definitions"])
 
             self.assertEqual(exit_code, EXIT_OK)
             self.assertTrue(output.is_file())

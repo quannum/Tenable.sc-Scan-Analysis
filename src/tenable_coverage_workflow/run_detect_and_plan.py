@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from dotenv import load_dotenv
 
@@ -152,7 +153,7 @@ def main(argv=None) -> int:
         log_file=config.log_file,
     )
     summary = run_detect_and_plan(config)
-    print_run_summary(summary["run_id"], summary)
+    print_run_summary(cast(str, summary["run_id"]), summary)
     return 0
 
 
@@ -166,9 +167,9 @@ class ServiceContextFilter(logging.Filter):
             if not hasattr(record, key):
                 setattr(record, key, value)
         if not hasattr(record, "run_id"):
-            record.run_id = None
+            setattr(record, "run_id", None)
         if not hasattr(record, "job_name"):
-            record.job_name = None
+            setattr(record, "job_name", None)
         return True
 
 
@@ -182,10 +183,12 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        if getattr(record, "run_id", None):
-            payload["run_id"] = record.run_id
-        if getattr(record, "job_name", None):
-            payload["job_name"] = record.job_name
+        run_id = getattr(record, "run_id", None)
+        if run_id:
+            payload["run_id"] = run_id
+        job_name = getattr(record, "job_name", None)
+        if job_name:
+            payload["job_name"] = job_name
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=True)
@@ -219,17 +222,10 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
-    source_config = build_authoritative_source_config(
-        scalar_getter=lambda name, environment_name, default=None: (
-            getattr(args, name, None)
-            if getattr(args, name, None) is not None
-            else (
-                os.getenv(environment_name)
-                if environment_name and os.getenv(environment_name) is not None
-                else default
-            )
-        ),
-        csv_getter=lambda name, environment_name, default=None: parse_csv_list(
+    def scalar_getter(
+        name: str, environment_name: str | None, default: Any = None
+    ) -> Any:
+        return (
             getattr(args, name, None)
             if getattr(args, name, None) is not None
             else (
@@ -238,7 +234,23 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
                 else default
             )
         )
-        or None,
+
+    def csv_getter(
+        name: str, environment_name: str | None, default: Any = None
+    ) -> list[str] | None:
+        return parse_csv_list(
+            getattr(args, name, None)
+            if getattr(args, name, None) is not None
+            else (
+                os.getenv(environment_name)
+                if environment_name and os.getenv(environment_name) is not None
+                else default
+            )
+        ) or None
+
+    source_config = build_authoritative_source_config(
+        scalar_getter=scalar_getter,
+        csv_getter=csv_getter,
     )
     if not has_configured_authoritative_source(source_config):
         raise ValueError(
@@ -330,9 +342,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     named_targets = apply_naming_rules_to_targets(connector_result.coverage_targets)
 
     actual_scopes, actual_by_scan, excluded_by_scan, configuration_index = (
-        load_actual_scope_data(
-            build_coverage_source_config(config)
-        )
+        load_actual_scope_data(build_coverage_source_config(config))
     )
     coverage_results = validate_coverage_targets(
         named_targets,
@@ -401,8 +411,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
             result.required_scan_present == "No" for result in coverage_results
         ),
         "scan_policy_mismatch_count": sum(
-            result.required_policy_configured == "No"
-            for result in coverage_results
+            result.required_policy_configured == "No" for result in coverage_results
         ),
         "output_directory": str(run_dir),
         "audit_log": str(audit_logger.path),
@@ -451,9 +460,7 @@ def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
         name = str(scan.get("name") or "").strip()
         scan_id = scan.get("id")
         details = (
-            data_access.get_scan_details(scan_id)
-            if scan_id not in (None, "")
-            else scan
+            data_access.get_scan_details(scan_id) if scan_id not in (None, "") else scan
         )
         record = details if isinstance(details, dict) and details else scan
         if name:
@@ -473,7 +480,7 @@ def validate_coverage_targets(
     audit_logger=None,
 ) -> list[CoverageValidationResult]:
     coverage_results: list[CoverageValidationResult] = []
-    exclusion_impact_by_scan = defaultdict(int)
+    exclusion_impact_by_scan: dict[str, int] = defaultdict(int)
     configuration_index = configuration_index or {}
     assets_by_name = configuration_index.get("assets_by_name", {})
     scans_by_name = configuration_index.get("scans_by_name", {})
@@ -622,12 +629,9 @@ def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
     print(f"Run ID: {run_id}")
     print(f"Authoritative source: {summary['authoritative_source_type']}")
     print(
-        "Authoritative units processed: "
-        f"{summary['authoritative_units_processed']}"
+        "Authoritative units processed: " f"{summary['authoritative_units_processed']}"
     )
-    print(
-        f"Authoritative units failed: {summary['authoritative_units_failed']}"
-    )
+    print(f"Authoritative units failed: {summary['authoritative_units_failed']}")
     print(f"Coverage targets created: {summary['coverage_targets_created']}")
     print(f"OK count: {summary['ok_count']}")
     print(f"GAP count: {summary['gap_count']}")

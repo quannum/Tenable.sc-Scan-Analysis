@@ -109,7 +109,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                     subnet_as_code_sites=["NYC", "LON"],
                     subnet_as_code_tags=["production"],
                 )
-        )
+            )
 
         self.assertEqual(source_type, "subnet_as_code")
         self.assertEqual(
@@ -129,9 +129,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         )
 
     def test_subnet_as_code_method_specific_filters_require_explicit_method(self):
-        with self.assertRaisesRegex(
-            ValueError, "subnet_as_code_method is required"
-        ):
+        with self.assertRaisesRegex(ValueError, "subnet_as_code_method is required"):
             load_authoritative_source(
                 AuthoritativeSourceConfig(
                     subnet_as_code_desired_properties=["site_code"]

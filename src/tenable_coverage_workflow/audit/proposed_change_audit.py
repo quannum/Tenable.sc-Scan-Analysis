@@ -94,7 +94,7 @@ def _write_markdown(
 
     lines = ["# Proposed Changes Audit", "", f"Run ID: `{run_id}`", ""]
 
-    for (site_code, site_name) in sorted(groups):
+    for site_code, site_name in sorted(groups):
         heading = site_code if not site_name else f"{site_code} - {site_name}"
         lines.append(f"## {heading}")
         lines.append("")
@@ -112,13 +112,9 @@ def _write_markdown(
             lines.append(f"- Current Status: {change.current_status}")
             lines.append(f"- Issue: {change.issue}")
             lines.append(f"- Proposed Action: {change.proposed_action}")
-            lines.append(
-                f"- Proposed Asset: {change.proposed_asset_name or 'N/A'}"
-            )
+            lines.append(f"- Proposed Asset: {change.proposed_asset_name or 'N/A'}")
             lines.append(f"- Proposed Scan: {change.proposed_scan_name or 'N/A'}")
-            lines.append(
-                f"- Proposed Policy: {change.proposed_policy_name or 'N/A'}"
-            )
+            lines.append(f"- Proposed Policy: {change.proposed_policy_name or 'N/A'}")
             lines.append(f"- Approval Status: {change.approval_status}")
             lines.append(f"- Source YAML File: {change.source_file or 'N/A'}")
             if change.vlan_name or change.vlan_tag is not None:

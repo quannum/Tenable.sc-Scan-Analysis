@@ -110,14 +110,14 @@ class ServiceConfigTests(unittest.TestCase):
                     'subnet_as_code_method = "get_sites"\n'
                     f'output_dir = "{(temp_path / "output").as_posix()}"\n'
                     'run_id_prefix = "nightly-"\n'
-                    'dry_run = true\n'
+                    "dry_run = true\n"
                     'mode = "offline"\n'
                     'scan_json_dir = "scans"\n'
                     'asset_json_dir = "assets"\n'
                     'include_keywords = "Discovery,Assessment"\n'
                     'exclude_keywords = "Deprecated"\n'
-                    'match_all_include = false\n'
-                    'case_sensitive = false\n'
+                    "match_all_include = false\n"
+                    "case_sensitive = false\n"
                     'filter_disabled_mode = "ALL"\n'
                     'log_level = "INFO"\n'
                 ),

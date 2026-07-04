@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..core.scope_utils import split_scope_items
 from ..io.data_access import DataAccess
@@ -94,9 +94,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 continue
             reviewer = _text(row.get("Reviewer"))
             if not reviewer:
-                raise ValueError(
-                    f"Row {row_number} is APPROVED but has no Reviewer."
-                )
+                raise ValueError(f"Row {row_number} is APPROVED but has no Reviewer.")
             run_id = _required_text(row, "Run ID", row_number)
             change = ApprovedChange(
                 run_id=run_id,
@@ -105,13 +103,9 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 proposed_action=_required_text(
                     row, "Proposed Action", row_number
                 ).upper(),
-                asset_name=_required_text(
-                    row, "Proposed Asset Name", row_number
-                ),
+                asset_name=_required_text(row, "Proposed Asset Name", row_number),
                 scan_name=_required_text(row, "Proposed Scan Name", row_number),
-                policy_name=_required_text(
-                    row, "Proposed Policy Name", row_number
-                ),
+                policy_name=_required_text(row, "Proposed Policy Name", row_number),
                 reviewer=reviewer,
                 decision_notes=_text(row.get("Decision Notes")),
             )
@@ -246,9 +240,7 @@ class ChangeApplier:
             message="Post-change verification passed.",
         )
 
-    def _ensure_asset(
-        self, change: ApprovedChange
-    ) -> tuple[dict[str, Any], str]:
+    def _ensure_asset(self, change: ApprovedChange) -> tuple[dict[str, Any], str]:
         existing = self.assets.get(change.asset_name)
         if existing is None:
             created = self.data_access.create_static_asset(
@@ -299,9 +291,7 @@ class ChangeApplier:
         scan_id = _resource_id(existing, "scan", change.scan_name)
         details = self.data_access.get_scan_details(scan_id) or existing
         current_asset_ids = extract_scan_asset_ids(details)
-        current_repository_id = extract_nested_id(
-            details, "repository", "repositoryID"
-        )
+        current_repository_id = extract_nested_id(details, "repository", "repositoryID")
         current_policy_id = extract_nested_id(details, "policy", "policyID")
         if (
             asset_id in current_asset_ids
@@ -346,9 +336,10 @@ class ChangeApplier:
             raise RuntimeError(
                 f"Scan {scan_id} verification failed: repository mismatch"
             )
-        if expected_policy_id is not None and extract_nested_id(
-            details, "policy", "policyID"
-        ) != expected_policy_id:
+        if (
+            expected_policy_id is not None
+            and extract_nested_id(details, "policy", "policyID") != expected_policy_id
+        ):
             raise RuntimeError(f"Scan {scan_id} verification failed: policy mismatch")
 
     @staticmethod
@@ -393,8 +384,10 @@ def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
     result = set()
     for value in values:
         raw_id = value.get("id") if isinstance(value, dict) else value
+        if raw_id in (None, ""):
+            continue
         try:
-            result.add(int(raw_id))
+            result.add(int(cast(Any, raw_id)))
         except (TypeError, ValueError):
             continue
     return result
@@ -405,8 +398,10 @@ def extract_nested_id(
 ) -> int | None:
     value = record.get(nested_key)
     raw_id = value.get("id") if isinstance(value, dict) else record.get(scalar_key)
+    if raw_id in (None, ""):
+        return None
     try:
-        return int(raw_id)
+        return int(cast(Any, raw_id))
     except (TypeError, ValueError):
         return None
 

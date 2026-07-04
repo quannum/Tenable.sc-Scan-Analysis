@@ -15,9 +15,7 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         covering_scans = list(covering_scans)
 
     return CoverageValidationResult(
-        status=str(
-            getter("status", getter("current_status", "UNKNOWN")) or "UNKNOWN"
-        ),
+        status=str(getter("status", getter("current_status", "UNKNOWN")) or "UNKNOWN"),
         target_type=str(getter("target_type", "")),
         cidr=str(getter("cidr", getter("scope_item", ""))),
         site_code=str(getter("site_code", "")),
@@ -43,9 +41,7 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         required_scan_present=str(getter("required_scan_present", "")),
         configured_repository=getter("configured_repository"),
         configured_policy=getter("configured_policy"),
-        required_policy_configured=str(
-            getter("required_policy_configured", "")
-        ),
+        required_policy_configured=str(getter("required_policy_configured", "")),
         timezone=getter("timezone"),
         tags=list(getter("tags", []) or []),
         environment=getter("environment"),
@@ -90,10 +86,7 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
-    if (
-        result.required_asset_present == "No"
-        or result.required_scan_present == "No"
-    ):
+    if result.required_asset_present == "No" or result.required_scan_present == "No":
         return _create_or_update_action(result.target_type)
 
     if result.required_policy_configured == "No":

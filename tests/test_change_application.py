@@ -54,23 +54,19 @@ class FakeDataAccess:
     def __init__(self):
         self.assets = {}
         self.scans = {}
-        self.policies = {
-            30: {"id": 30, "name": "Credentialed Server Assessment"}
-        }
+        self.policies = {30: {"id": 30, "name": "Credentialed Server Assessment"}}
         self.calls = []
         self.next_asset_id = 10
         self.next_scan_id = 20
 
     def get_asset_lists(self):
         return [
-            {"id": item["id"], "name": item["name"]}
-            for item in self.assets.values()
+            {"id": item["id"], "name": item["name"]} for item in self.assets.values()
         ]
 
     def get_scans(self):
         return [
-            {"id": item["id"], "name": item["name"]}
-            for item in self.scans.values()
+            {"id": item["id"], "name": item["name"]} for item in self.scans.values()
         ]
 
     def get_policies(self):
@@ -117,9 +113,7 @@ class FakeDataAccess:
         self.scans[scan_id] = record
         return record
 
-    def update_scan_configuration(
-        self, scan_id, asset_ids, repository_id, policy_id
-    ):
+    def update_scan_configuration(self, scan_id, asset_ids, repository_id, policy_id):
         self.calls.append(
             ("update_scan", scan_id, tuple(asset_ids), repository_id, policy_id)
         )
@@ -182,9 +176,7 @@ class ChangeApplicationTests(unittest.TestCase):
                 data_access.assets[8]["typeFields"]["definedIPs"],
                 "10.1.15.0/24,10.1.16.0/24",
             )
-            self.assertEqual(
-                data_access.scans[9]["assets"], [{"id": 8}, {"id": 99}]
-            )
+            self.assertEqual(data_access.scans[9]["assets"], [{"id": 8}, {"id": 99}])
 
     def test_missing_policy_fails_preflight_before_mutation(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -28,7 +28,7 @@ from .tenable_inventory import collect_tenable_inventory, write_inventory_snapsh
 try:
     import tomllib
 except ImportError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore[no-redef]
+    import tomli as tomllib
 
 EXIT_OK = 0
 EXIT_VALIDATION = 2
@@ -176,9 +176,7 @@ def _tenable_config(args):
         sc_backoff_seconds=float(
             _setting(args, "sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5)
         ),
-        sc_ssl_verify=_as_bool(
-            _setting(args, "sc_ssl_verify", "SC_SSL_VERIFY", True)
-        ),
+        sc_ssl_verify=_as_bool(_setting(args, "sc_ssl_verify", "SC_SSL_VERIFY", True)),
     )
 
 
@@ -191,9 +189,10 @@ def _collect_tenable(args) -> int:
         )
     output = write_inventory_snapshot(snapshot, output_file)
     print(f"Tenable.sc inventory written to {output}")
-    if _as_bool(_setting(args, "fail_on_partial", default=False)) and snapshot[
-        "collection_errors"
-    ]:
+    if (
+        _as_bool(_setting(args, "fail_on_partial", default=False))
+        and snapshot["collection_errors"]
+    ):
         return EXIT_OPERATION
     return EXIT_OK
 
@@ -249,9 +248,7 @@ def _apply_changes(args) -> int:
         default=str(plan.with_name("apply_result.json")),
     )
     output = write_inventory_snapshot(result, result_file)
-    markdown_output = write_apply_markdown(
-        result, Path(result_file).with_suffix(".md")
-    )
+    markdown_output = write_apply_markdown(result, Path(result_file).with_suffix(".md"))
     failed = int(result["status_counts"].get("FAILED", 0))
     print(
         f"Apply results written to {output} and {markdown_output}; "

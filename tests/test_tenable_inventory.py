@@ -49,9 +49,7 @@ class TenableInventoryTests(unittest.TestCase):
         snapshot = collect_tenable_inventory(FakeDataAccess())
 
         self.assertEqual(snapshot["resource_counts"]["scans"], 1)
-        self.assertEqual(
-            snapshot["resources"]["scans"][0]["schedule"]["type"], "ical"
-        )
+        self.assertEqual(snapshot["resources"]["scans"][0]["schedule"]["type"], "ical")
         self.assertEqual(
             snapshot["resources"]["asset_groups"][0]["password"], "[REDACTED]"
         )

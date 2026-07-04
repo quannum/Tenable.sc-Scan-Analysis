@@ -70,9 +70,7 @@ class CoverageReportingTests(unittest.TestCase):
         summary = build_coverage_summary([result], [])
 
         self.assertEqual(summary["totals"]["gap_ip_count"], 256)
-        self.assertEqual(
-            summary["missing_asset_groups"], ["LAB01_Servers_VLAN_10"]
-        )
+        self.assertEqual(summary["missing_asset_groups"], ["LAB01_Servers_VLAN_10"])
         self.assertEqual(summary["dimensions"]["region"][0]["name"], "Test")
 
 

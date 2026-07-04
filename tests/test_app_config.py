@@ -33,9 +33,7 @@ class AppConfigTests(unittest.TestCase):
         try:
             with (
                 patch("src.io.app_config.os.makedirs"),
-                patch(
-                    "src.io.app_config.prompt_for_inputs"
-                ) as prompt_for_inputs,
+                patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
             ):
                 config = app_config.build_config(["--config-file", str(config_file)])
 
@@ -73,9 +71,7 @@ class AppConfigTests(unittest.TestCase):
         try:
             with (
                 patch("src.io.app_config.os.makedirs"),
-                patch(
-                    "src.io.app_config.prompt_for_inputs"
-                ) as prompt_for_inputs,
+                patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
             ):
                 config = app_config.build_config(
                     [
@@ -103,9 +99,7 @@ class AppConfigTests(unittest.TestCase):
         )
 
     def test_live_mode_with_no_expected_scope_does_not_prompt(self):
-        with patch(
-            "src.io.app_config.prompt_for_inputs"
-        ) as prompt_for_inputs:
+        with patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs:
             config = app_config.build_config(["--mode", "live", "--no-expected-scope"])
 
         prompt_for_inputs.assert_not_called()
@@ -117,9 +111,7 @@ class AppConfigTests(unittest.TestCase):
     def test_missing_offline_paths_prompt_when_interactive(self):
         with (
             patch("src.io.app_config.os.makedirs"),
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
         ):
             prompt_for_inputs.return_value = ("picked-scans", "picked-assets", "")
             config = app_config.build_config(["--no-expected-scope"])
@@ -135,9 +127,7 @@ class AppConfigTests(unittest.TestCase):
     def test_non_interactive_missing_paths_fails_without_prompt(self):
         with (
             patch("sys.stderr", new=StringIO()),
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
             self.assertRaises(SystemExit),
         ):
             app_config.build_config(["--non-interactive", "--no-expected-scope"])
@@ -147,9 +137,7 @@ class AppConfigTests(unittest.TestCase):
     def test_non_interactive_requires_expected_scope_choice(self):
         with (
             patch("sys.stderr", new=StringIO()),
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
             self.assertRaises(SystemExit),
         ):
             app_config.build_config(
@@ -167,9 +155,7 @@ class AppConfigTests(unittest.TestCase):
     def test_offline_mode_with_all_paths_does_not_prompt(self):
         with (
             patch("src.io.app_config.os.makedirs") as makedirs,
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
         ):
             config = app_config.build_config(
                 [
@@ -192,9 +178,7 @@ class AppConfigTests(unittest.TestCase):
     def test_expected_sheet_is_configurable(self):
         with (
             patch("src.io.app_config.os.makedirs"),
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
         ):
             config = app_config.build_config(
                 [
@@ -215,9 +199,7 @@ class AppConfigTests(unittest.TestCase):
     def test_log_file_is_configurable(self):
         with (
             patch("src.io.app_config.os.makedirs"),
-            patch(
-                "src.io.app_config.prompt_for_inputs"
-            ) as prompt_for_inputs,
+            patch("src.io.app_config.prompt_for_inputs") as prompt_for_inputs,
         ):
             config = app_config.build_config(
                 [

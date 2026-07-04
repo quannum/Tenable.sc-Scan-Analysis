@@ -254,9 +254,11 @@ def _parse_private_ranges(
         parent_input,
         source_file=source_file,
         site_code=site_code,
-        field_name=f"{field_name}.supernet"
-        if isinstance(value, dict) and value.get("supernet") is not None
-        else field_name,
+        field_name=(
+            f"{field_name}.supernet"
+            if isinstance(value, dict) and value.get("supernet") is not None
+            else field_name
+        ),
         issues=issues,
     )
 
@@ -274,7 +276,17 @@ def _parse_private_ranges(
                 issues=issues,
             ):
                 vlan_network = ipaddress.ip_network(vlan.cidr, strict=False)
-                if not vlan_network.subnet_of(parent_network):
+                if isinstance(
+                    parent_network, ipaddress.IPv4Network
+                ) and isinstance(vlan_network, ipaddress.IPv4Network):
+                    vlan_is_child = vlan_network.subnet_of(parent_network)
+                elif isinstance(
+                    parent_network, ipaddress.IPv6Network
+                ) and isinstance(vlan_network, ipaddress.IPv6Network):
+                    vlan_is_child = vlan_network.subnet_of(parent_network)
+                else:
+                    vlan_is_child = False
+                if not vlan_is_child:
                     issues.append(
                         ValidationIssue(
                             source_file=source_file,
@@ -641,9 +653,7 @@ def _merge_tags(*values: list[str]) -> list[str]:
     return result
 
 
-def _source_metadata(
-    value: Any, consumed_keys: set[str]
-) -> dict[str, object]:
+def _source_metadata(value: Any, consumed_keys: set[str]) -> dict[str, object]:
     if not isinstance(value, dict):
         return {}
     return {

@@ -36,7 +36,7 @@ def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
                     ),
                 )
             )
-    seen_duplicates: set[tuple[str, str, str, str]] = set()
+    seen_duplicates: set[tuple[str, ...]] = set()
     for left_index, left in enumerate(targets):
         left_network = ipaddress.ip_network(left.cidr, strict=False)
         for right in targets[left_index + 1 :]:
@@ -97,9 +97,7 @@ def _relationship_issue(
     )
 
 
-def _is_expected_parent_child(
-    left: CoverageTarget, right: CoverageTarget
-) -> bool:
+def _is_expected_parent_child(left: CoverageTarget, right: CoverageTarget) -> bool:
     if left.site_code != right.site_code:
         return False
     return {left.target_type, right.target_type} == {"PRIVATE_SUPERNET", "VLAN"}

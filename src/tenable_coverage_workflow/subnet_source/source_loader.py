@@ -205,8 +205,7 @@ def validate_authoritative_source_config(config: AuthoritativeSourceConfig) -> N
 
 def _uses_subnet_as_code(config: AuthoritativeSourceConfig) -> bool:
     return any(
-        getattr(config, field_name)
-        for field_name in _SUBNET_AS_CODE_CONFIG_FIELDS
+        getattr(config, field_name) for field_name in _SUBNET_AS_CODE_CONFIG_FIELDS
     )
 
 
