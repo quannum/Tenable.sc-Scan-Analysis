@@ -13,8 +13,6 @@ AUTHORITATIVE_SOURCE_ARGUMENTS: tuple[tuple[str, str], ...] = (
     ("source_routing_type", "--source-routing-type"),
     ("source_desired_properties", "--source-desired-properties"),
     ("source_address_type", "--source-address-type"),
-    ("source_xlsx_file", "--source-xlsx-file"),
-    ("source_xlsx_sheet", "--source-xlsx-sheet"),
 )
 
 SOURCE_ENVIRONMENT_MAP = {
@@ -27,8 +25,6 @@ SOURCE_ENVIRONMENT_MAP = {
     "source_routing_type": "SUBNET_AS_CODE_ROUTING_TYPE",
     "source_desired_properties": "SUBNET_AS_CODE_DESIRED_PROPERTIES",
     "source_address_type": "SUBNET_AS_CODE_ADDRESS_TYPE",
-    "source_xlsx_file": "NETWORK_SOURCE_XLSX_FILE",
-    "source_xlsx_sheet": "NETWORK_SOURCE_XLSX_SHEET",
 }
 
 
@@ -85,16 +81,6 @@ def build_authoritative_source_config(
         subnet_as_code_address_type=scalar_getter(
             "source_address_type",
             SOURCE_ENVIRONMENT_MAP["source_address_type"],
-            None,
-        ),
-        xlsx_file=scalar_getter(
-            "source_xlsx_file",
-            SOURCE_ENVIRONMENT_MAP["source_xlsx_file"],
-            None,
-        ),
-        xlsx_sheet=scalar_getter(
-            "source_xlsx_sheet",
-            SOURCE_ENVIRONMENT_MAP["source_xlsx_sheet"],
             None,
         ),
     )

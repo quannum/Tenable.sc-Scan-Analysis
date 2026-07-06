@@ -1,7 +1,6 @@
 import importlib
 import ipaddress
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from ..models import (
@@ -12,7 +11,6 @@ from ..models import (
     ValidationIssue,
 )
 from .json_connector import load_json_payload
-from .xlsx_connector import load_xlsx_definitions
 from .yaml_connector import flatten_site_definition
 
 _SUBNET_AS_CODE_METHOD_PARAMETER_MAP: dict[str, dict[str, str]] = {
@@ -111,8 +109,6 @@ class AuthoritativeSourceConfig:
     subnet_as_code_routing_type: str | None = None
     subnet_as_code_desired_properties: list[str] | None = None
     subnet_as_code_address_type: str | None = None
-    xlsx_file: str | Path | None = None
-    xlsx_sheet: str | None = None
 
 
 class AuthoritativeSourceConfigMixin:
@@ -157,45 +153,25 @@ class AuthoritativeSourceConfigMixin:
     def subnet_as_code_address_type(self) -> str | None:
         return self.source_config.subnet_as_code_address_type
 
-    @property
-    def source_xlsx_file(self) -> str | None:
-        return _stringify_pathlike(self.source_config.xlsx_file)
-
-    @property
-    def source_xlsx_sheet(self) -> str | None:
-        return self.source_config.xlsx_sheet
-
 
 def load_authoritative_source(
     config: AuthoritativeSourceConfig, audit_logger=None
 ) -> tuple[str, SourceLoadResult]:
     """Load the highest-priority configured source.
 
-    Expected-range input is intentionally limited to subnet_as_code and the
-    legacy XLSX workflow.
+    Expected-range input is intentionally limited to subnet_as_code.
     """
     validate_authoritative_source_config(config)
     if _uses_subnet_as_code(config):
         return "subnet_as_code", _load_subnet_as_code(config, audit_logger=audit_logger)
-    if config.xlsx_file:
-        return "xlsx_file", load_xlsx_definitions(
-            config.xlsx_file,
-            sheet_name=config.xlsx_sheet,
-            audit_logger=audit_logger,
-        )
     raise ValueError(
         "No supported authoritative source configured. Use subnet_as_code "
-        "query settings or a legacy XLSX file."
+        "method/query settings."
     )
 
 
 def has_configured_authoritative_source(config: AuthoritativeSourceConfig) -> bool:
-    return any(
-        (
-            _uses_subnet_as_code(config),
-            config.xlsx_file,
-        )
-    )
+    return _uses_subnet_as_code(config)
 
 
 def validate_authoritative_source_config(config: AuthoritativeSourceConfig) -> None:
@@ -293,12 +269,6 @@ def _subnet_as_code_has_value(value: Any) -> bool:
     if isinstance(value, list):
         return bool(value)
     return True
-
-
-def _stringify_pathlike(value: str | Path | None) -> str | None:
-    if value is None:
-        return None
-    return str(value)
 
 
 def _resolve_subnet_as_code_method(config: AuthoritativeSourceConfig) -> str:

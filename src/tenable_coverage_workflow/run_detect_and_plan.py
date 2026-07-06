@@ -89,8 +89,8 @@ class CoverageSourceConfig:
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Load subnet_as_code or legacy XLSX scope definitions, validate "
-            "Tenable.sc coverage, and generate detect-and-plan audit outputs."
+            "Load subnet_as_code scope definitions, validate Tenable.sc "
+            "coverage, and generate detect-and-plan audit outputs."
         )
     )
     add_authoritative_source_arguments(parser)
@@ -258,7 +258,7 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     if not has_configured_authoritative_source(source_config):
         raise ValueError(
             "An authoritative source is required: subnet_as_code "
-            "method/filter settings or --source-xlsx-file."
+            "method/query settings."
         )
     validate_authoritative_source_config(source_config)
     return DetectAndPlanConfig(
@@ -326,7 +326,6 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         subnet_as_code_routing_type=config.subnet_as_code_routing_type,
         subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
         subnet_as_code_address_type=config.subnet_as_code_address_type,
-        source_xlsx_file=config.source_xlsx_file,
         output_dir=output_dir,
         dry_run=config.dry_run,
         mode=config.mode,
@@ -393,11 +392,8 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "dry_run": config.dry_run,
         "authoritative_source_type": source_type,
         "authoritative_source": (
-            f"subnet_as_code.{config.subnet_as_code_method}"
-            if config.subnet_as_code_method
-            else None
-        )
-        or config.source_xlsx_file,
+            f"subnet_as_code.{config.subnet_as_code_method or 'get_sites'}"
+        ),
         "authoritative_units_processed": connector_result.files_processed,
         "authoritative_units_failed": connector_result.files_failed,
         "validation_issue_count": len(connector_result.validation_issues),

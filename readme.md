@@ -485,46 +485,42 @@ What it adds on top of `tenable-coverage-detect-plan`:
 
 ### Authoritative network sources
 
-The detect-and-plan workflow normalizes every authoritative input into the same
-site and coverage-target models. Configure any combination of these inputs; the
-highest-priority configured source is selected:
+The detect-and-plan workflow now uses the internal `subnet_as_code` Python
+module as the authoritative expected-range source. It imports the module at
+runtime and calls the selected query method directly.
 
-1. `--source-api-url` / `NETWORK_SOURCE_API_URL` (normalized internal JSON API)
-2. `--source-json-file` / `NETWORK_SOURCE_JSON_FILE` (local copy of that JSON)
-3. `--github-api-url` plus `--github-repository` (direct GitHub Enterprise YAML)
-4. `--subnet-repo-path` / `SUBNET_REPO_PATH` (local YAML checkout/fallback)
-5. `--source-xlsx-file` / `NETWORK_SOURCE_XLSX_FILE` (legacy/manual workbook)
+Required configuration:
 
-API bearer credentials are read from `NETWORK_SOURCE_API_TOKEN`. Direct GitHub
-retrieval reads `GITHUB_TOKEN`; tokens are intentionally omitted from the
-unified CLI flags so they do not appear in process listings. Mounted/environment
-secrets are recommended. Requests
-use a bounded timeout and retry transient network and server failures. The JSON
-root may be a site, a list of sites, or an object containing `sites`,
-`locations`, or `data`. CIDRs and explicit `start-end` IP ranges are normalized
-with Python `ipaddress` before analysis.
+1. `--subnet-as-code-method` / `SUBNET_AS_CODE_METHOD`
 
-Example local JSON invocation:
+Optional filters are passed through only when the selected method supports them:
 
-`tenable-coverage-detect-plan --source-json-file C:\network\sites.json --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
+1. `--source-reference-id` / `SUBNET_AS_CODE_REFERENCE_ID`
+2. `--source-sites` / `SUBNET_AS_CODE_SITES`
+3. `--source-tags` / `SUBNET_AS_CODE_TAGS`
+4. `--source-name` / `SUBNET_AS_CODE_NAME`
+5. `--source-network-type` / `SUBNET_AS_CODE_NETWORK_TYPE`
+6. `--source-routing-type` / `SUBNET_AS_CODE_ROUTING_TYPE`
+7. `--source-desired-properties` / `SUBNET_AS_CODE_DESIRED_PROPERTIES`
+8. `--source-address-type` / `SUBNET_AS_CODE_ADDRESS_TYPE`
 
-The exact strong schema will be finalized against the representative internal
-API/YAML payload. Until then, validation issues are retained in audit output and
-invalid sites or ranges are excluded from coverage planning.
+When `--source-sites` is omitted, the workflow queries all sites returned by the
+chosen `subnet_as_code` method. This is the recommended setup for scheduled runs
+that should automatically detect newly added sites or VLANs.
 
-The XLSX connector accepts a row-oriented worksheet with a scope column named
-`Scope Item`, `Scope`, `CIDR`, `IP Range`, or `Network`. Optional columns include
-site code/name, location, region, timezone, tags, environment, business function,
-target type, VLAN name/ID, required asset, required scan, and required policy.
-Explicit IP ranges are summarized into canonical CIDRs. Use
-`--source-xlsx-sheet` when definitions are not on the first worksheet.
+Example all-sites invocation:
 
-For GitHub Enterprise Server, set the REST base URL (typically
-`https://HOSTNAME/api/v3`), repository as `OWNER/REPO`, optional ref, and optional
-repository path. The connector recursively follows the Contents API, requests
-raw YAML, preserves the selected ref on child requests, rejects unsafe paths,
-and retries transient failures. The token needs read-only repository Contents
-permission.
+`tenable-coverage-detect-plan --subnet-as-code-method get_sites --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
+
+Example filtered invocation:
+
+`tenable-coverage-detect-plan --subnet-as-code-method get_sites_properties --source-sites NYC,LON --source-tags production --source-desired-properties site_code,private_ranges --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
+
+The returned payload may be a site object, a list of sites, or an object
+containing `site_definition`, `sites`, `locations`, or `data`. CIDRs and
+explicit `start-end` IP ranges are normalized with Python `ipaddress` before
+analysis. Validation issues are retained in audit output and invalid sites or
+ranges are excluded from coverage planning.
 
 Important deployment note:
 

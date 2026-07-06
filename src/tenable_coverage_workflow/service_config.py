@@ -192,7 +192,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     if not has_configured_authoritative_source(source_config):
         parser.error(
             "An authoritative source is required. Configure subnet_as_code "
-            "method/query settings or source_xlsx_file."
+            "method/query settings."
         )
     try:
         validate_authoritative_source_config(source_config)

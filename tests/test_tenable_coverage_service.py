@@ -7,55 +7,11 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from openpyxl import Workbook
-
 from src.tenable_coverage_workflow.service_config import build_service_config
 from src.tenable_coverage_workflow.service_runner import main as service_main
 
 
 class ServiceConfigTests(unittest.TestCase):
-    def _write_xlsx_source(self, path: Path) -> None:
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.title = "Networks"
-        sheet.append(
-            [
-                "Site Code",
-                "Site Name",
-                "Region",
-                "Target Type",
-                "Scope Item",
-                "VLAN Name",
-                "VLAN ID",
-            ]
-        )
-        sheet.append(
-            ["NYC01", "New York Office", "US East", "PUBLIC", "203.0.113.0/26"]
-        )
-        sheet.append(
-            [
-                "NYC01",
-                "New York Office",
-                "US East",
-                "PRIVATE_SUPERNET",
-                "10.1.0.0/16",
-                None,
-                None,
-            ]
-        )
-        sheet.append(
-            [
-                "NYC01",
-                "New York Office",
-                "US East",
-                "VLAN",
-                "10.1.32.0/22",
-                "End User",
-                130,
-            ]
-        )
-        workbook.save(path)
-
     def test_service_config_loads_yaml_and_transport_controls(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "service_yaml_config_case"
@@ -68,7 +24,7 @@ class ServiceConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_coverage_workflow_service:",
-                        "  source_xlsx_file: sites.xlsx",
+                        '  subnet_as_code_method: "get_sites"',
                         "  mode: offline",
                         "  scan_json_dir: scans",
                         "  asset_json_dir: assets",
@@ -83,8 +39,8 @@ class ServiceConfigTests(unittest.TestCase):
 
             config = build_service_config(["--config-file", str(config_file)])
 
-            self.assertEqual(config.source_xlsx_file, "sites.xlsx")
-            self.assertEqual(str(config.source_config.xlsx_file), "sites.xlsx")
+            self.assertEqual(config.subnet_as_code_method, "get_sites")
+            self.assertEqual(config.source_config.subnet_as_code_method, "get_sites")
             self.assertEqual(config.sc_timeout_seconds, 45)
             self.assertEqual(config.sc_retries, 4)
             self.assertEqual(config.sc_backoff_seconds, 2.0)
@@ -145,6 +101,37 @@ class ServiceConfigTests(unittest.TestCase):
 
 
 class ScheduledServiceTests(unittest.TestCase):
+    @staticmethod
+    def _subnet_module():
+        class Module:
+            @staticmethod
+            def get_sites(**kwargs):
+                return {
+                    "site_definition": [
+                        {
+                            "site_code": "NYC01",
+                            "site_name": "New York Office",
+                            "region": "US East",
+                            "public_ranges": ["203.0.113.0/26"],
+                            "private_ranges": [
+                                {
+                                    "cidr": "10.1.0.0/16",
+                                    "name": "NYC private",
+                                    "vlans": [
+                                        {
+                                            "name": "End User",
+                                            "vlan_id": 130,
+                                            "cidr": "10.1.32.0/22",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+
+        return Module
+
     def test_service_main_writes_latest_summary_and_run_artifacts(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "scheduled_service_case"
@@ -155,8 +142,6 @@ class ScheduledServiceTests(unittest.TestCase):
         temp_path.mkdir(parents=True, exist_ok=True)
 
         try:
-            source_xlsx = temp_path / "expected_ranges.xlsx"
-            ServiceConfigTests()._write_xlsx_source(source_xlsx)
             scan_dir = temp_path / "scans"
             asset_dir = temp_path / "assets"
             output_dir = temp_path / "output"
@@ -183,24 +168,29 @@ class ScheduledServiceTests(unittest.TestCase):
                     json.dumps(payload), encoding="utf-8"
                 )
 
-            exit_code = service_main(
-                [
-                    "--job-name",
-                    "nightly-coverage",
-                    "--source-xlsx-file",
-                    str(source_xlsx),
-                    "--output-dir",
-                    str(output_dir),
-                    "--run-id-prefix",
-                    "svc-",
-                    "--mode",
-                    "offline",
-                    "--scan-json-dir",
-                    str(scan_dir),
-                    "--asset-json-dir",
-                    str(asset_dir),
-                ]
-            )
+            with patch(
+                "src.tenable_coverage_workflow.subnet_source.source_loader."
+                "importlib.import_module",
+                return_value=self._subnet_module(),
+            ):
+                exit_code = service_main(
+                    [
+                        "--job-name",
+                        "nightly-coverage",
+                        "--subnet-as-code-method",
+                        "get_sites",
+                        "--output-dir",
+                        str(output_dir),
+                        "--run-id-prefix",
+                        "svc-",
+                        "--mode",
+                        "offline",
+                        "--scan-json-dir",
+                        str(scan_dir),
+                        "--asset-json-dir",
+                        str(asset_dir),
+                    ]
+                )
 
             self.assertEqual(exit_code, 0)
             latest_summary = json.loads(

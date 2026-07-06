@@ -1,17 +1,10 @@
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
-
-from openpyxl import Workbook
 
 from src.tenable_coverage_workflow.subnet_source import (
     AuthoritativeSourceConfig,
     load_authoritative_source,
     load_json_payload,
-)
-from src.tenable_coverage_workflow.subnet_source.xlsx_connector import (
-    load_xlsx_definitions,
 )
 
 
@@ -127,6 +120,36 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
             targets[("LON", "PUBLIC", "192.41.32.55/32")].tags,
             ["production"],
         )
+
+    def test_subnet_as_code_can_query_all_sites_without_sites_filter(self):
+        calls = []
+
+        class Module:
+            @staticmethod
+            def get_sites(**kwargs):
+                calls.append(kwargs)
+                return {
+                    "site_definition": [
+                        {
+                            "site_code": "ALL01",
+                            "site_name": "All Sites Example",
+                            "private_ranges": ["10.42.0.0/24"],
+                        }
+                    ]
+                }
+
+        with patch(
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
+            "importlib.import_module",
+            return_value=Module,
+        ):
+            source_type, result = load_authoritative_source(
+                AuthoritativeSourceConfig(subnet_as_code_method="get_sites")
+            )
+
+        self.assertEqual(source_type, "subnet_as_code")
+        self.assertEqual(calls[0], {})
+        self.assertEqual(result.site_definitions[0].site_code, "ALL01")
 
     def test_subnet_as_code_method_specific_filters_require_explicit_method(self):
         with self.assertRaisesRegex(ValueError, "subnet_as_code_method is required"):
@@ -337,49 +360,6 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         self.assertTrue(
             any("IPv6 scope" in issue.message for issue in result.validation_issues)
         )
-
-    def test_xlsx_legacy_input_normalizes_to_common_targets(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "networks.xlsx"
-            workbook = Workbook()
-            sheet = workbook.active
-            sheet.title = "Networks"
-            sheet.append(
-                [
-                    "Site Code",
-                    "Site Name",
-                    "Region",
-                    "Target Type",
-                    "Scope Item",
-                    "VLAN Name",
-                    "VLAN ID",
-                    "Required Scan",
-                ]
-            )
-            sheet.append(
-                [
-                    "DAL01",
-                    "Dallas",
-                    "US Central",
-                    "VLAN",
-                    "10.20.1.0-10.20.1.255",
-                    "Servers",
-                    120,
-                    "Custom_Server_Scan",
-                ]
-            )
-            workbook.save(path)
-
-            result = load_xlsx_definitions(path)
-
-            self.assertEqual(result.files_failed, 0)
-            self.assertEqual(result.coverage_targets[0].cidr, "10.20.1.0/24")
-            self.assertEqual(result.coverage_targets[0].target_type, "VLAN")
-            self.assertEqual(
-                result.coverage_targets[0].required_scan_name,
-                "Custom_Server_Scan",
-            )
-
 
 if __name__ == "__main__":
     unittest.main()
