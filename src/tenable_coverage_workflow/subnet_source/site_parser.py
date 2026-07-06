@@ -276,13 +276,13 @@ def _parse_private_ranges(
                 issues=issues,
             ):
                 vlan_network = ipaddress.ip_network(vlan.cidr, strict=False)
-                if isinstance(
-                    parent_network, ipaddress.IPv4Network
-                ) and isinstance(vlan_network, ipaddress.IPv4Network):
+                if isinstance(parent_network, ipaddress.IPv4Network) and isinstance(
+                    vlan_network, ipaddress.IPv4Network
+                ):
                     vlan_is_child = vlan_network.subnet_of(parent_network)
-                elif isinstance(
-                    parent_network, ipaddress.IPv6Network
-                ) and isinstance(vlan_network, ipaddress.IPv6Network):
+                elif isinstance(parent_network, ipaddress.IPv6Network) and isinstance(
+                    vlan_network, ipaddress.IPv6Network
+                ):
                     vlan_is_child = vlan_network.subnet_of(parent_network)
                 else:
                     vlan_is_child = False

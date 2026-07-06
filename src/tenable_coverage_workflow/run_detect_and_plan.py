@@ -238,15 +238,18 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        return parse_csv_list(
-            getattr(args, name, None)
-            if getattr(args, name, None) is not None
-            else (
-                os.getenv(environment_name)
-                if environment_name and os.getenv(environment_name) is not None
-                else default
+        return (
+            parse_csv_list(
+                getattr(args, name, None)
+                if getattr(args, name, None) is not None
+                else (
+                    os.getenv(environment_name)
+                    if environment_name and os.getenv(environment_name) is not None
+                    else default
+                )
             )
-        ) or None
+            or None
+        )
 
     source_config = build_authoritative_source_config(
         scalar_getter=scalar_getter,
