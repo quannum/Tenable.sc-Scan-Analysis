@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..constants import VERSION
-from ..core.analysis import (
-    analyze_expected_ranges,
+from ..core.analysis import analyze_expected_ranges
+from ..core.tenable_scope_analysis import (
     build_coverage_data,
     build_scope_sheets,
 )

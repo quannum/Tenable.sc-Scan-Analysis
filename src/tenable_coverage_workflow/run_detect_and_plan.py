@@ -10,12 +10,12 @@ from typing import Any, cast
 
 from dotenv import load_dotenv
 
-from ..core.analysis import (
+from ..core.scope_utils import parse_scope_item
+from ..core.tenable_scope_analysis import (
     build_coverage_data,
     build_scope_sheets,
     calculate_coverage_result,
 )
-from ..core.scope_utils import parse_scope_item
 from ..io.app_config import parse_csv_list
 from ..io.data_access import DataAccess
 from ..reporting.workbook import build_workbook

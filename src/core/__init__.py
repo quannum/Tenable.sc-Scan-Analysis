@@ -1,26 +1,12 @@
 from .analysis import (
-    CoverageResult,
-    ExcludedScopeRecord,
-    ExclusionImpact,
-    ScopeRecord,
     Totals,
     analyze_expected_ranges,
     append_coverage_result,
-    build_coverage_data,
     build_expected_analysis_sheets,
-    build_scope_sheets,
     build_totals,
-    calculate_coverage_result,
-    calculate_scan_intervals,
-    collect_covering_scans,
-    determine_coverage_status,
-    determine_required_scan_coverage,
-    filter_scans,
-    normalize_scope,
     resolve_expected_sheet,
     update_totals,
     validate_expected_row,
-    walk_combination,
 )
 from .scope_utils import (
     ParsedScope,
@@ -32,6 +18,22 @@ from .scope_utils import (
     scope_to_interval,
     split_scope_items,
     subtract_intervals,
+)
+from .tenable_scope_analysis import (
+    CoverageResult,
+    ExcludedScopeRecord,
+    ExclusionImpact,
+    ScopeRecord,
+    build_coverage_data,
+    build_scope_sheets,
+    calculate_coverage_result,
+    calculate_scan_intervals,
+    collect_covering_scans,
+    determine_coverage_status,
+    determine_required_scan_coverage,
+    filter_scans,
+    normalize_scope,
+    walk_combination,
 )
 
 __all__ = [
