@@ -4,8 +4,12 @@ import shutil
 import unittest
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from src.constants import INCLUDE
+from src.core.tenable_scope_analysis import build_scope_sheets
+from src.reporting.workbook import build_workbook
 from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
@@ -13,6 +17,9 @@ from src.tenable_coverage_workflow.models import (
 from src.tenable_coverage_workflow.planning.naming_rules import apply_naming_rules
 from src.tenable_coverage_workflow.planning.proposed_changes import (
     generate_proposed_changes,
+)
+from src.tenable_coverage_workflow.run_detect_and_plan import (
+    build_configuration_index,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
@@ -314,6 +321,68 @@ class DetectAndPlanCliTests(unittest.TestCase):
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)
+
+
+class ScanNameCompatibilityTests(unittest.TestCase):
+    @staticmethod
+    def _config():
+        return SimpleNamespace(
+            include_keywords=[],
+            exclude_keywords=[],
+            match_all_include=False,
+            case_sensitive=False,
+            filter_disabled_mode="ALL",
+        )
+
+    def test_build_scope_sheets_accepts_info_name_only_scan_records(self):
+        class FakeDataAccess:
+            @staticmethod
+            def get_scans():
+                return [{"id": 1, "info": {"name": "Production Weekly"}}]
+
+            @staticmethod
+            def get_scan_details(scan_id):
+                self.assertEqual(scan_id, 1)
+                return {
+                    "id": 1,
+                    "info": {"name": "Production Weekly"},
+                    "ipList": "10.1.0.0/24",
+                    "assets": [],
+                }
+
+        _, scope_ws, normalized_ws = build_workbook()
+        build_scope_sheets(
+            scope_ws,
+            normalized_ws,
+            FakeDataAccess(),
+            self._config(),
+        )
+
+        rows = list(scope_ws.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(
+            rows,
+            [("Production Weekly", INCLUDE, "Scan", "Direct IP List", "10.1.0.0/24")],
+        )
+
+    def test_build_configuration_index_prefers_info_name(self):
+        class FakeDataAccess:
+            @staticmethod
+            def get_asset_lists():
+                return []
+
+            @staticmethod
+            def get_scans():
+                return [{"id": 7, "name": "fallback", "info": {"name": "Canonical"}}]
+
+            @staticmethod
+            def get_scan_details(scan_id):
+                self.assertEqual(scan_id, 7)
+                return {"id": 7, "info": {"name": "Canonical"}, "assets": []}
+
+        index = build_configuration_index(FakeDataAccess())
+
+        self.assertIn("Canonical", index["scans_by_name"])
+        self.assertNotIn("fallback", index["scans_by_name"])
 
 
 if __name__ == "__main__":

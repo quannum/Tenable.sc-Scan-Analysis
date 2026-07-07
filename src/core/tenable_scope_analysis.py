@@ -60,6 +60,19 @@ class CoverageResult:
     coverage_pct: float
 
 
+def extract_scan_name(scan) -> str:
+    if not isinstance(scan, dict):
+        return ""
+
+    info = scan.get("info")
+    if isinstance(info, dict):
+        info_name = str(info.get("name") or "").strip()
+        if info_name:
+            return info_name
+
+    return str(scan.get("name") or "").strip()
+
+
 def filter_scans(scans, config):
     if (
         not config.include_keywords
@@ -83,7 +96,7 @@ def filter_scans(scans, config):
     )
 
     for scan in scans:
-        name = scan.get("info", {}).get("name") or scan.get("name", "")
+        name = extract_scan_name(scan)
         compare_name = name if config.case_sensitive else name.lower()
 
         schedule = scan.get("schedule", {})
@@ -201,8 +214,8 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
     for scan in filtered_scans:
         scan_id = scan.get("id")
-        scan_name = scan.get("name")
-        if scan_id in (None, "") or not scan_name:
+        scan_name = extract_scan_name(scan)
+        if scan_id in (None, ""):
             LOGGER.warning("Skipping malformed scan record: %s", scan)
             continue
 
@@ -211,6 +224,12 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
             LOGGER.warning(
                 "Skipping scan '%s' because details were not found", scan_name
             )
+            continue
+        detail_scan_name = extract_scan_name(details)
+        if detail_scan_name:
+            scan_name = detail_scan_name
+        if not scan_name:
+            LOGGER.warning("Skipping scan with no usable name: %s", scan)
             continue
 
         ip_list = details.get("ipList")
