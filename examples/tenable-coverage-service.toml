@@ -1,36 +1,56 @@
 [tenable_coverage_workflow_service]
-job_name = "tenable-coverage-nightly"
+job_name = "tenable-coverage-all-sites"
+
+# Authoritative expected-range source:
+# Use subnet_as_code and intentionally leave source_sites unset so the workflow
+# queries all sites returned by the selected method.
 subnet_as_code_method = "get_sites"
-# Leave source_sites unset to analyze all sites returned by subnet_as_code.
 # source_sites = "NYC,LON"
 # source_tags = "production"
 # source_name = "New York"
 # source_network_type = "private"
 # source_routing_type = "core"
-# source_desired_properties = "site_code,private_ranges"
+# source_desired_properties = "site_code,site_name,public_ranges,private_ranges"
 # source_address_type = "trusted-pat"
+
+# Output + scheduler state
 output_dir = "/data/output"
-run_id_prefix = "nightly-"
+run_id_prefix = "all-sites-"
 latest_summary_file = "/data/output/latest_run.json"
 lock_file = "/data/output/scheduler.lock"
 stale_lock_timeout_seconds = 21600
+
+# Detect-and-plan runs should remain dry-run.
 dry_run = true
-mode = "offline"
-scan_json_dir = "/data/tenable/scans"
-asset_json_dir = "/data/tenable/assets"
-include_keywords = "Assessment,Discovery"
+
+# Tenable data source:
+# Recommended scheduled mode is live. Provide SC_URL, SC_ACCESS_KEY, and
+# SC_SECRET_KEY via environment variables or a mounted secret.
+mode = "live"
+
+# For offline mode instead, switch mode to "offline" and set these:
+# scan_json_dir = "/data/tenable/scans"
+# asset_json_dir = "/data/tenable/assets"
+
+# Scan filtering
+include_keywords = ""
 exclude_keywords = ""
 match_all_include = false
 case_sensitive = false
 filter_disabled_mode = "ALL"
+
+# Logging
 log_level = "INFO"
 log_format = "json"
+log_file = "/data/output/tenable-coverage-service.log"
+
+# Tenable API transport settings
 sc_timeout_seconds = 60
 sc_retries = 3
 sc_backoff_seconds = 1.5
 sc_ssl_verify = true
 
-# For live mode, switch mode to "live" and provide these via secrets or env:
+# Optional explicit live-mode overrides if you do not want to rely on env vars:
 # sc_url = "https://tenable-sc.example.internal"
 # sc_access_key = "set-via-secret"
 # sc_secret_key = "set-via-secret"
