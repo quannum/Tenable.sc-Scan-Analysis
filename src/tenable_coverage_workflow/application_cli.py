@@ -2,9 +2,8 @@ import argparse
 import json
 import os
 import shutil
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import yaml
@@ -35,6 +34,20 @@ EXIT_VALIDATION = 2
 EXIT_CONFIG = 3
 EXIT_OPERATION = 4
 EXIT_APPLY_REQUIRED = 5
+
+
+@dataclass(frozen=True)
+class TenableAccessConfig:
+    mode: str
+    scan_json_dir: str | None
+    asset_json_dir: str | None
+    sc_url: str | None
+    sc_access_key: str | None
+    sc_secret_key: str | None
+    sc_timeout_seconds: int
+    sc_retries: int
+    sc_backoff_seconds: float
+    sc_ssl_verify: bool
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -156,13 +169,13 @@ def _validate_definitions(args) -> int:
     return EXIT_VALIDATION if has_errors else EXIT_OK
 
 
-def _tenable_config(args):
+def _tenable_config(args) -> TenableAccessConfig:
     mode = _setting(args, "mode", default="offline")
     scan_dir = _setting(args, "scan_json_dir")
     asset_dir = _setting(args, "asset_json_dir")
     if mode == "offline" and (not scan_dir or not asset_dir):
         raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
-    return SimpleNamespace(
+    return TenableAccessConfig(
         mode=mode,
         scan_json_dir=scan_dir,
         asset_json_dir=asset_dir,

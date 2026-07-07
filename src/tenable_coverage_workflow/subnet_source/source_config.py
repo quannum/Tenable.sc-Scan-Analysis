@@ -41,7 +41,7 @@ def build_authoritative_source_config(
         subnet_as_code_method=scalar_getter(
             "subnet_as_code_method",
             SOURCE_ENVIRONMENT_MAP["subnet_as_code_method"],
-            None,
+            "get_sites",
         ),
         subnet_as_code_reference_id=scalar_getter(
             "source_reference_id",
