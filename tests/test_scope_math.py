@@ -1,6 +1,5 @@
 import unittest
 
-from src.core.analysis import validate_expected_row
 from src.core.scope_utils import (
     merge_intervals,
     parse_scope_item,
@@ -46,10 +45,6 @@ class ScopeMathTests(unittest.TestCase):
     def test_scope_size_range_is_inclusive(self):
         parsed = parse_scope_item("10.0.0.1-10.0.0.3")
         self.assertEqual(scope_size(parsed), 3)
-
-    def test_validate_expected_row_rejects_short_rows(self):
-        with self.assertRaises(ValueError):
-            validate_expected_row(("10.0.0.0/24",))
 
 
 if __name__ == "__main__":

@@ -8,8 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from src.constants import INCLUDE
-from src.core.tenable_scope_analysis import build_scope_sheets
-from src.reporting.workbook import build_workbook
+from src.core.tenable_scope_analysis import build_scope_sheets, build_scope_tables
 from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
@@ -350,7 +349,7 @@ class ScanNameCompatibilityTests(unittest.TestCase):
                     "assets": [],
                 }
 
-        _, scope_ws, normalized_ws = build_workbook()
+        scope_ws, normalized_ws = build_scope_tables()
         build_scope_sheets(
             scope_ws,
             normalized_ws,

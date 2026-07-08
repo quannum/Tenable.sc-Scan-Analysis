@@ -2,17 +2,19 @@
 
 ## Overview
 
-This script extracts scan scope definitions from Tenable Security Center and produces a structured Excel workbook that:
+This project validates Tenable.sc scan and asset coverage against an
+authoritative `subnet_as_code` source.
 
-- Enumerates all scan scope definitions with union operator logic (exclusion-aware)
-- Normalizes CIDR and IP ranges
-- Compares actual scan coverage against expected IP ranges
-- Calculates per-range compliance metrics
-- Highlights coverage gaps and partial coverage
+It supports:
 
-The output is a consolidated workbook:
+- offline analysis from exported scan JSON and asset JSON
+- live analysis against the Tenable.sc API
+- authoritative network loading from the internal `subnet_as_code` module
+- dry-run coverage validation and proposed-change generation
+- JSON, CSV, Markdown, and audit-log reporting for scheduled or manual runs
 
-output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
+The current branch is focused on the subnet-as-code workflow only. The older
+XLSX expected-range workflow lives separately in a legacy branch.
 
 
 ------
@@ -22,12 +24,11 @@ output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
 ## 1. Dual Mode Operation
 
 Supports:
+
 - Live Mode – Pulls data directly from Tenable.sc API
 - Offline Mode – Loads asynchronously exported scan and asset JSON files
 
-Switch via:
-
-### MODE = "live"      # or "offline"
+Switch via the `--mode` CLI option or configuration file settings.
 
 ------
 
@@ -125,7 +126,8 @@ Internally converted to interval math for coverage calculations.
 
 ## 5. Coverage Matrix (Disabled)
 
-The old matrix experiment is currently disabled in the script and is not generated in the workbook.
+The old matrix experiment is currently disabled and is not generated in the
+current workflow outputs.
 
 It previously created a 2D matrix like:
 
@@ -141,27 +143,23 @@ Exclusions override inclusions.
 
 ------
 
-## 6. Expected vs Actual Coverage Analysis
+## 6. Authoritative Coverage Analysis
 
-If `EXPECTED_SCOPE_FILE` is selected, the script:
-- Loads expected ranges from sheet `rsg-all`
-- Falls back to `Expected_Ranges` if `rsg-all` is not present
-- Supports case-insensitive matching when `--expected-sheet` is provided
-- Compares expected ranges to actual scan coverage
-- Reports whether the optional `Required Scan` value is one of the scans covering each expected range
-- Performs:
-    - Full containment checks
-    - Partial intersection checks
-    - Exclusion subtraction
-    - Interval merging
-- Assigns status:
-    - OK
-    - PARTIAL
-    - GAP
+The current workflow:
+
+- loads authoritative ranges from `subnet_as_code`
+- normalizes returned CIDRs, single IPs, and explicit `start-end` ranges
+- compares authoritative ranges to actual Tenable.sc scan coverage
+- reports whether the required scan name derived for each target is actually one
+  of the scans covering that target
+- assigns status:
+  - OK
+  - PARTIAL
+  - GAP
 
 ### Exclusion Impact Math
 
-For each expected range:
+For each authoritative target range:
 
 1. Compute included intervals
 2. Compute excluded intervals
@@ -176,17 +174,16 @@ Metrics:
 * Gap IPs
 * % Scan Coverage Suppressed (This is "how much of the scan configured coverage was suppressed by exclusions".
                              It is NOT "how much of the given range is excluded". This metric is meant to highlight
-                             scans that have an usually high number of exclusions.)
+                             scans that have an unusually high number of exclusions.)
 
 ------
 
-## 7. Expected Range Compliance Metrics
+## 7. Coverage Metrics
 
-For each expected range:
+For each authoritative target:
 - Calculates total expected IP count
 - Calculates covered IP count
 - Computes coverage percentage
-- Applies conditional formatting
 
 ------
 
@@ -201,91 +198,101 @@ Aggregates:
 * Total Exclusion Loss
 * % Coverage Lost to Exclusions
 
-Also generates:
-
-```
-Top_Exclusion_Impact_Scans
-```
-
-Sorted by exclusion IP impact.
+Coverage and audit reporting also includes exclusion-heavy scans and proposed
+exclusion candidates in the generated JSON, CSV, and Markdown artifacts.
 
 ------
 
-# Output Workbook Structure
+# Output Artifacts
 
-| Sheet                      | Purpose                       |
-| -------------------------- | ----------------------------- |
-| Scan_Scope_Summary         | Raw scan scope definitions    |
-| Scan_Scope_Normalized      | One row per scope item        |
-| Expected_vs_Actual         | Coverage analysis             |
-| Expected_Range_Compliance  | % coverage per expected range |
-| Top_Exclusion_Impact_Scans | Exclusion-heavy scans         |
-| Executive_Summary          | Organization overview         |
-| Warnings                   | Skipped records and validation warnings, when present |
-| Run_Metadata               | Run timestamp, mode, input paths, filters, and output path |
+Primary workflow artifacts include:
+
+- `coverage_results.json`
+- `coverage_results.csv`
+- `coverage_summary.json`
+- `coverage_summary.md`
+- `extra_scan_targets.json`
+- `proposed_exclusions.json`
+- `proposed_exclusions.csv`
+- `definition_validation_issues.json`
+- `proposed_changes.csv`
+- `proposed_changes.md`
+- `audit.jsonl`
+- `final_audit_report.md`
+- `run_summary.json`
 
 ------
 
-# Expected Scope File Format
+# Authoritative Source Format
 
-Workbook: expected_scope.xlsx
-Sheet: `rsg-all` or `Expected_Ranges`
-
-Minimum required columns, in order:
-
-`Scope Item | Location | Environment | Required Scan`
-
-
-Scope Item supports:
-- CIDR notation (10.0.0.0/24)
-- IP range (10.0.0.1-10.0.0.50)
-- Single IP
+The authoritative source is the internal `subnet_as_code` Python module. The
+workflow supports payloads that contain site data directly or under wrapper keys
+such as `site_definition`, `sites`, `locations`, or `data`.
 
 ------
 
 # Configuration
 
-MODE = "offline"
+The unified CLI and scheduled service accept YAML, JSON, or TOML config files.
 
-SCAN_JSON_DIR = chosen via file picker
-ASSET_JSON_DIR = chosen via file picker
+For the unified CLI, the root config section is:
 
-EXPECTED_SCOPE_FILE = chosen via file picker
+- `tenable_sc_scan_analysis`
 
-SC_ACCESS_KEY = ""
-SC_SECRET_KEY = ""
-SC_URL = ""
+For the scheduled service wrapper, the root config section is:
+
+- `tenable_coverage_workflow_service`
+
+The scheduler example is here:
+
+- [examples/tenable-coverage-service.toml](/abs/path/E:/Documents/GitHub/Tenable.sc-Scan-Analysis/examples/tenable-coverage-service.toml)
 
 
 ------
 
 # Environment and Location
 
-Environment and location columns are gathered from IP address tracker data (expected_scope.xlsx) 
+Environment and location fields come from the authoritative data returned by
+the selected `subnet_as_code` query method.
 
 
 ------
 
 # Dependencies
 - Python 3.10+
-- openpyxl
 - python-dotenv
-- subnet_as_code>=0.0.1 (required for authoritative expected-range input; install from the internal package repository)
+- subnet_as_code>=0.0.1 (required authoritative-source dependency; install from the internal package repository)
 - pyTenable (only required for live mode)
 
 Install:
 
 pip install -r requirements.txt
 
-Note: `subnet_as_code>=0.0.1` is a required internal dependency for the coverage workflow. Make sure your environment can install it from the internal package repository before running the authoritative expected-range commands.
+Note: `subnet_as_code>=0.0.1` is a required internal dependency for the coverage workflow. Make sure your environment can install it from the internal package repository before running authoritative-source commands.
+
+To install this project as a package from the repository root:
+
+- Standard install:
+
+  `pip install .`
+
+- Editable install for development:
+
+  `pip install -e .`
 
 For live Tenable.sc API mode:
 
 `pip install ".[live]"`
 
-For an editable local install with the `tenable-scan-analysis` command:
+For an editable local install with the console commands available immediately:
 
-`pip install -e .`
+`pip install -e ".[live]"`
+
+Package install provides these commands:
+
+- `tenable-sc-scan-analysis` - unified authoritative-source workflow
+- `tenable-coverage-detect-plan` - direct detect-and-plan workflow entry point
+- `tenable-coverage-scheduled` - scheduled service wrapper
 
 For the scheduled detect-and-plan workflow command:
 
@@ -296,14 +303,8 @@ For the scheduled detect-and-plan workflow command:
 
 # Execution
 
-python main.py
-
-If installed as a package, run:
-
-`tenable-scan-analysis`
-
-The unified enterprise workflow is available as `tenable-sc-scan-analysis` and
-provides the required command surface:
+The unified workflow is available as `tenable-sc-scan-analysis` and provides
+the required command surface:
 
 ```text
 validate-definitions  Normalize and validate authoritative network scope
@@ -318,7 +319,7 @@ Examples:
 
 ```powershell
 tenable-sc-scan-analysis validate-definitions `
-  --source-json-file C:\network\sites.json `
+  --subnet-as-code-method get_sites `
   --output-file C:\output\normalized-sites.json
 
 tenable-sc-scan-analysis collect-tenable `
@@ -326,7 +327,7 @@ tenable-sc-scan-analysis collect-tenable `
   --output-file C:\output\tenable-inventory.json
 
 tenable-sc-scan-analysis propose-changes `
-  --source-json-file C:\network\sites.json `
+  --subnet-as-code-method get_sites `
   --scan-json-dir C:\tenable\scans `
   --asset-json-dir C:\tenable\assets `
   --output-dir C:\output
@@ -388,74 +389,85 @@ IPs by region, site, VLAN, required scan type, configured repository, and
 policy. They list missing asset groups, missing required scans, policy
 mismatches, and wholly or partially extra scan target ranges.
 
+At the moment, `analyze-coverage` and `propose-changes` both run the same
+underlying detect-and-plan pipeline and emit the same core audit/report
+artifacts. `propose-changes` is the clearer command when you explicitly want
+the proposed-change outputs.
+
+### Running the workflow correctly
+
+The newer workflow modules use package-relative imports such as
+`from ..core...` and `from .subnet_source...`.
+
+Because of that, do not run files like these directly:
+
+- `python src/tenable_coverage_workflow/run_detect_and_plan.py`
+- `python src/tenable_coverage_workflow/application_cli.py`
+
+Direct file execution makes Python treat the file as a standalone script, so
+relative imports do not have a parent package to resolve from.
+
+Use one of these supported launch methods instead:
+
+- installed console scripts:
+  - `tenable-sc-scan-analysis ...`
+  - `tenable-coverage-detect-plan ...`
+  - `tenable-coverage-scheduled ...`
+- module execution from the repository root:
+  - `python -m src.tenable_coverage_workflow.application_cli ...`
+  - `python -m src.tenable_coverage_workflow.run_detect_and_plan ...`
+
+Examples:
+
+```powershell
+tenable-sc-scan-analysis analyze-coverage `
+  --subnet-as-code-method get_sites `
+  --mode offline `
+  --scan-json-dir C:\tenable\scans `
+  --asset-json-dir C:\tenable\assets `
+  --output-dir C:\output
+
+python -m src.tenable_coverage_workflow.application_cli analyze-coverage `
+  --subnet-as-code-method get_sites `
+  --mode offline `
+  --scan-json-dir C:\tenable\scans `
+  --asset-json-dir C:\tenable\assets `
+  --output-dir C:\output
+```
+
 All unified commands can load YAML, JSON, or TOML configuration with the global
 `--config-file` option. Settings resolve in this order: explicit CLI flag,
 environment variable, command-specific config, global config, built-in default.
-See `config/example-config.yaml`. Keep credentials in environment variables or
-mounted secrets rather than configuration files.
+Keep credentials in environment variables or mounted secrets rather than
+configuration files.
 
-You can also run as a module after install:
+You can also run the package entry point as a module:
 
 `python -m src`
 
-Optional CLI arguments can be used instead of the file pickers:
+Example configuration-driven scheduled run:
 
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
+`tenable-coverage-scheduled --config-file examples/tenable-coverage-service.toml`
 
-Manual runs can omit paths and use file pickers. Future scheduled jobs should include `--non-interactive` so missing inputs fail immediately instead of waiting on a GUI prompt:
+Typical outputs from detect-and-plan and analyze-coverage runs include:
 
-`python main.py --non-interactive --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --output-file C:\output\report.xlsx`
+- `coverage_results.json`
+- `coverage_results.csv`
+- `coverage_summary.json`
+- `coverage_summary.md`
+- `extra_scan_targets.json`
+- `proposed_exclusions.json`
+- `proposed_exclusions.csv`
+- `definition_validation_issues.json`
+- `proposed_changes.csv`
+- `proposed_changes.md`
+- `audit.jsonl`
+- `final_audit_report.md`
+- `run_summary.json`
 
-Use a specific expected-ranges worksheet:
-
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --expected-sheet Expected_Ranges`
-
-To skip expected-vs-actual analysis intentionally:
-
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope`
-
-Non-interactive scope-only run:
-
-`python main.py --non-interactive --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope`
-
-Live mode does not require offline JSON directory arguments:
-
-`python main.py --mode live --expected-scope-file C:\expected.xlsx`
-
-Live mode requires `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` to be set (for example in `.env`).
-If any are missing, the run exits with a clear validation error before API calls.
-
-Show the installed version:
-
-`python main.py --version`
-
-Write console logs to a file as well:
-
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope --log-file C:\logs\tenable-scan-analysis.log`
-
-Use structured JSON logs for SIEM ingestion:
-
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --no-expected-scope --log-format json`
-
-Export every workbook sheet as CSV files for BI tools:
-
-`python main.py --scan-json-dir C:\Scans --asset-json-dir C:\Assets --expected-scope-file C:\expected.xlsx --csv-output-dir C:\output\csv`
-
-Provide settings from a config file (`.toml` or `.json`), with CLI flags overriding config values:
-
-`python main.py --config-file C:\config\tenable-scan.toml`
-
-Output:
-
-output\tenable_scan_summary-YYYYMMDD-HHMMSS.xlsx
-
-The default filename includes the run date and time to avoid overwriting earlier reports from the same day.
-Each run also writes a machine-readable summary JSON file to `output\run_summary.json` by default
-(or the path provided by `--run-summary-file`).
-
-Console output includes `INFO` and `WARNING` messages for skipped records, invalid scope values, and workbook save completion.
-If warnings are encountered during processing, they are also written into a `Warnings` sheet in the output workbook.
-Each workbook also includes a `Run_Metadata` sheet with selected inputs, filters, output path, log settings, optional CSV path, summary path, and run timestamp.
+Console output includes `INFO` and `WARNING` messages for skipped records,
+invalid scope values, and report generation. Warnings are also retained in the
+run artifacts and audit outputs.
 
 ------
 
@@ -486,7 +498,7 @@ What it adds on top of `tenable-coverage-detect-plan`:
 ### Authoritative network sources
 
 The detect-and-plan workflow now uses the internal `subnet_as_code` Python
-module as the authoritative expected-range source. It imports the module at
+module as the authoritative source. It imports the module at
 runtime and calls the selected query method directly.
 
 Required configuration:
@@ -524,8 +536,8 @@ ranges are excluded from coverage planning.
 
 Important deployment note:
 
-- The scheduler can retrieve YAML directly from GitHub Enterprise, or it can
-  analyze an externally refreshed checkout mounted at `subnet_repo_path`.
+- The workflow itself does not reimplement repository access logic; that is
+  delegated to the installed `subnet_as_code` module.
 - Scheduled detect-and-plan runs remain dry-run only; mutation is isolated to the
   separately invoked, explicitly gated `apply-changes --apply` command.
 
@@ -534,7 +546,6 @@ Container example:
 ```bash
 docker build -t tenable-coverage-service .
 docker run --rm \
-  -v /srv/subnet-repo:/data/subnet-repo \
   -v /srv/tenable-output:/data/output \
   -v /srv/tenable-json/scans:/data/tenable/scans \
   -v /srv/tenable-json/assets:/data/tenable/assets \
@@ -572,9 +583,8 @@ Core application code is in:
 Suggested internal boundaries:
 
 - `core/` - scope parsing and coverage logic
-- `io/` - config, prompts, and Tenable/offline data access
-- `reporting/` - workbook generation and formatting
-- `cli/` - orchestration entrypoint
+- `io/` - parsing and Tenable/offline data access
+- `tenable_coverage_workflow/` - authoritative-source loading, orchestration, planning, reporting, and scheduling
 
 Automated tests are in:
 
@@ -593,9 +603,9 @@ Scope Normalization
       ↓
 Coverage Analytics
       ↓
-Compliance Calculation
+Coverage / Gap Evaluation
       ↓
-Excel Reporting
+Audit + Report Artifacts
 
 
 ------
@@ -606,7 +616,6 @@ Excel Reporting
 - Coverage is deterministic - calculated using interval merging
 - Exclusion aware coverage logic
 - Full containment and partial coverage are differentiated
-- Excel formatting is applied programmatically
 - Invalid JSON records and malformed scope values are skipped with warnings instead of aborting the run
 
 ------
@@ -623,7 +632,7 @@ Excel Reporting
 # Limitations
 - Environment detection is name-based
 - IPv6 scopes are intentionally rejected with a warning
-- No automatic deduplication of overlapping expected ranges
+- No automatic deduplication of overlapping authoritative ranges
 - Required Scan matching is name-based
 
 ------

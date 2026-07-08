@@ -14,12 +14,12 @@ from ..core.scope_utils import parse_scope_item
 from ..core.tenable_scope_analysis import (
     build_coverage_data,
     build_scope_sheets,
+    build_scope_tables,
     calculate_coverage_result,
     extract_scan_name,
 )
-from ..io.app_config import parse_csv_list
 from ..io.data_access import DataAccess
-from ..reporting.workbook import build_workbook
+from ..io.parsing import parse_csv_list
 from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
@@ -435,7 +435,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
 
 def load_actual_scope_data(config: CoverageSourceConfig):
     data_access = DataAccess(config)
-    _, scope_ws, normalized_ws = build_workbook()
+    scope_ws, normalized_ws = build_scope_tables()
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws

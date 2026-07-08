@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any, Iterable
 
 from ..constants import EXCLUDE, INCLUDE, STATUS_GAP, STATUS_OK, STATUS_PARTIAL
 from .scope_utils import (
@@ -16,6 +17,36 @@ from .scope_utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+class InMemoryTable:
+    def __init__(self, headers: Iterable[str]) -> None:
+        self._rows: list[list[Any]] = [list(headers)]
+
+    def append(self, row: Iterable[Any]) -> None:
+        self._rows.append(list(row))
+
+    def iter_rows(self, min_row: int = 1, values_only: bool = False):
+        if not values_only:
+            raise ValueError("InMemoryTable only supports values_only=True iteration")
+        for row in self._rows[min_row - 1 :]:
+            yield tuple(row)
+
+
+def build_scope_tables() -> tuple[InMemoryTable, InMemoryTable]:
+    scope_ws = InMemoryTable(
+        [
+            "Scan Name",
+            "Inclusion Type",
+            "Source Type",
+            "Source Name",
+            "Scope Definition",
+        ]
+    )
+    normalized_ws = InMemoryTable(
+        ["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"]
+    )
+    return scope_ws, normalized_ws
 
 
 @dataclass(frozen=True)

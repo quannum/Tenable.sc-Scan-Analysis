@@ -1,7 +1,7 @@
 import unittest
 
-from src.core.analysis import ScopeRecord
 from src.core.scope_utils import parse_scope_item
+from src.core.tenable_scope_analysis import ScopeRecord
 from src.tenable_coverage_workflow.coverage_reporting import (
     build_coverage_summary,
     build_proposed_exclusions,

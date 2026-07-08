@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from src.core.analysis import filter_scans
+from src.core.tenable_scope_analysis import filter_scans
 
 
 def config(**overrides):

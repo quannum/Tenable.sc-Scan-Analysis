@@ -13,7 +13,6 @@ authors = [
     { name = "Ken Parker" }
 ]
 dependencies = [
-    "openpyxl>=3.1",
     "PyYAML>=6.0",
     "python-dotenv>=1.0",
     "subnet_as_code>=0.0.1",
@@ -32,7 +31,6 @@ dev = [
 ]
 
 [project.scripts]
-tenable-scan-analysis = "src.cli.main:main"
 tenable-coverage-detect-plan = "src.tenable_coverage_workflow.run_detect_and_plan:main"
 tenable-coverage-scheduled = "src.tenable_coverage_workflow.service_runner:main"
 tenable-sc-scan-analysis = "src.tenable_coverage_workflow.application_cli:main"

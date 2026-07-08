@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from ..io.app_config import parse_csv_list
+from ..io.parsing import parse_csv_list
 from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,

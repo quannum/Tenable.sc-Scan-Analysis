@@ -1,19 +1,16 @@
 tenable_sc_scan_analysis:
-  # Source priority: API, local JSON, GitHub, local YAML, XLSX.
-  # Keep NETWORK_SOURCE_API_TOKEN in an environment variable or mounted secret.
-  source_api_url: null
-  source_json_file: /data/network-source/sites.json
-  # github_api_url: https://github.example.internal/api/v3
-  # github_repository: network/subnet-definitions
-  # github_ref: main
-  # github_path: sites
-  # Keep GITHUB_TOKEN in an environment variable or mounted secret.
-  subnet_repo_path: /data/subnet-repo
-  # Lowest-priority legacy fallback:
-  # source_xlsx_file: /data/network-source/networks.xlsx
-  # source_xlsx_sheet: Networks
+  subnet_as_code_method: get_sites
 
-  # Tenable secrets are read from SC_ACCESS_KEY and SC_SECRET_KEY.
+  # Optional authoritative-source filters:
+  # source_sites: "NYC,LON"
+  # source_tags: "production"
+  # source_name: "New York"
+  # source_network_type: "private"
+  # source_routing_type: "core"
+  # source_desired_properties: "site_code,site_name,public_ranges,private_ranges"
+  # source_address_type: "trusted-pat"
+
+  # Tenable data source
   mode: offline
   scan_json_dir: /data/tenable/scans
   asset_json_dir: /data/tenable/assets
