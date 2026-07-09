@@ -13,13 +13,19 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     if not folder_path:
         return data
 
-    file_paths = glob.glob(os.path.join(folder_path, "*.json"))
+    file_paths = sorted(glob.glob(os.path.join(folder_path, "*.json")))
     for file_path in file_paths:
         try:
             with open(file_path, "r", encoding="utf-8") as handle:
                 obj = json.load(handle)
         except (OSError, json.JSONDecodeError) as exc:
             LOGGER.warning("Skipping unreadable JSON file '%s': %s", file_path, exc)
+            continue
+
+        if not isinstance(obj, dict):
+            LOGGER.warning(
+                "Skipping JSON file whose root is not an object: %s", file_path
+            )
             continue
 
         object_id = obj.get("id")

@@ -107,6 +107,8 @@ def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--scan-json-dir")
     parser.add_argument("--asset-json-dir")
     parser.add_argument("--sc-url")
+    parser.add_argument("--sc-access-key")
+    parser.add_argument("--sc-secret-key")
     parser.add_argument("--sc-timeout-seconds", type=int)
     parser.add_argument("--sc-retries", type=int)
     parser.add_argument("--sc-backoff-seconds", type=float)
@@ -178,11 +180,28 @@ def _validate_definitions(args) -> int:
 
 
 def _tenable_config(args) -> TenableAccessConfig:
-    mode = _setting(args, "mode", default="offline")
+    mode = str(_setting(args, "mode", default="offline")).strip().lower()
+    if mode not in {"offline", "live"}:
+        raise ValueError("mode must be 'offline' or 'live'.")
+
     scan_dir = _setting(args, "scan_json_dir")
     asset_dir = _setting(args, "asset_json_dir")
     if mode == "offline" and (not scan_dir or not asset_dir):
         raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
+
+    sc_timeout_seconds = _parse_positive_int(
+        _setting(args, "sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60),
+        "sc_timeout_seconds",
+    )
+    sc_retries = _parse_positive_int(
+        _setting(args, "sc_retries", "SC_RETRIES", 3),
+        "sc_retries",
+    )
+    sc_backoff_seconds = _parse_nonnegative_float(
+        _setting(args, "sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5),
+        "sc_backoff_seconds",
+    )
+
     return TenableAccessConfig(
         mode=mode,
         scan_json_dir=scan_dir,
@@ -190,13 +209,9 @@ def _tenable_config(args) -> TenableAccessConfig:
         sc_url=_setting(args, "sc_url", "SC_URL"),
         sc_access_key=_setting(args, "sc_access_key", "SC_ACCESS_KEY"),
         sc_secret_key=_setting(args, "sc_secret_key", "SC_SECRET_KEY"),
-        sc_timeout_seconds=int(
-            _setting(args, "sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60)
-        ),
-        sc_retries=int(_setting(args, "sc_retries", "SC_RETRIES", 3)),
-        sc_backoff_seconds=float(
-            _setting(args, "sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5)
-        ),
+        sc_timeout_seconds=sc_timeout_seconds,
+        sc_retries=sc_retries,
+        sc_backoff_seconds=sc_backoff_seconds,
         sc_ssl_verify=_as_bool(_setting(args, "sc_ssl_verify", "SC_SSL_VERIFY", True)),
     )
 
@@ -365,6 +380,9 @@ def _setting(
     cli_value = getattr(args, name, None)
     if cli_value is not None:
         return cli_value
+    prefixed_environment_name = f"TCW_{name.upper()}"
+    if os.getenv(prefixed_environment_name) is not None:
+        return os.getenv(prefixed_environment_name)
     if environment_name and os.getenv(environment_name) is not None:
         return os.getenv(environment_name)
     config = getattr(args, "_config", {})
@@ -396,6 +414,32 @@ def _as_bool(value: Any) -> bool:
         if normalized in {"false", "no", "0", "off", ""}:
             return False
     return bool(value)
+
+
+def _parse_positive_int(value: Any, field_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid integer value for '{field_name}': {value}") from exc
+
+    if parsed <= 0:
+        raise ValueError(
+            f"Invalid integer value for '{field_name}': {value}. Must be > 0."
+        )
+    return parsed
+
+
+def _parse_nonnegative_float(value: Any, field_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value for '{field_name}': {value}") from exc
+
+    if parsed < 0:
+        raise ValueError(
+            f"Invalid numeric value for '{field_name}': {value}. Must be >= 0."
+        )
+    return parsed
 
 
 def _csv_setting(

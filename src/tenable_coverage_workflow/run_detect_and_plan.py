@@ -665,3 +665,7 @@ def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
     print(f"EXCLUDED count: {summary['excluded_count']}")
     print(f"Proposed changes count: {summary['proposed_changes_count']}")
     print(f"Output directory: {summary['output_directory']}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

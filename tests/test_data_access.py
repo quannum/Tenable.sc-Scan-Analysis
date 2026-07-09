@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.io.data_access import DataAccess, normalize_resource_list
+from src.io.data_access import DataAccess, load_json_folder, normalize_resource_list
 
 
 def make_config(**overrides):
@@ -246,6 +246,34 @@ class DataAccessTests(unittest.TestCase):
                 any("Duplicate object id '1'" in line for line in logs.output)
             )
             self.assertIn("Scan B", str(access.offline_scans.get("1")))
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
+    def test_load_json_folder_skips_non_object_json_roots(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "non_object_json_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            (temp_path / "array.json").write_text(
+                json.dumps([{"id": 1}]),
+                encoding="utf-8",
+            )
+            (temp_path / "object.json").write_text(
+                json.dumps({"id": 2, "name": "Scan"}),
+                encoding="utf-8",
+            )
+
+            with self.assertLogs("src.io.data_access", level="WARNING") as logs:
+                payload = load_json_folder(str(temp_path))
+
+            self.assertEqual(payload, {"2": {"id": 2, "name": "Scan"}})
+            self.assertTrue(
+                any("root is not an object" in line for line in logs.output)
+            )
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)

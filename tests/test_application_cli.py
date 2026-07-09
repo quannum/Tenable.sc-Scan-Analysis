@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -102,6 +103,74 @@ class ApplicationCliTests(unittest.TestCase):
             self.assertEqual(exit_code, EXIT_OK)
             snapshot = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(snapshot["resource_counts"]["scans"], 1)
+
+    def test_collect_tenable_accepts_live_credentials_and_tcw_env(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "inventory.json"
+            env = {
+                "TCW_SC_ACCESS_KEY": "tcw-access",
+                "SC_ACCESS_KEY": "legacy-access",
+                "TCW_SC_TIMEOUT_SECONDS": "45",
+                "SC_TIMEOUT_SECONDS": "60",
+            }
+
+            with (
+                patch.dict(os.environ, env, clear=False),
+                patch(
+                    "src.tenable_coverage_workflow.application_cli.DataAccess"
+                ) as data_access_cls,
+                patch(
+                    "src.tenable_coverage_workflow.application_cli."
+                    "collect_tenable_inventory",
+                    return_value={"schema_version": 1, "collection_errors": {}},
+                ),
+            ):
+                exit_code = main(
+                    [
+                        "collect-tenable",
+                        "--mode",
+                        "live",
+                        "--sc-url",
+                        "https://tenable.local",
+                        "--sc-secret-key",
+                        "cli-secret",
+                        "--output-file",
+                        str(output),
+                    ]
+                )
+
+            self.assertEqual(exit_code, EXIT_OK)
+            config_arg = data_access_cls.call_args.args[0]
+            self.assertEqual(config_arg.sc_url, "https://tenable.local")
+            self.assertEqual(config_arg.sc_access_key, "tcw-access")
+            self.assertEqual(config_arg.sc_secret_key, "cli-secret")
+            self.assertEqual(config_arg.sc_timeout_seconds, 45)
+
+    def test_config_rejects_invalid_mode_value(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "tenable_sc_scan_analysis:",
+                        '  mode: "livet"',
+                        "  commands:",
+                        "    collect_tenable:",
+                        f"      output_file: '{(root / 'inventory.json').as_posix()}'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "src.tenable_coverage_workflow.application_cli.DataAccess"
+            ) as data_access_cls:
+                exit_code = main(["--config-file", str(config), "collect-tenable"])
+
+            self.assertEqual(exit_code, EXIT_OPERATION)
+            data_access_cls.assert_not_called()
 
     def test_apply_changes_requires_explicit_apply(self):
         exit_code = main(["apply-changes", "--plan-file", "plan.json"])

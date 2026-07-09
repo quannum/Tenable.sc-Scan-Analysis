@@ -8,7 +8,7 @@ def _run() -> int:
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
-    from src.cli.main import main
+    from src.tenable_coverage_workflow.application_cli import main
 
     return main()
 
