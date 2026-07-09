@@ -287,6 +287,9 @@ Install:
 pip install -r requirements.txt
 
 Note: `subnet_as_code>=0.0.1` is a required internal dependency for the coverage workflow. Make sure your environment can install it from the internal package repository before running authoritative-source commands.
+`requirements.txt` installs the base/offline dependencies. Install `pyTenable`
+separately or use the package `live` extra when running against the Tenable.sc
+API.
 
 To install this project as a package from the repository root:
 

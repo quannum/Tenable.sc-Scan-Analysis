@@ -102,13 +102,10 @@ class DataAccess:
                 self.sc.scans.list,
                 operation_name="scans.list",
             )
-            usable = scans_payload.get("usable")
-            if isinstance(usable, list):
-                return usable
-            LOGGER.warning(
-                "Unexpected live scan payload shape; expected key 'usable' as list"
-            )
-            return []
+            scans = normalize_resource_list(scans_payload)
+            if not scans:
+                LOGGER.warning("Unexpected live scan payload shape; no scans found")
+            return scans
         return list(self.offline_scans.values())
 
     def get_scan_details(self, scan_id) -> dict[str, Any]:

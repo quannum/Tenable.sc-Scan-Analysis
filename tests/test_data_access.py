@@ -144,6 +144,31 @@ class DataAccessTests(unittest.TestCase):
 
         self.assertEqual(access.get_scans(), [])
 
+    def test_live_mode_normalizes_alternate_scan_list_shapes(self):
+        tenable_module = types.ModuleType("tenable")
+        tenable_sc_module = types.ModuleType("tenable.sc")
+        tenable_sc_module.TenableSC = FakeTenableSC
+        tenable_module.sc = tenable_sc_module
+
+        with patch.dict(
+            sys.modules,
+            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            clear=False,
+        ):
+            access = DataAccess(make_config())
+            access.sc.scans._list_payload = {
+                "manageable": [{"id": 2, "name": "Manageable Scan"}],
+                "response": [{"id": 3, "name": "Response Scan"}],
+            }
+
+        self.assertEqual(
+            access.get_scans(),
+            [
+                {"id": 2, "name": "Manageable Scan"},
+                {"id": 3, "name": "Response Scan"},
+            ],
+        )
+
     def test_live_mutation_methods_use_supported_pytenable_arguments(self):
         tenable_module = types.ModuleType("tenable")
         tenable_sc_module = types.ModuleType("tenable.sc")
