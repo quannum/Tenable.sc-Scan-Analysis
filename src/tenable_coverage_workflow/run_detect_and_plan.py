@@ -19,10 +19,11 @@ from ..core.tenable_scope_analysis import (
     extract_scan_name,
 )
 from ..io.data_access import DataAccess
-from ..io.parsing import parse_csv_list, parse_string_mapping
+from ..io.parsing import parse_csv_list
 from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
+from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
 from .subnet_source import (
@@ -269,7 +270,7 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
             "method/query settings."
         )
     validate_authoritative_source_config(source_config)
-    grouping_config = _build_grouping_config(
+    grouping_config = build_grouping_config(
         mode_value=scalar_getter("grouping_mode", "GROUPING_MODE", "default"),
         prefix_value=scalar_getter(
             "grouping_vlan_tag_prefix",
@@ -302,22 +303,6 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         sc_backoff_seconds=args.sc_backoff_seconds,
         sc_ssl_verify=args.sc_ssl_verify,
         grouping_config=grouping_config,
-    )
-
-
-def _build_grouping_config(
-    mode_value: Any,
-    prefix_value: Any,
-    tag_map_value: Any,
-) -> GroupingConfig:
-    mode = str(mode_value or "default").strip() or "default"
-    if mode not in {"default", "vlan_tag"}:
-        raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")
-    prefix = str(prefix_value or "vlan-").strip() or "vlan-"
-    return GroupingConfig(
-        mode=mode,
-        vlan_tag_prefix=prefix,
-        tag_map=parse_string_mapping(tag_map_value),
     )
 
 

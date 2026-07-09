@@ -9,6 +9,7 @@ from unittest.mock import patch
 from src.tenable_coverage_workflow.application_cli import (
     EXIT_APPLY_REQUIRED,
     EXIT_OK,
+    EXIT_OPERATION,
     main,
 )
 from tests.test_change_application import FakeDataAccess, approved_row, write_plan
@@ -227,6 +228,44 @@ class ApplicationCliTests(unittest.TestCase):
                 config_arg.grouping_config.tag_map,
                 {"vlan-workstation": "END_USER"},
             )
+
+    def test_analyze_coverage_rejects_invalid_grouping_mode_from_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scans = root / "scans"
+            assets = root / "assets"
+            scans.mkdir()
+            assets.mkdir()
+            config = root / "config.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "tenable_sc_scan_analysis:",
+                        "  subnet_as_code_method: get_sites",
+                        '  grouping_mode: "by_magic"',
+                        "  commands:",
+                        "    analyze_coverage:",
+                        f"      output_dir: '{(root / 'output').as_posix()}'",
+                        '      mode: "offline"',
+                        f"      scan_json_dir: '{scans.as_posix()}'",
+                        f"      asset_json_dir: '{assets.as_posix()}'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            stdout = StringIO()
+            with (
+                patch(
+                    "src.tenable_coverage_workflow.application_cli.run_detect_and_plan"
+                ) as run_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(["--config-file", str(config), "analyze-coverage"])
+
+            self.assertEqual(exit_code, EXIT_OPERATION)
+            self.assertIn("grouping_mode", stdout.getvalue())
+            run_mock.assert_not_called()
 
 
 if __name__ == "__main__":

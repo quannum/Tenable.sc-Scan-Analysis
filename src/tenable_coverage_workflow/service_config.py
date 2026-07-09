@@ -2,14 +2,15 @@ import argparse
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 from dotenv import load_dotenv
 
-from ..io.parsing import parse_csv_list, parse_string_mapping
+from ..io.parsing import parse_csv_list
+from .grouping_config import build_grouping_config
 from .models import GroupingConfig
 from .subnet_source.source_config import (
     add_authoritative_source_arguments,
@@ -60,7 +61,7 @@ class ScheduledServiceConfig(AuthoritativeSourceConfigMixin):
     sc_retries: int = 3
     sc_backoff_seconds: float = 1.5
     sc_ssl_verify: bool = True
-    grouping_config: GroupingConfig = GroupingConfig()
+    grouping_config: GroupingConfig = field(default_factory=GroupingConfig)
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -224,7 +225,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         parser.error("--log-format must be 'text' or 'json'")
     log_file = _as_path(pick("log_file"))
     try:
-        grouping_config = _build_grouping_config(
+        grouping_config = build_grouping_config(
             mode_value=pick("grouping_mode", "default", "GROUPING_MODE"),
             prefix_value=pick(
                 "grouping_vlan_tag_prefix",
@@ -285,22 +286,6 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         sc_backoff_seconds=sc_backoff_seconds,
         sc_ssl_verify=sc_ssl_verify,
         grouping_config=grouping_config,
-    )
-
-
-def _build_grouping_config(
-    mode_value: Any,
-    prefix_value: Any,
-    tag_map_value: Any,
-) -> GroupingConfig:
-    mode = str(mode_value or "default").strip() or "default"
-    if mode not in {"default", "vlan_tag"}:
-        raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")
-    prefix = str(prefix_value or "vlan-").strip() or "vlan-"
-    return GroupingConfig(
-        mode=mode,
-        vlan_tag_prefix=prefix,
-        tag_map=parse_string_mapping(tag_map_value),
     )
 
 

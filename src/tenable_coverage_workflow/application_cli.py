@@ -11,13 +11,12 @@ from dotenv import load_dotenv
 
 from ..constants import VERSION
 from ..io.data_access import DataAccess
-from ..io.parsing import parse_string_mapping
 from .change_application import (
     ChangeApplier,
     load_approved_plan,
     write_apply_markdown,
 )
-from .models import GroupingConfig
+from .grouping_config import build_grouping_config
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
 from .subnet_source import load_authoritative_source
 from .subnet_source.source_config import (
@@ -222,17 +221,6 @@ def _collect_tenable(args) -> int:
 def _analyze_or_propose(args) -> int:
     source = _source_config(args)
     tenable = _tenable_config(args)
-    grouping_mode = str(
-        _setting(args, "grouping_mode", "GROUPING_MODE", "default")
-    ).strip() or "default"
-    grouping_prefix = str(
-        _setting(
-            args,
-            "grouping_vlan_tag_prefix",
-            "GROUPING_VLAN_TAG_PREFIX",
-            "vlan-",
-        )
-    ).strip() or "vlan-"
     config = DetectAndPlanConfig(
         source_config=source,
         output_dir=Path(_setting(args, "output_dir", default="output")),
@@ -253,12 +241,15 @@ def _analyze_or_propose(args) -> int:
         sc_retries=tenable.sc_retries,
         sc_backoff_seconds=tenable.sc_backoff_seconds,
         sc_ssl_verify=tenable.sc_ssl_verify,
-        grouping_config=GroupingConfig(
-            mode=grouping_mode,
-            vlan_tag_prefix=grouping_prefix,
-            tag_map=parse_string_mapping(
-                _setting(args, "grouping_tag_map", "GROUPING_TAG_MAP")
+        grouping_config=build_grouping_config(
+            mode_value=_setting(args, "grouping_mode", "GROUPING_MODE", "default"),
+            prefix_value=_setting(
+                args,
+                "grouping_vlan_tag_prefix",
+                "GROUPING_VLAN_TAG_PREFIX",
+                "vlan-",
             ),
+            tag_map_value=_setting(args, "grouping_tag_map", "GROUPING_TAG_MAP"),
         ),
     )
     summary = run_detect_and_plan(config)

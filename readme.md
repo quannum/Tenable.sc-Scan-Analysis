@@ -38,7 +38,8 @@ Allows filtering enabled or disabled scans before scope processing.
 
 Allows inclusion or exclusion of scans before scope processing.
 
-Filtering occurs **before normalization**, ensuring all downstream sheets reflect the filtered scan criteria.
+Filtering occurs **before normalization**, so all downstream coverage outputs
+reflect the filtered scan criteria.
 
 ## Behavior
 
@@ -152,10 +153,11 @@ The current workflow:
 - compares authoritative ranges to actual Tenable.sc scan coverage
 - reports whether the required scan name derived for each target is actually one
   of the scans covering that target
-- assigns status:
+- assigns workflow status:
   - OK
   - PARTIAL
   - GAP
+  - EXCLUDED
 
 ### Exclusion Impact Math
 
@@ -195,8 +197,11 @@ Aggregates:
 * Total Covered IPs
 * Total Gap IPs
 * Overall Coverage %
-* Total Exclusion Loss
-* % Coverage Lost to Exclusions
+* Status counts by coverage state
+* Missing asset groups
+* Missing required scans
+* Policy mismatches
+* Extra or stale scan target findings
 
 Coverage and audit reporting also includes exclusion-heavy scans and proposed
 exclusion candidates in the generated JSON, CSV, and Markdown artifacts.
@@ -245,7 +250,7 @@ For the scheduled service wrapper, the root config section is:
 
 The scheduler example is here:
 
-- [examples/tenable-coverage-service.toml](/abs/path/E:/Documents/GitHub/Tenable.sc-Scan-Analysis/examples/tenable-coverage-service.toml)
+- `examples/tenable-coverage-service.toml`
 
 
 ------
@@ -501,9 +506,13 @@ The detect-and-plan workflow now uses the internal `subnet_as_code` Python
 module as the authoritative source. It imports the module at
 runtime and calls the selected query method directly.
 
-Required configuration:
+Default method:
 
-1. `--subnet-as-code-method` / `SUBNET_AS_CODE_METHOD`
+1. `get_sites`
+
+Configure `--subnet-as-code-method` / `SUBNET_AS_CODE_METHOD` explicitly when
+you want a different `subnet_as_code` query method or when you prefer the
+configuration to be self-documenting.
 
 Optional filters are passed through only when the selected method supports them:
 
