@@ -84,7 +84,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stale-lock-timeout-seconds")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=None)
     parser.add_argument(
-        "--no-dry-run", dest="dry_run", action="store_false", default=None
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        default=None,
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--mode", choices=["offline", "live"])
     parser.add_argument("--scan-json-dir")
@@ -257,11 +261,11 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     if mode == "live":
         missing = []
         if not sc_url:
-            missing.append("SC_URL")
+            missing.append("TCW_SC_URL/SC_URL")
         if not sc_access_key:
-            missing.append("SC_ACCESS_KEY")
+            missing.append("TCW_SC_ACCESS_KEY/SC_ACCESS_KEY")
         if not sc_secret_key:
-            missing.append("SC_SECRET_KEY")
+            missing.append("TCW_SC_SECRET_KEY/SC_SECRET_KEY")
         if missing:
             parser.error("Live scheduled runs require: " + ", ".join(missing))
 

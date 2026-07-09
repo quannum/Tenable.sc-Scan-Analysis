@@ -95,9 +95,9 @@ class DataAccessTests(unittest.TestCase):
             )
 
         error_text = str(ctx.exception)
-        self.assertIn("SC_URL", error_text)
-        self.assertIn("SC_ACCESS_KEY", error_text)
-        self.assertIn("SC_SECRET_KEY", error_text)
+        self.assertIn("TCW_SC_URL/SC_URL", error_text)
+        self.assertIn("TCW_SC_ACCESS_KEY/SC_ACCESS_KEY", error_text)
+        self.assertIn("TCW_SC_SECRET_KEY/SC_SECRET_KEY", error_text)
 
     def test_live_mode_uses_tenable_client_and_methods(self):
         tenable_module = types.ModuleType("tenable")
@@ -127,6 +127,21 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(access.get_scans(), [{"id": 1, "name": "Scan A"}])
         self.assertEqual(access.get_scan_details(1), {"id": 1, "name": "Scan Details"})
         self.assertEqual(access.get_asset(20), {"id": 20, "name": "Asset Details"})
+
+    def test_live_mode_parses_string_false_ssl_verify(self):
+        tenable_module = types.ModuleType("tenable")
+        tenable_sc_module = types.ModuleType("tenable.sc")
+        tenable_sc_module.TenableSC = FakeTenableSC
+        tenable_module.sc = tenable_sc_module
+
+        with patch.dict(
+            sys.modules,
+            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            clear=False,
+        ):
+            DataAccess(make_config(sc_ssl_verify="false"))
+
+        self.assertFalse(FakeTenableSC.last_init["ssl_verify"])
 
     def test_live_mode_handles_unexpected_scan_list_shape(self):
         tenable_module = types.ModuleType("tenable")

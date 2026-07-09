@@ -50,6 +50,17 @@ class ApplicationCliTests(unittest.TestCase):
         ):
             self.assertIn(command, help_text)
 
+    def test_analyze_help_exposes_scan_filtering_options(self):
+        stdout = StringIO()
+        with self.assertRaises(SystemExit) as context, redirect_stdout(stdout):
+            main(["analyze-coverage", "--help"])
+
+        self.assertEqual(context.exception.code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("--include-keywords", help_text)
+        self.assertIn("--exclude-keywords", help_text)
+        self.assertIn("--filter-disabled-mode", help_text)
+
     def test_validate_definitions_writes_normalized_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -297,6 +308,52 @@ class ApplicationCliTests(unittest.TestCase):
                 config_arg.grouping_config.tag_map,
                 {"vlan-workstation": "END_USER"},
             )
+
+    def test_analyze_coverage_config_can_set_scan_filtering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scans = root / "scans"
+            assets = root / "assets"
+            scans.mkdir()
+            assets.mkdir()
+            config = root / "config.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "tenable_sc_scan_analysis:",
+                        "  subnet_as_code_method: get_sites",
+                        "  commands:",
+                        "    analyze_coverage:",
+                        f"      output_dir: '{(root / 'output').as_posix()}'",
+                        '      mode: "offline"',
+                        f"      scan_json_dir: '{scans.as_posix()}'",
+                        f"      asset_json_dir: '{assets.as_posix()}'",
+                        '      include_keywords: "Weekly,Production"',
+                        '      exclude_keywords: "Deprecated"',
+                        "      match_all_include: true",
+                        "      case_sensitive: true",
+                        '      filter_disabled_mode: "ENABLED_ONLY"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "src.tenable_coverage_workflow.application_cli.run_detect_and_plan",
+                return_value={
+                    "run_id": "run-001",
+                    "output_directory": str(root / "output"),
+                },
+            ) as run_mock:
+                exit_code = main(["--config-file", str(config), "analyze-coverage"])
+
+            self.assertEqual(exit_code, EXIT_OK)
+            config_arg = run_mock.call_args.args[0]
+            self.assertEqual(config_arg.include_keywords, ["Weekly", "Production"])
+            self.assertEqual(config_arg.exclude_keywords, ["Deprecated"])
+            self.assertTrue(config_arg.match_all_include)
+            self.assertTrue(config_arg.case_sensitive)
+            self.assertEqual(config_arg.filter_disabled_mode, "ENABLED_ONLY")
 
     def test_analyze_coverage_rejects_invalid_grouping_mode_from_config(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -105,7 +105,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--run-id")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True)
-    parser.add_argument("--no-dry-run", dest="dry_run", action="store_false")
+    parser.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--mode", choices=["offline", "live"], default="offline")
     parser.add_argument("--scan-json-dir")
     parser.add_argument("--asset-json-dir")
@@ -363,6 +368,9 @@ def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceC
 
 
 def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
+    if not config.dry_run:
+        raise ValueError("detect-and-plan runs do not support dry_run=false")
+
     started_at = datetime.now(timezone.utc)
     run_id = config.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = Path(config.output_dir)
@@ -385,12 +393,6 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         dry_run=config.dry_run,
         mode=config.mode,
     )
-
-    if not config.dry_run:
-        LOGGER.info(
-            "Mutation is not implemented in this phase; continuing in "
-            "detect-and-plan mode."
-        )
 
     source_type, connector_result = load_authoritative_source(
         config.as_authoritative_source_config(),

@@ -20,13 +20,16 @@ from src.tenable_coverage_workflow.planning.proposed_changes import (
     generate_proposed_changes,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
+    DetectAndPlanConfig,
     build_argument_parser,
     build_configuration_index,
     build_detect_and_plan_config,
+    run_detect_and_plan,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
 )
+from src.tenable_coverage_workflow.subnet_source import AuthoritativeSourceConfig
 
 
 class PlanningTests(unittest.TestCase):
@@ -306,6 +309,35 @@ class DetectAndPlanCliTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "does not support --no-dry-run"):
             build_detect_and_plan_config(args)
+
+    def test_detect_and_plan_help_hides_no_dry_run(self):
+        parser = build_argument_parser()
+        help_text = parser.format_help()
+
+        self.assertIn("--dry-run", help_text)
+        self.assertNotIn("--no-dry-run", help_text)
+
+    def test_run_detect_and_plan_rejects_programmatic_non_dry_run(self):
+        config = DetectAndPlanConfig(
+            source_config=AuthoritativeSourceConfig(subnet_as_code_method="get_sites"),
+            output_dir=Path("output"),
+            run_id="run-001",
+            dry_run=False,
+            mode="offline",
+            scan_json_dir="scans",
+            asset_json_dir="assets",
+            sc_access_key=None,
+            sc_secret_key=None,
+            sc_url=None,
+            include_keywords=[],
+            exclude_keywords=[],
+            match_all_include=False,
+            case_sensitive=False,
+            filter_disabled_mode="ALL",
+        )
+
+        with self.assertRaisesRegex(ValueError, "dry_run=false"):
+            run_detect_and_plan(config)
 
     def test_detect_and_plan_cli_writes_audits_for_bad_subnet_records(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"

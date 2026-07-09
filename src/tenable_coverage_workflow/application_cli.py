@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
         command = commands.add_parser(name, help=help_text)
         _add_source_arguments(command)
         _add_tenable_arguments(command)
+        _add_filter_arguments(command)
         _add_grouping_arguments(command)
         command.add_argument("--output-dir")
         command.add_argument("--run-id")
@@ -124,6 +125,17 @@ def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
         dest="sc_ssl_verify",
         action="store_false",
         default=None,
+    )
+
+
+def _add_filter_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--include-keywords")
+    parser.add_argument("--exclude-keywords")
+    parser.add_argument("--match-all-include", action="store_true", default=None)
+    parser.add_argument("--case-sensitive", action="store_true", default=None)
+    parser.add_argument(
+        "--filter-disabled-mode",
+        choices=("ALL", "ENABLED_ONLY", "DISABLED_ONLY"),
     )
 
 
@@ -243,6 +255,11 @@ def _collect_tenable(args) -> int:
 def _analyze_or_propose(args) -> int:
     source = _source_config(args)
     tenable = _tenable_config(args)
+    filter_disabled_mode = str(_setting(args, "filter_disabled_mode", default="ALL"))
+    if filter_disabled_mode not in {"ALL", "ENABLED_ONLY", "DISABLED_ONLY"}:
+        raise ValueError(
+            "filter_disabled_mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY."
+        )
     config = DetectAndPlanConfig(
         source_config=source,
         output_dir=Path(_setting(args, "output_dir", default="output")),
@@ -254,11 +271,11 @@ def _analyze_or_propose(args) -> int:
         sc_access_key=tenable.sc_access_key,
         sc_secret_key=tenable.sc_secret_key,
         sc_url=tenable.sc_url,
-        include_keywords=[],
-        exclude_keywords=[],
-        match_all_include=False,
-        case_sensitive=False,
-        filter_disabled_mode="ALL",
+        include_keywords=_csv_setting(args, "include_keywords") or [],
+        exclude_keywords=_csv_setting(args, "exclude_keywords") or [],
+        match_all_include=_as_bool(_setting(args, "match_all_include", default=False)),
+        case_sensitive=_as_bool(_setting(args, "case_sensitive", default=False)),
+        filter_disabled_mode=filter_disabled_mode,
         sc_timeout_seconds=tenable.sc_timeout_seconds,
         sc_retries=tenable.sc_retries,
         sc_backoff_seconds=tenable.sc_backoff_seconds,

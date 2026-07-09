@@ -174,6 +174,14 @@ class ServiceConfigTests(unittest.TestCase):
                 ]
             )
 
+    def test_service_config_help_hides_no_dry_run(self):
+        from src.tenable_coverage_workflow.service_config import build_argument_parser
+
+        help_text = build_argument_parser().format_help()
+
+        self.assertIn("--dry-run", help_text)
+        self.assertNotIn("--no-dry-run", help_text)
+
 
 class ScheduledServiceTests(unittest.TestCase):
     @staticmethod

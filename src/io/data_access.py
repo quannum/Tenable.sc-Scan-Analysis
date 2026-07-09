@@ -66,7 +66,7 @@ class DataAccess:
             timeout = int(getattr(config, "sc_timeout_seconds", 60))
             retries = int(getattr(config, "sc_retries", 3))
             backoff = float(getattr(config, "sc_backoff_seconds", 1.5))
-            ssl_verify = bool(getattr(config, "sc_ssl_verify", True))
+            ssl_verify = _parse_bool(getattr(config, "sc_ssl_verify", True))
             if timeout <= 0 or retries <= 0 or backoff < 0:
                 raise ValueError(
                     "Tenable timeout/retries must be positive and backoff non-negative"
@@ -90,11 +90,11 @@ class DataAccess:
     def _validate_live_config(config) -> None:
         missing = []
         if not config.sc_url:
-            missing.append("SC_URL")
+            missing.append("TCW_SC_URL/SC_URL")
         if not config.sc_access_key:
-            missing.append("SC_ACCESS_KEY")
+            missing.append("TCW_SC_ACCESS_KEY/SC_ACCESS_KEY")
         if not config.sc_secret_key:
-            missing.append("SC_SECRET_KEY")
+            missing.append("TCW_SC_SECRET_KEY/SC_SECRET_KEY")
 
         if missing:
             raise ValueError(
@@ -307,3 +307,15 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
             seen.add(identity)
             records.append(item)
     return records
+
+
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off", ""}:
+            return False
+    return bool(value)
