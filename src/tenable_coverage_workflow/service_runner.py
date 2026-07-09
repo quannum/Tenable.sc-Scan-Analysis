@@ -111,6 +111,7 @@ def build_detect_config(
         sc_retries=config.sc_retries,
         sc_backoff_seconds=config.sc_backoff_seconds,
         sc_ssl_verify=config.sc_ssl_verify,
+        grouping_config=config.grouping_config,
     )
 
 

@@ -182,6 +182,52 @@ class ApplicationCliTests(unittest.TestCase):
                 result_file.with_suffix(".md").read_text(encoding="utf-8"),
             )
 
+    def test_analyze_coverage_config_can_set_vlan_tag_grouping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scans = root / "scans"
+            assets = root / "assets"
+            scans.mkdir()
+            assets.mkdir()
+            config = root / "config.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "tenable_sc_scan_analysis:",
+                        "  subnet_as_code_method: get_sites",
+                        '  grouping_mode: "vlan_tag"',
+                        '  grouping_vlan_tag_prefix: "vlan-"',
+                        "  grouping_tag_map:",
+                        '    vlan-workstation: "END_USER"',
+                        "  commands:",
+                        "    analyze_coverage:",
+                        f"      output_dir: '{(root / 'output').as_posix()}'",
+                        '      mode: "offline"',
+                        f"      scan_json_dir: '{scans.as_posix()}'",
+                        f"      asset_json_dir: '{assets.as_posix()}'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "src.tenable_coverage_workflow.application_cli.run_detect_and_plan",
+                return_value={
+                    "run_id": "run-001",
+                    "output_directory": str(root / "output"),
+                },
+            ) as run_mock:
+                exit_code = main(["--config-file", str(config), "analyze-coverage"])
+
+            self.assertEqual(exit_code, EXIT_OK)
+            config_arg = run_mock.call_args.args[0]
+            self.assertEqual(config_arg.grouping_config.mode, "vlan_tag")
+            self.assertEqual(config_arg.grouping_config.vlan_tag_prefix, "vlan-")
+            self.assertEqual(
+                config_arg.grouping_config.tag_map,
+                {"vlan-workstation": "END_USER"},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

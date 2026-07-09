@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -19,11 +19,11 @@ from ..core.tenable_scope_analysis import (
     extract_scan_name,
 )
 from ..io.data_access import DataAccess
-from ..io.parsing import parse_csv_list
+from ..io.parsing import parse_csv_list, parse_string_mapping
 from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
-from .models import CoverageTarget, CoverageValidationResult
+from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
 from .subnet_source import (
     AuthoritativeSourceConfig,
@@ -66,6 +66,7 @@ class DetectAndPlanConfig(AuthoritativeSourceConfigMixin):
     sc_retries: int = 3
     sc_backoff_seconds: float = 1.5
     sc_ssl_verify: bool = True
+    grouping_config: GroupingConfig = field(default_factory=GroupingConfig)
 
 
 @dataclass
@@ -115,6 +116,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sc-timeout-seconds", type=int, default=60)
     parser.add_argument("--sc-retries", type=int, default=3)
     parser.add_argument("--sc-backoff-seconds", type=float, default=1.5)
+    parser.add_argument("--grouping-mode", choices=["default", "vlan_tag"])
+    parser.add_argument("--grouping-vlan-tag-prefix")
+    parser.add_argument(
+        "--grouping-tag-map",
+        help="JSON object or comma-separated key=value mappings for vlan tag groups.",
+    )
     parser.add_argument(
         "--no-sc-ssl-verify",
         dest="sc_ssl_verify",
@@ -262,6 +269,15 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
             "method/query settings."
         )
     validate_authoritative_source_config(source_config)
+    grouping_config = _build_grouping_config(
+        mode_value=scalar_getter("grouping_mode", "GROUPING_MODE", "default"),
+        prefix_value=scalar_getter(
+            "grouping_vlan_tag_prefix",
+            "GROUPING_VLAN_TAG_PREFIX",
+            "vlan-",
+        ),
+        tag_map_value=scalar_getter("grouping_tag_map", "GROUPING_TAG_MAP", None),
+    )
     return DetectAndPlanConfig(
         source_config=source_config,
         output_dir=Path(args.output_dir),
@@ -285,6 +301,23 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         sc_retries=args.sc_retries,
         sc_backoff_seconds=args.sc_backoff_seconds,
         sc_ssl_verify=args.sc_ssl_verify,
+        grouping_config=grouping_config,
+    )
+
+
+def _build_grouping_config(
+    mode_value: Any,
+    prefix_value: Any,
+    tag_map_value: Any,
+) -> GroupingConfig:
+    mode = str(mode_value or "default").strip() or "default"
+    if mode not in {"default", "vlan_tag"}:
+        raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")
+    prefix = str(prefix_value or "vlan-").strip() or "vlan-"
+    return GroupingConfig(
+        mode=mode,
+        vlan_tag_prefix=prefix,
+        tag_map=parse_string_mapping(tag_map_value),
     )
 
 
@@ -342,7 +375,10 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         config.as_authoritative_source_config(),
         audit_logger=audit_logger,
     )
-    named_targets = apply_naming_rules_to_targets(connector_result.coverage_targets)
+    named_targets = apply_naming_rules_to_targets(
+        connector_result.coverage_targets,
+        config.grouping_config,
+    )
 
     actual_scopes, actual_by_scan, excluded_by_scan, configuration_index = (
         load_actual_scope_data(build_coverage_source_config(config))

@@ -10,6 +10,16 @@ tenable_sc_scan_analysis:
   # source_desired_properties: "site_code,site_name,public_ranges,private_ranges"
   # source_address_type: "trusted-pat"
 
+  # Optional VLAN tag grouping for asset/scan naming:
+  # When enabled, the first target tag starting with grouping_vlan_tag_prefix wins.
+  # grouping_mode: vlan_tag
+  # grouping_vlan_tag_prefix: vlan-
+  # grouping_tag_map:
+  #   vlan-server: SERVER
+  #   vlan-mgmt: NETWORK
+  #   vlan-workstation: END_USER
+  #   vlan-wireless: WIRELESS
+
   # Tenable data source
   mode: offline
   scan_json_dir: /data/tenable/scans

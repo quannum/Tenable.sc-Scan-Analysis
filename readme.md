@@ -534,6 +534,28 @@ explicit `start-end` IP ranges are normalized with Python `ipaddress` before
 analysis. Validation issues are retained in audit output and invalid sites or
 ranges are excluded from coverage planning.
 
+### Optional VLAN tag grouping
+
+Asset and scan grouping can optionally be driven by VLAN tags from
+`subnet_as_code`.
+
+When `grouping_mode = "vlan_tag"` is enabled:
+
+- only tags starting with `grouping_vlan_tag_prefix` are considered
+- the first matching tag wins
+- `grouping_tag_map` can translate tags such as `vlan-workstation` into
+  internal group roles such as `END_USER`
+- if no matching prefixed tag is found, the workflow falls back to the current
+  VLAN-name-based grouping logic
+
+Example:
+
+```toml
+grouping_mode = "vlan_tag"
+grouping_vlan_tag_prefix = "vlan-"
+grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "WIRELESS" }
+```
+
 Important deployment note:
 
 - The workflow itself does not reimplement repository access logic; that is

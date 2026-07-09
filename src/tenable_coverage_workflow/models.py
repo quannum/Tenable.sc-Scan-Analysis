@@ -2,6 +2,13 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class GroupingConfig:
+    mode: str = "default"
+    vlan_tag_prefix: str = "vlan-"
+    tag_map: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class NetworkRange:
     name: str | None
     description: str | None

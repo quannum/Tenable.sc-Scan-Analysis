@@ -12,6 +12,7 @@ from src.core.tenable_scope_analysis import build_scope_sheets, build_scope_tabl
 from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
+    GroupingConfig,
 )
 from src.tenable_coverage_workflow.planning.naming_rules import apply_naming_rules
 from src.tenable_coverage_workflow.planning.proposed_changes import (
@@ -48,6 +49,90 @@ class PlanningTests(unittest.TestCase):
             named_target.required_policy_name,
             "Credentialed Server Assessment",
         )
+
+    def test_vlan_tag_grouping_can_override_vlan_name_grouping(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.32.0/22",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Corp Wireless",
+            vlan_name="Corp WiFi",
+            vlan_tag=220,
+            tags=["production", "vlan-workstation", "wireless"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+
+        named_target = apply_naming_rules(
+            target,
+            GroupingConfig(mode="vlan_tag", vlan_tag_prefix="vlan-"),
+        )
+
+        self.assertEqual(
+            named_target.required_asset_name,
+            "NYC01_End_User_VLAN_Group",
+        )
+        self.assertEqual(named_target.required_scan_name, "US_East_End_User_Assessment")
+        self.assertEqual(
+            named_target.required_policy_name,
+            "Credentialed Workstation Assessment",
+        )
+
+    def test_first_vlan_prefixed_tag_wins(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.48.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Shared VLAN",
+            vlan_name="Shared",
+            vlan_tag=140,
+            tags=["vlan-wireless", "vlan-server"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+
+        named_target = apply_naming_rules(
+            target,
+            GroupingConfig(mode="vlan_tag", vlan_tag_prefix="vlan-"),
+        )
+
+        self.assertEqual(named_target.required_asset_name, "NYC01_Wireless_VLAN_Group")
+        self.assertEqual(named_target.required_scan_name, "US_East_Wireless_Assessment")
+        self.assertEqual(named_target.required_policy_name, "Wireless Assessment")
+
+    def test_grouping_tag_map_can_override_role_classification(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.64.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Wireless VLAN",
+            vlan_name="Corp Wireless",
+            vlan_tag=250,
+            tags=["vlan-wireless"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+
+        named_target = apply_naming_rules(
+            target,
+            GroupingConfig(
+                mode="vlan_tag",
+                vlan_tag_prefix="vlan-",
+                tag_map={"vlan-wireless": "END_USER"},
+            ),
+        )
+
+        self.assertEqual(
+            named_target.required_asset_name,
+            "NYC01_End_User_VLAN_Group",
+        )
+        self.assertEqual(named_target.required_scan_name, "US_East_End_User_Assessment")
 
     def test_proposed_changes_map_wrong_scan_gap_and_excluded_statuses(self):
         results = [

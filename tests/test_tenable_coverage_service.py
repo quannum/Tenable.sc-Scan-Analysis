@@ -99,6 +99,39 @@ class ServiceConfigTests(unittest.TestCase):
             if temp_path.exists():
                 shutil.rmtree(temp_path)
 
+    def test_service_config_supports_vlan_tag_grouping(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "service_grouping_config_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            config_file = temp_path / "service.toml"
+            config_file.write_text(
+                (
+                    "[tenable_coverage_workflow_service]\n"
+                    'subnet_as_code_method = "get_sites"\n'
+                    'mode = "offline"\n'
+                    'scan_json_dir = "scans"\n'
+                    'asset_json_dir = "assets"\n'
+                    'grouping_mode = "vlan_tag"\n'
+                    'grouping_vlan_tag_prefix = "vlan-"\n'
+                    "grouping_tag_map = { vlan-mgmt = \"NETWORK\" }\n"
+                ),
+                encoding="utf-8",
+            )
+
+            config = build_service_config(["--config-file", str(config_file)])
+
+            self.assertEqual(config.grouping_config.mode, "vlan_tag")
+            self.assertEqual(config.grouping_config.vlan_tag_prefix, "vlan-")
+            self.assertEqual(config.grouping_config.tag_map, {"vlan-mgmt": "NETWORK"})
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
 
 class ScheduledServiceTests(unittest.TestCase):
     @staticmethod
