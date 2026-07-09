@@ -16,6 +16,15 @@ It supports:
 The current branch is focused on the subnet-as-code workflow only. The older
 XLSX expected-range workflow lives separately in a legacy branch.
 
+At a high level, each coverage run:
+
+1. Calls the configured `subnet_as_code` method.
+2. Normalizes returned site, public range, private range, and VLAN data.
+3. Applies asset, scan, and policy naming rules.
+4. Loads Tenable scan and asset configuration from live API or offline JSON.
+5. Compares expected ranges against configured scan inclusions and exclusions.
+6. Writes coverage results, proposed changes, audit logs, and summary reports.
+
 
 ------
 
@@ -174,9 +183,8 @@ Metrics:
 * Expected IPs
 * Covered IPs
 * Gap IPs
-* % Scan Coverage Suppressed (This is "how much of the scan configured coverage was suppressed by exclusions".
-                             It is NOT "how much of the given range is excluded". This metric is meant to highlight
-                             scans that have an unusually high number of exclusions.)
+* Coverage percentage
+* Excluded IP impact for ranges where scan exclusions reduce net coverage
 
 ------
 
@@ -233,6 +241,11 @@ Primary workflow artifacts include:
 The authoritative source is the internal `subnet_as_code` Python module. The
 workflow supports payloads that contain site data directly or under wrapper keys
 such as `site_definition`, `sites`, `locations`, or `data`.
+
+Authoritative-source validation keeps invalid records out of coverage planning
+and records issues in `definition_validation_issues.json`. It rejects IPv6
+scopes, reports invalid CIDRs/ranges, flags duplicate ranges, and warns on
+unexpected overlaps except for expected private-supernet-to-VLAN containment.
 
 ------
 
@@ -356,9 +369,11 @@ Disabling certificate verification requires the explicit
 
 `propose-changes` writes `proposed_changes.csv` with every row initially marked
 `PENDING`. A reviewer must change selected rows to `APPROVED` and populate the
-`Reviewer` column. Automatic application is limited to asset/scan creation and
-target attachment actions; review-only exclusion, partial-coverage, and
-wrong-scan actions are skipped rather than guessed.
+`Reviewer` column. The CSV includes a `Source Reference` column pointing back to
+the `subnet_as_code` method/result item that produced the target. Automatic
+application is limited to asset/scan creation and target attachment actions;
+review-only exclusion, partial-coverage, and wrong-scan actions are skipped
+rather than guessed.
 
 Application requires every safety gate below:
 
@@ -392,7 +407,9 @@ Detect-and-plan runs also produce `coverage_results.json`/`.csv`,
 `definition_validation_issues.json`. Summaries group expected, covered, and gap
 IPs by region, site, VLAN, required scan type, configured repository, and
 policy. They list missing asset groups, missing required scans, policy
-mismatches, and wholly or partially extra scan target ranges.
+mismatches, and wholly or partially extra scan target ranges. The Markdown
+summary includes policy mismatch and extra/stale target sections for easier
+human review.
 
 At the moment, `analyze-coverage` and `propose-changes` both run the same
 underlying detect-and-plan pipeline and emit the same core audit/report
@@ -536,6 +553,10 @@ Example all-sites invocation:
 Example filtered invocation:
 
 `tenable-coverage-detect-plan --subnet-as-code-method get_sites_properties --source-sites NYC,LON --source-tags production --source-desired-properties site_code,private_ranges --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
+
+Offline mode always requires both `--scan-json-dir` and `--asset-json-dir`.
+Live mode requires `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` through
+environment variables, config, or explicit CLI flags where supported.
 
 The returned payload may be a site object, a list of sites, or an object
 containing `site_definition`, `sites`, `locations`, or `data`. CIDRs and

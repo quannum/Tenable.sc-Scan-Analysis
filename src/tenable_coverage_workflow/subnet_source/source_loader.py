@@ -11,6 +11,7 @@ from ..models import (
     ValidationIssue,
 )
 from .json_connector import load_json_payload
+from .validation import add_relationship_issues
 from .yaml_connector import flatten_site_definition
 
 _SUBNET_AS_CODE_METHOD_PARAMETER_MAP: dict[str, dict[str, str]] = {
@@ -465,7 +466,7 @@ def _load_ipaddress_payload(
 
     if not result.site_definitions:
         result.files_failed = 1
-    return result
+    return add_relationship_issues(result)
 
 
 def _coerce_record_tags(value: Any) -> list[str]:

@@ -121,6 +121,31 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
             ["production"],
         )
 
+    def test_subnet_as_code_get_ipaddress_reports_duplicate_ips(self):
+        class Module:
+            @staticmethod
+            def get_ipaddress(**kwargs):
+                return [
+                    {"ip": "192.41.32.55", "site_code": "lon"},
+                    {"ip": "192.41.32.55", "site_code": "lon"},
+                ]
+
+        with patch(
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
+            "importlib.import_module",
+            return_value=Module,
+        ):
+            _, result = load_authoritative_source(
+                AuthoritativeSourceConfig(subnet_as_code_method="get_ipaddress")
+            )
+
+        self.assertTrue(
+            any(
+                "Duplicate authoritative range" in issue.message
+                for issue in result.validation_issues
+            )
+        )
+
     def test_subnet_as_code_can_query_all_sites_without_sites_filter(self):
         calls = []
 
@@ -360,6 +385,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         self.assertTrue(
             any("IPv6 scope" in issue.message for issue in result.validation_issues)
         )
+
 
 if __name__ == "__main__":
     unittest.main()

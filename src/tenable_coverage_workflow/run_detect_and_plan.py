@@ -279,14 +279,19 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         ),
         tag_map_value=scalar_getter("grouping_tag_map", "GROUPING_TAG_MAP", None),
     )
+    scan_json_dir = scalar_getter("scan_json_dir", None)
+    asset_json_dir = scalar_getter("asset_json_dir", None)
+    if args.mode == "offline" and (not scan_json_dir or not asset_json_dir):
+        raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
+
     return DetectAndPlanConfig(
         source_config=source_config,
         output_dir=Path(args.output_dir),
         run_id=args.run_id,
         dry_run=bool(args.dry_run),
         mode=args.mode,
-        scan_json_dir=args.scan_json_dir,
-        asset_json_dir=args.asset_json_dir,
+        scan_json_dir=scan_json_dir,
+        asset_json_dir=asset_json_dir,
         sc_access_key=args.sc_access_key or os.getenv("SC_ACCESS_KEY"),
         sc_secret_key=args.sc_secret_key or os.getenv("SC_SECRET_KEY"),
         sc_url=args.sc_url or os.getenv("SC_URL"),

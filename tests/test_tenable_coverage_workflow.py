@@ -19,7 +19,9 @@ from src.tenable_coverage_workflow.planning.proposed_changes import (
     generate_proposed_changes,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
+    build_argument_parser,
     build_configuration_index,
+    build_detect_and_plan_config,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
@@ -242,6 +244,20 @@ class DetectAndPlanCliTests(unittest.TestCase):
 
         return Module
 
+    def test_detect_and_plan_config_requires_offline_json_dirs(self):
+        parser = build_argument_parser()
+        args = parser.parse_args(
+            [
+                "--subnet-as-code-method",
+                "get_sites",
+                "--mode",
+                "offline",
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "Offline mode requires"):
+            build_detect_and_plan_config(args)
+
     def test_detect_and_plan_cli_writes_audits_for_bad_subnet_records(self):
         temp_root = Path.cwd() / ".tmp-test-artifacts"
         temp_path = temp_root / "detect_and_plan_case"
@@ -334,7 +350,10 @@ class DetectAndPlanCliTests(unittest.TestCase):
             self.assertIn("run_completed", event_types)
 
             with csv_path.open("r", encoding="utf-8", newline="") as handle:
-                rows = list(csv.DictReader(handle))
+                reader = csv.DictReader(handle)
+                self.assertIn("Source Reference", reader.fieldnames or [])
+                self.assertNotIn("Source YAML File", reader.fieldnames or [])
+                rows = list(reader)
 
             public_row = next(
                 row
@@ -381,6 +400,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             markdown = md_path.read_text(encoding="utf-8")
             self.assertIn("## NYC01 - New York Office", markdown)
             self.assertIn("### PUBLIC: `203.0.113.0/26`", markdown)
+            self.assertIn("Source Reference", markdown)
 
             coverage_summary = json.loads(
                 (run_dir / "coverage_summary.json").read_text(encoding="utf-8")

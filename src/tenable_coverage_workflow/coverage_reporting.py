@@ -353,4 +353,17 @@ def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
     lines.extend(f"- {name}" for name in summary["missing_scans"])
     if not summary["missing_scans"]:
         lines.append("- None")
+    lines.extend(("", "## Policy Mismatches", ""))
+    if summary["policy_mismatches"]:
+        for mismatch in summary["policy_mismatches"]:
+            lines.append(
+                "- "
+                f"{mismatch['site_code']} / {mismatch['scan']}: expected "
+                f"{mismatch['expected_policy'] or 'N/A'}, configured "
+                f"{mismatch['configured_policy'] or 'N/A'}"
+            )
+    else:
+        lines.append("- None")
+    lines.extend(("", "## Extra/Stale Scan Targets", ""))
+    lines.append(f"- Findings: {summary['extra_scan_target_count']}")
     return atomic_write_text(path, "\n".join(lines).rstrip() + "\n")

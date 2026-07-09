@@ -23,7 +23,7 @@ CSV_COLUMNS = [
     "Approval Status",
     "Reviewer",
     "Decision Notes",
-    "Source YAML File",
+    "Source Reference",
 ]
 
 
@@ -94,7 +94,10 @@ def _write_markdown(
 
     lines = ["# Proposed Changes Audit", "", f"Run ID: `{run_id}`", ""]
 
-    for site_code, site_name in sorted(groups):
+    for site_code, site_name in sorted(
+        groups,
+        key=lambda item: (item[0], item[1] or ""),
+    ):
         heading = site_code if not site_name else f"{site_code} - {site_name}"
         lines.append(f"## {heading}")
         lines.append("")
@@ -116,7 +119,7 @@ def _write_markdown(
             lines.append(f"- Proposed Scan: {change.proposed_scan_name or 'N/A'}")
             lines.append(f"- Proposed Policy: {change.proposed_policy_name or 'N/A'}")
             lines.append(f"- Approval Status: {change.approval_status}")
-            lines.append(f"- Source YAML File: {change.source_file or 'N/A'}")
+            lines.append(f"- Source Reference: {change.source_file or 'N/A'}")
             if change.vlan_name or change.vlan_tag is not None:
                 vlan_label = change.vlan_name or "N/A"
                 vlan_tag = change.vlan_tag if change.vlan_tag is not None else "N/A"
