@@ -354,11 +354,12 @@ tenable-sc-scan-analysis propose-changes `
   --output-dir C:\output
 ```
 
-Live collection reads `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` from the
-environment. The inventory artifact includes repositories, asset groups,
-detailed scan definitions and schedules, policies, credential metadata, and
-observed hosts. Secret-like fields are recursively redacted before the snapshot
-is atomically written. A permission failure for one resource is recorded in
+Live collection reads `TCW_SC_URL`, `TCW_SC_ACCESS_KEY`, and
+`TCW_SC_SECRET_KEY` from the environment, with legacy `SC_*` names accepted as
+fallbacks. The inventory artifact includes repositories, asset groups, detailed
+scan definitions and schedules, policies, credential metadata, and observed
+hosts. Secret-like fields are recursively redacted before the snapshot is
+atomically written. A permission failure for one resource is recorded in
 `collection_errors` without discarding the rest of the snapshot; use
 `--fail-on-partial` when partial collection should fail the job.
 
@@ -385,7 +386,8 @@ Application requires every safety gate below:
 - `--mode live`
 - an approved CSV plan with one Run ID and a reviewer on every approved row
 - a positive repository ID
-- `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` from the environment
+- Tenable.sc URL, access key, and secret key from CLI flags, config, or
+  `TCW_SC_*` / legacy `SC_*` environment variables
 - unique exact asset, scan, and policy names
 - all referenced policies present before the first mutation
 
@@ -558,7 +560,7 @@ Example filtered invocation:
 `tenable-coverage-detect-plan --subnet-as-code-method get_sites_properties --source-sites NYC,LON --source-tags production --source-desired-properties site_code,private_ranges --mode offline --scan-json-dir C:\tenable\scans --asset-json-dir C:\tenable\assets`
 
 Offline mode always requires both `--scan-json-dir` and `--asset-json-dir`.
-Live mode requires `SC_URL`, `SC_ACCESS_KEY`, and `SC_SECRET_KEY` through
+Live mode requires Tenable.sc URL, access key, and secret key through
 environment variables, config, or explicit CLI flags where supported.
 
 The returned payload may be a site object, a list of sites, or an object
@@ -611,8 +613,8 @@ docker run --rm \
 A hardened Kubernetes CronJob and ConfigMap example is provided at
 `deploy/kubernetes/cronjob.yaml`. It forbids overlapping jobs, runs as a
 non-root user with a read-only root filesystem, mounts credentials from a
-Secret, and keeps authoritative input read-only. Replace the example image,
-Secret, PVC names, and schedule before deployment.
+Secret, and writes reports to a persistent output volume. Replace the example
+image, Secret, PVC names, release tag, and schedule before deployment.
 
 
 ------

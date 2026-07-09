@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -26,6 +25,12 @@ from .coverage_reporting import write_coverage_reports, write_final_audit_report
 from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
+from .settings import (
+    env_setting,
+    parse_bool,
+    parse_nonnegative_float,
+    parse_positive_int,
+)
 from .subnet_source import (
     AuthoritativeSourceConfig,
     load_authoritative_source,
@@ -114,9 +119,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="ALL",
     )
     parser.add_argument("--log-level", default="INFO")
-    parser.add_argument("--sc-timeout-seconds", type=int, default=60)
-    parser.add_argument("--sc-retries", type=int, default=3)
-    parser.add_argument("--sc-backoff-seconds", type=float, default=1.5)
+    parser.add_argument("--sc-timeout-seconds", type=int)
+    parser.add_argument("--sc-retries", type=int)
+    parser.add_argument("--sc-backoff-seconds", type=float)
     parser.add_argument("--grouping-mode", choices=["default", "vlan_tag"])
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument(
@@ -127,24 +132,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--no-sc-ssl-verify",
         dest="sc_ssl_verify",
         action="store_false",
-        default=True,
+        default=None,
     )
     parser.add_argument(
         "--sc-url",
-        help="Optional Tenable.sc URL override for live mode. Defaults to SC_URL.",
+        help=(
+            "Optional Tenable.sc URL override for live mode. Defaults to "
+            "TCW_SC_URL or SC_URL."
+        ),
     )
     parser.add_argument(
         "--sc-access-key",
         help=(
             "Optional Tenable.sc access key override for live mode. "
-            "Defaults to SC_ACCESS_KEY."
+            "Defaults to TCW_SC_ACCESS_KEY or SC_ACCESS_KEY."
         ),
     )
     parser.add_argument(
         "--sc-secret-key",
         help=(
             "Optional Tenable.sc secret key override for live mode. "
-            "Defaults to SC_SECRET_KEY."
+            "Defaults to TCW_SC_SECRET_KEY or SC_SECRET_KEY."
         ),
     )
     return parser
@@ -155,7 +163,10 @@ def main(argv=None) -> int:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
 
-    config = build_detect_and_plan_config(args)
+    try:
+        config = build_detect_and_plan_config(args)
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+        parser.error(str(exc))
     configure_logging(
         config.log_level,
         log_format=config.log_format,
@@ -238,8 +249,8 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
             getattr(args, name, None)
             if getattr(args, name, None) is not None
             else (
-                os.getenv(environment_name)
-                if environment_name and os.getenv(environment_name) is not None
+                env_value
+                if (env_value := env_setting(name, environment_name)) is not None
                 else default
             )
         )
@@ -252,13 +263,16 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
                 getattr(args, name, None)
                 if getattr(args, name, None) is not None
                 else (
-                    os.getenv(environment_name)
-                    if environment_name and os.getenv(environment_name) is not None
+                    env_value
+                    if (env_value := env_setting(name, environment_name)) is not None
                     else default
                 )
             )
             or None
         )
+
+    if args.dry_run is False:
+        raise ValueError("detect-and-plan does not support --no-dry-run")
 
     source_config = build_authoritative_source_config(
         scalar_getter=scalar_getter,
@@ -284,6 +298,23 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     if args.mode == "offline" and (not scan_json_dir or not asset_json_dir):
         raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
 
+    sc_timeout_seconds = parse_positive_int(
+        scalar_getter("sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60),
+        "sc_timeout_seconds",
+    )
+    sc_retries = parse_positive_int(
+        scalar_getter("sc_retries", "SC_RETRIES", 3),
+        "sc_retries",
+    )
+    sc_backoff_seconds = parse_nonnegative_float(
+        scalar_getter("sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5),
+        "sc_backoff_seconds",
+    )
+    sc_ssl_verify = parse_bool(
+        scalar_getter("sc_ssl_verify", "SC_SSL_VERIFY", True),
+        "sc_ssl_verify",
+    )
+
     return DetectAndPlanConfig(
         source_config=source_config,
         output_dir=Path(args.output_dir),
@@ -292,9 +323,9 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         mode=args.mode,
         scan_json_dir=scan_json_dir,
         asset_json_dir=asset_json_dir,
-        sc_access_key=args.sc_access_key or os.getenv("SC_ACCESS_KEY"),
-        sc_secret_key=args.sc_secret_key or os.getenv("SC_SECRET_KEY"),
-        sc_url=args.sc_url or os.getenv("SC_URL"),
+        sc_access_key=scalar_getter("sc_access_key", "SC_ACCESS_KEY"),
+        sc_secret_key=scalar_getter("sc_secret_key", "SC_SECRET_KEY"),
+        sc_url=scalar_getter("sc_url", "SC_URL"),
         include_keywords=parse_csv_list(args.include_keywords),
         exclude_keywords=parse_csv_list(args.exclude_keywords),
         match_all_include=bool(args.match_all_include),
@@ -303,10 +334,10 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         log_level=args.log_level,
         log_format="text",
         log_file=None,
-        sc_timeout_seconds=args.sc_timeout_seconds,
-        sc_retries=args.sc_retries,
-        sc_backoff_seconds=args.sc_backoff_seconds,
-        sc_ssl_verify=args.sc_ssl_verify,
+        sc_timeout_seconds=sc_timeout_seconds,
+        sc_retries=sc_retries,
+        sc_backoff_seconds=sc_backoff_seconds,
+        sc_ssl_verify=sc_ssl_verify,
         grouping_config=grouping_config,
     )
 

@@ -6,7 +6,7 @@ data:
   service.yaml: |
     tenable_coverage_workflow_service:
       job_name: tenable-coverage-nightly
-      source_json_file: /data/network-source/sites.json
+      subnet_as_code_method: get_sites
       output_dir: /data/output
       dry_run: true
       mode: live
@@ -39,23 +39,23 @@ spec:
               type: RuntimeDefault
           containers:
             - name: analyzer
-              image: registry.example.internal/security/tenable-sc-scan-analysis:2.2
+              image: registry.example.internal/security/tenable-sc-scan-analysis:RELEASE_TAG
               imagePullPolicy: IfNotPresent
               args:
                 - --config-file
                 - /etc/tenable-analysis/service.yaml
               env:
-                - name: SC_URL
+                - name: TCW_SC_URL
                   valueFrom:
                     secretKeyRef:
                       name: tenable-sc-api
                       key: url
-                - name: SC_ACCESS_KEY
+                - name: TCW_SC_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: tenable-sc-api
                       key: access-key
-                - name: SC_SECRET_KEY
+                - name: TCW_SC_SECRET_KEY
                   valueFrom:
                     secretKeyRef:
                       name: tenable-sc-api
@@ -76,9 +76,6 @@ spec:
                 - name: config
                   mountPath: /etc/tenable-analysis
                   readOnly: true
-                - name: network-source
-                  mountPath: /data/network-source
-                  readOnly: true
                 - name: output
                   mountPath: /data/output
                 - name: tmp
@@ -87,9 +84,6 @@ spec:
             - name: config
               configMap:
                 name: tenable-sc-scan-analysis
-            - name: network-source
-              persistentVolumeClaim:
-                claimName: authoritative-network-source
             - name: output
               persistentVolumeClaim:
                 claimName: tenable-coverage-output

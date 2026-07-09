@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import shutil
 import unittest
 from io import StringIO
@@ -256,6 +257,54 @@ class DetectAndPlanCliTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "Offline mode requires"):
+            build_detect_and_plan_config(args)
+
+    def test_detect_and_plan_config_prefers_tcw_transport_environment(self):
+        parser = build_argument_parser()
+        args = parser.parse_args(
+            [
+                "--subnet-as-code-method",
+                "get_sites",
+                "--mode",
+                "live",
+            ]
+        )
+        env = {
+            "TCW_SC_URL": "https://tcw.tenable.local",
+            "SC_URL": "https://legacy.tenable.local",
+            "TCW_SC_ACCESS_KEY": "tcw-access",
+            "SC_ACCESS_KEY": "legacy-access",
+            "TCW_SC_SECRET_KEY": "tcw-secret",
+            "SC_SECRET_KEY": "legacy-secret",
+            "TCW_SC_TIMEOUT_SECONDS": "45",
+            "SC_TIMEOUT_SECONDS": "60",
+            "TCW_SC_RETRIES": "4",
+            "TCW_SC_BACKOFF_SECONDS": "2.0",
+            "TCW_SC_SSL_VERIFY": "false",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = build_detect_and_plan_config(args)
+
+        self.assertEqual(config.sc_url, "https://tcw.tenable.local")
+        self.assertEqual(config.sc_access_key, "tcw-access")
+        self.assertEqual(config.sc_secret_key, "tcw-secret")
+        self.assertEqual(config.sc_timeout_seconds, 45)
+        self.assertEqual(config.sc_retries, 4)
+        self.assertEqual(config.sc_backoff_seconds, 2.0)
+        self.assertFalse(config.sc_ssl_verify)
+
+    def test_detect_and_plan_rejects_no_dry_run(self):
+        parser = build_argument_parser()
+        args = parser.parse_args(
+            [
+                "--subnet-as-code-method",
+                "get_sites",
+                "--no-dry-run",
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "does not support --no-dry-run"):
             build_detect_and_plan_config(args)
 
     def test_detect_and_plan_cli_writes_audits_for_bad_subnet_records(self):

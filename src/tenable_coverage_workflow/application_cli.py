@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -18,6 +17,14 @@ from .change_application import (
 )
 from .grouping_config import build_grouping_config
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
+from .settings import (
+    env_setting,
+    normalize_config_keys,
+    normalize_key,
+    parse_bool,
+    parse_nonnegative_float,
+    parse_positive_int,
+)
 from .subnet_source import load_authoritative_source
 from .subnet_source.source_config import (
     add_authoritative_source_arguments,
@@ -189,15 +196,15 @@ def _tenable_config(args) -> TenableAccessConfig:
     if mode == "offline" and (not scan_dir or not asset_dir):
         raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
 
-    sc_timeout_seconds = _parse_positive_int(
+    sc_timeout_seconds = parse_positive_int(
         _setting(args, "sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60),
         "sc_timeout_seconds",
     )
-    sc_retries = _parse_positive_int(
+    sc_retries = parse_positive_int(
         _setting(args, "sc_retries", "SC_RETRIES", 3),
         "sc_retries",
     )
-    sc_backoff_seconds = _parse_nonnegative_float(
+    sc_backoff_seconds = parse_nonnegative_float(
         _setting(args, "sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5),
         "sc_backoff_seconds",
     )
@@ -368,7 +375,7 @@ def _load_cli_config(path_value: str | None) -> dict[str, Any]:
     section = data.get("tenable_sc_scan_analysis", data)
     if not isinstance(section, dict):
         raise ValueError("tenable_sc_scan_analysis config must be a mapping.")
-    return {_normalize_key(key): value for key, value in section.items()}
+    return normalize_config_keys(section)
 
 
 def _setting(
@@ -380,66 +387,26 @@ def _setting(
     cli_value = getattr(args, name, None)
     if cli_value is not None:
         return cli_value
-    prefixed_environment_name = f"TCW_{name.upper()}"
-    if os.getenv(prefixed_environment_name) is not None:
-        return os.getenv(prefixed_environment_name)
-    if environment_name and os.getenv(environment_name) is not None:
-        return os.getenv(environment_name)
+    env_value = env_setting(name, environment_name)
+    if env_value is not None:
+        return env_value
     config = getattr(args, "_config", {})
-    command_key = _normalize_key(args.command)
+    command_key = normalize_key(args.command)
     commands = config.get("commands", {})
     if not isinstance(commands, dict):
         commands = {}
     command_config = config.get(command_key, commands.get(command_key, {}))
     if isinstance(command_config, dict):
         normalized = {
-            _normalize_key(key): value for key, value in command_config.items()
+            normalize_key(key): value for key, value in command_config.items()
         }
         if name in normalized:
             return normalized[name]
     return config.get(name, default)
 
 
-def _normalize_key(value: Any) -> str:
-    return str(value).strip().lower().replace("-", "_")
-
-
 def _as_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"true", "yes", "1", "on"}:
-            return True
-        if normalized in {"false", "no", "0", "off", ""}:
-            return False
-    return bool(value)
-
-
-def _parse_positive_int(value: Any, field_name: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"Invalid integer value for '{field_name}': {value}") from exc
-
-    if parsed <= 0:
-        raise ValueError(
-            f"Invalid integer value for '{field_name}': {value}. Must be > 0."
-        )
-    return parsed
-
-
-def _parse_nonnegative_float(value: Any, field_name: str) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"Invalid numeric value for '{field_name}': {value}") from exc
-
-    if parsed < 0:
-        raise ValueError(
-            f"Invalid numeric value for '{field_name}': {value}. Must be >= 0."
-        )
-    return parsed
+    return parse_bool(value, "boolean")
 
 
 def _csv_setting(

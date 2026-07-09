@@ -30,8 +30,9 @@ stale_lock_timeout_seconds = 21600
 dry_run = true
 
 # Tenable data source:
-# Recommended scheduled mode is live. Provide SC_URL, SC_ACCESS_KEY, and
-# SC_SECRET_KEY via environment variables or a mounted secret.
+# Recommended scheduled mode is live. Provide TCW_SC_URL, TCW_SC_ACCESS_KEY, and
+# TCW_SC_SECRET_KEY via environment variables or a mounted secret. Legacy SC_*
+# names are still accepted as fallbacks.
 mode = "live"
 
 # For offline mode instead, switch mode to "offline" and set these:

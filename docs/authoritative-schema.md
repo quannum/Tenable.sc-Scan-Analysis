@@ -1,11 +1,10 @@
 # Authoritative Network Schema
 
-Production input is the subnet-as-code API JSON, typically obtained by calling
-the internal `subnet_as_code` Python module with query parameters such as
-`sites`, `tags`, `referenceId`, `networkType`, `routingType`, and
-`desiredProperties`. Raw YAML remains supported only for fallback, testing, and
-local development. A direct URL-based JSON fetch path is still available as a
-compatibility fallback, but the preferred transport is the internal module.
+Production input is the subnet-as-code API JSON, obtained by calling the
+internal `subnet_as_code` Python module with query parameters such as `sites`,
+`tags`, `referenceId`, `networkType`, `routingType`, and `desiredProperties`.
+The workflow normalizes the returned Python/JSON payload into the internal site
+model before analysis.
 
 When `subnet_as_code.get_ipaddress(...)` is used, its flat host-record response
 is normalized into site-scoped `/32` targets using each record's `site_code`,
@@ -88,10 +87,9 @@ The real subnet-as-code storage shape supplied for this project is:
 }
 ```
 
-The JSON loader also accepts already-normalized variants such as direct CIDRs,
-explicit `start-end` IPv4 ranges, or simple `{network, cidr}` objects. This
-keeps the API, local JSON fixtures, GitHub YAML, and legacy XLSX paths
-source-neutral once normalized.
+The JSON normalizer also accepts already-normalized variants such as direct
+CIDRs, explicit `start-end` IPv4 ranges, or simple `{network, cidr}` objects.
+This keeps subnet-as-code payload variants source-neutral once normalized.
 
 Normalization rules:
 

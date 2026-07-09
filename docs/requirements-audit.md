@@ -6,10 +6,10 @@ an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| JSON API, local JSON, GitHub YAML, local YAML, XLSX priority | Implemented | `subnet_source/source_loader.py`; connector tests |
+| subnet_as_code API authoritative source | Implemented | `subnet_source/source_loader.py`; connector tests |
 | Common internal source model | Implemented | `models.py`; `docs/authoritative-schema.md` |
 | Site, region, timezone, tags, environment, business function, scan metadata | Implemented | source connectors and coverage detail reports |
-| CIDR and IP-range normalization with `ipaddress` | Implemented | JSON/XLSX/YAML connectors and tests |
+| CIDR and IP-range normalization with `ipaddress` | Implemented | subnet-as-code normalization and parser tests |
 | Public/private/VLAN validation | Implemented | malformed, IPv4, label warning, and VLAN containment checks |
 | Missing, extra, overlap, duplicate, malformed, partial coverage | Implemented | source validation, coverage engine, extra target reporting |
 | Expected asset and scan mapping | Implemented | naming rules, configuration index, coverage results |

@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +11,13 @@ from dotenv import load_dotenv
 from ..io.parsing import parse_csv_list
 from .grouping_config import build_grouping_config
 from .models import GroupingConfig
+from .settings import (
+    env_setting,
+    normalize_config_keys,
+    parse_bool,
+    parse_nonnegative_float,
+    parse_positive_int,
+)
 from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
@@ -27,9 +33,6 @@ try:
     import tomllib
 except ImportError:  # pragma: no cover
     import tomli as tomllib  # pyright: ignore[reportMissingImports]
-
-
-ENV_PREFIX = "TCW_"
 
 
 @dataclass(frozen=True)
@@ -135,43 +138,48 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         if cli_value is not None:
             return cli_value
 
-        env_value = os.getenv(f"{ENV_PREFIX}{name.upper()}")
+        legacy_names = {
+            "sc_access_key": ("SC_ACCESS_KEY",),
+            "sc_secret_key": ("SC_SECRET_KEY",),
+            "sc_url": ("SC_URL",),
+        }.get(name, ())
+        env_value = env_setting(name, environment_name, legacy_names)
         if env_value is not None:
             return env_value
 
-        if environment_name and os.getenv(environment_name) is not None:
-            return os.getenv(environment_name)
-
-        if name == "sc_access_key" and os.getenv("SC_ACCESS_KEY") is not None:
-            return os.getenv("SC_ACCESS_KEY")
-        if name == "sc_secret_key" and os.getenv("SC_SECRET_KEY") is not None:
-            return os.getenv("SC_SECRET_KEY")
-        if name == "sc_url" and os.getenv("SC_URL") is not None:
-            return os.getenv("SC_URL")
         return config_data.get(name, default)
 
     try:
-        dry_run = _parse_bool(pick("dry_run", True), "dry_run")
-        match_all_include = _parse_bool(
+        dry_run = parse_bool(pick("dry_run", True), "dry_run")
+        match_all_include = parse_bool(
             pick("match_all_include", False), "match_all_include"
         )
-        case_sensitive = _parse_bool(pick("case_sensitive", False), "case_sensitive")
-        sc_ssl_verify = _parse_bool(pick("sc_ssl_verify", True), "sc_ssl_verify")
-        stale_lock_timeout_seconds = _parse_positive_int(
+        case_sensitive = parse_bool(pick("case_sensitive", False), "case_sensitive")
+        sc_ssl_verify = parse_bool(
+            pick("sc_ssl_verify", True, "SC_SSL_VERIFY"), "sc_ssl_verify"
+        )
+        stale_lock_timeout_seconds = parse_positive_int(
             pick("stale_lock_timeout_seconds", 21600),
             "stale_lock_timeout_seconds",
         )
-        sc_timeout_seconds = _parse_positive_int(
-            pick("sc_timeout_seconds", 60), "sc_timeout_seconds"
+        sc_timeout_seconds = parse_positive_int(
+            pick("sc_timeout_seconds", 60, "SC_TIMEOUT_SECONDS"),
+            "sc_timeout_seconds",
         )
-        sc_retries = _parse_positive_int(pick("sc_retries", 3), "sc_retries")
-        sc_backoff_seconds = float(pick("sc_backoff_seconds", 1.5))
-        if sc_backoff_seconds < 0:
-            raise ValueError("sc_backoff_seconds must be >= 0")
+        sc_retries = parse_positive_int(
+            pick("sc_retries", 3, "SC_RETRIES"), "sc_retries"
+        )
+        sc_backoff_seconds = parse_nonnegative_float(
+            pick("sc_backoff_seconds", 1.5, "SC_BACKOFF_SECONDS"),
+            "sc_backoff_seconds",
+        )
     except ValueError as exc:
         parser.error(str(exc))
 
-    mode = str(pick("mode", "offline"))
+    if not dry_run:
+        parser.error("Scheduled detect-and-plan runs do not support dry_run=false")
+
+    mode = str(pick("mode", "offline")).strip().lower()
     if mode not in {"offline", "live"}:
         parser.error("--mode must be 'offline' or 'live'")
 
@@ -315,46 +323,13 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
             "object/dictionary."
         )
 
-    return _normalize_config_keys(section)
+    return normalize_config_keys(section)
 
 
 def normalize_job_name(value: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", str(value).strip().lower())
     normalized = normalized.strip("-")
     return normalized or "tenable-coverage"
-
-
-def _normalize_config_keys(config_data: dict[str, Any]) -> dict[str, Any]:
-    normalized = {}
-    for key, value in config_data.items():
-        normalized[str(key).strip().replace("-", "_")] = value
-    return normalized
-
-
-def _parse_bool(value: Any, field_name: str) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "y", "on"}:
-            return True
-        if normalized in {"0", "false", "no", "n", "off"}:
-            return False
-    raise ValueError(f"Invalid boolean value for '{field_name}': {value}")
-
-
-def _parse_positive_int(value: Any, field_name: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"Invalid integer value for '{field_name}': {value}") from exc
-
-    if parsed <= 0:
-        raise ValueError(
-            f"Invalid integer value for '{field_name}': {value}. Must be > 0."
-        )
-
-    return parsed
 
 
 def _as_path(value: str | Path | None) -> Path | None:

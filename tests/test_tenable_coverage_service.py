@@ -118,7 +118,7 @@ class ServiceConfigTests(unittest.TestCase):
                     'asset_json_dir = "assets"\n'
                     'grouping_mode = "vlan_tag"\n'
                     'grouping_vlan_tag_prefix = "vlan-"\n'
-                    "grouping_tag_map = { vlan-mgmt = \"NETWORK\" }\n"
+                    'grouping_tag_map = { vlan-mgmt = "NETWORK" }\n'
                 ),
                 encoding="utf-8",
             )
@@ -131,6 +131,48 @@ class ServiceConfigTests(unittest.TestCase):
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)
+
+    def test_service_config_prefers_tcw_transport_environment(self):
+        env = {
+            "TCW_SC_URL": "https://tcw.tenable.local",
+            "SC_URL": "https://legacy.tenable.local",
+            "TCW_SC_ACCESS_KEY": "tcw-access",
+            "SC_ACCESS_KEY": "legacy-access",
+            "TCW_SC_SECRET_KEY": "tcw-secret",
+            "SC_SECRET_KEY": "legacy-secret",
+            "TCW_SC_TIMEOUT_SECONDS": "45",
+            "SC_TIMEOUT_SECONDS": "60",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            config = build_service_config(
+                [
+                    "--subnet-as-code-method",
+                    "get_sites",
+                    "--mode",
+                    "live",
+                ]
+            )
+
+        self.assertEqual(config.sc_url, "https://tcw.tenable.local")
+        self.assertEqual(config.sc_access_key, "tcw-access")
+        self.assertEqual(config.sc_secret_key, "tcw-secret")
+        self.assertEqual(config.sc_timeout_seconds, 45)
+
+    def test_service_config_rejects_no_dry_run(self):
+        with self.assertRaises(SystemExit):
+            build_service_config(
+                [
+                    "--subnet-as-code-method",
+                    "get_sites",
+                    "--mode",
+                    "offline",
+                    "--scan-json-dir",
+                    "scans",
+                    "--asset-json-dir",
+                    "assets",
+                    "--no-dry-run",
+                ]
+            )
 
 
 class ScheduledServiceTests(unittest.TestCase):
