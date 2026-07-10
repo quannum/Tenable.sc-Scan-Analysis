@@ -26,7 +26,7 @@ from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
 from .settings import (
-    env_setting,
+    SettingsResolver,
     parse_bool,
     parse_nonnegative_float,
     parse_positive_int,
@@ -247,34 +247,17 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
+    resolver = SettingsResolver(args)
+
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
-        return (
-            getattr(args, name, None)
-            if getattr(args, name, None) is not None
-            else (
-                env_value
-                if (env_value := env_setting(name, environment_name)) is not None
-                else default
-            )
-        )
+        return resolver.get(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        return (
-            parse_csv_list(
-                getattr(args, name, None)
-                if getattr(args, name, None) is not None
-                else (
-                    env_value
-                    if (env_value := env_setting(name, environment_name)) is not None
-                    else default
-                )
-            )
-            or None
-        )
+        return resolver.csv(name, default, environment_name)
 
     if args.dry_run is False:
         raise ValueError("detect-and-plan does not support --no-dry-run")
@@ -685,19 +668,29 @@ def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
 
 
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
-    print(f"Run ID: {run_id}")
-    print(f"Authoritative source: {summary['authoritative_source_type']}")
-    print(
-        "Authoritative units processed: " f"{summary['authoritative_units_processed']}"
+    _emit_lines(
+        [
+            f"Run ID: {run_id}",
+            f"Authoritative source: {summary['authoritative_source_type']}",
+            (
+                "Authoritative units processed: "
+                f"{summary['authoritative_units_processed']}"
+            ),
+            f"Authoritative units failed: {summary['authoritative_units_failed']}",
+            f"Coverage targets created: {summary['coverage_targets_created']}",
+            f"OK count: {summary['ok_count']}",
+            f"GAP count: {summary['gap_count']}",
+            f"PARTIAL count: {summary['partial_count']}",
+            f"EXCLUDED count: {summary['excluded_count']}",
+            f"Proposed changes count: {summary['proposed_changes_count']}",
+            f"Output directory: {summary['output_directory']}",
+        ]
     )
-    print(f"Authoritative units failed: {summary['authoritative_units_failed']}")
-    print(f"Coverage targets created: {summary['coverage_targets_created']}")
-    print(f"OK count: {summary['ok_count']}")
-    print(f"GAP count: {summary['gap_count']}")
-    print(f"PARTIAL count: {summary['partial_count']}")
-    print(f"EXCLUDED count: {summary['excluded_count']}")
-    print(f"Proposed changes count: {summary['proposed_changes_count']}")
-    print(f"Output directory: {summary['output_directory']}")
+
+
+def _emit_lines(lines: list[str]) -> None:
+    for line in lines:
+        print(line)
 
 
 if __name__ == "__main__":

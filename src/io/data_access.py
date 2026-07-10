@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Protocol
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,11 +46,31 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     return data
 
 
+class DataAccessConfig(Protocol):
+    @property
+    def mode(self) -> str: ...
+
+    @property
+    def scan_json_dir(self) -> str | None: ...
+
+    @property
+    def asset_json_dir(self) -> str | None: ...
+
+    @property
+    def sc_url(self) -> str | None: ...
+
+    @property
+    def sc_access_key(self) -> str | None: ...
+
+    @property
+    def sc_secret_key(self) -> str | None: ...
+
+
 class DataAccess:
     LIVE_CALL_MAX_RETRIES = 3
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
-    def __init__(self, config) -> None:
+    def __init__(self, config: DataAccessConfig) -> None:
         self.config = config
         self.sc: Any = None
         self.offline_scans = {}
@@ -87,7 +107,7 @@ class DataAccess:
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
     @staticmethod
-    def _validate_live_config(config) -> None:
+    def _validate_live_config(config: DataAccessConfig) -> None:
         missing = []
         if not config.sc_url:
             missing.append("TCW_SC_URL/SC_URL")

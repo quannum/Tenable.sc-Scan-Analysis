@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
 from dotenv import load_dotenv
 
 from ..constants import VERSION
@@ -18,9 +17,8 @@ from .change_application import (
 from .grouping_config import build_grouping_config
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
 from .settings import (
-    env_setting,
-    normalize_config_keys,
-    normalize_key,
+    SettingsResolver,
+    load_config_section,
     parse_bool,
     parse_nonnegative_float,
     parse_positive_int,
@@ -31,11 +29,6 @@ from .subnet_source.source_config import (
     build_authoritative_source_config,
 )
 from .tenable_inventory import collect_tenable_inventory, write_inventory_snapshot
-
-try:
-    import tomllib
-except ImportError:  # pragma: no cover
-    import tomli as tomllib
 
 EXIT_OK = 0
 EXIT_VALIDATION = 2
@@ -150,6 +143,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
         args._config = _load_cli_config(args.config_file)
+        args._settings = SettingsResolver(args, args._config, args.command)
         if args.command == "validate-definitions":
             return _validate_definitions(args)
         if args.command == "collect-tenable":
@@ -161,7 +155,7 @@ def main(argv=None) -> int:
         if args.command == "export-report":
             return _export_report(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-        print(f"ERROR: {exc}")
+        _emit(f"ERROR: {exc}")
         return EXIT_OPERATION
     return EXIT_CONFIG
 
@@ -189,7 +183,7 @@ def _validate_definitions(args) -> int:
     output_file = _setting(args, "output_file")
     if output_file:
         write_inventory_snapshot(payload, output_file)
-    print(
+    _emit(
         f"Validated {len(result.site_definitions)} site(s), "
         f"{len(result.coverage_targets)} target(s), "
         f"{len(result.validation_issues)} issue(s)."
@@ -243,7 +237,7 @@ def _collect_tenable(args) -> int:
             "collect-tenable requires --output-file or config output_file."
         )
     output = write_inventory_snapshot(snapshot, output_file)
-    print(f"Tenable.sc inventory written to {output}")
+    _emit(f"Tenable.sc inventory written to {output}")
     if (
         _as_bool(_setting(args, "fail_on_partial", default=False))
         and snapshot["collection_errors"]
@@ -292,13 +286,13 @@ def _analyze_or_propose(args) -> int:
         ),
     )
     summary = run_detect_and_plan(config)
-    print(f"Run {summary['run_id']} completed: {summary['output_directory']}")
+    _emit(f"Run {summary['run_id']} completed: {summary['output_directory']}")
     return EXIT_OK
 
 
 def _apply_changes(args) -> int:
     if args.apply is not True:
-        print("Refusing mutation: apply-changes requires the explicit --apply flag.")
+        _emit("Refusing mutation: apply-changes requires the explicit --apply flag.")
         return EXIT_APPLY_REQUIRED
     plan_file = _setting(args, "plan_file")
     if not plan_file:
@@ -320,7 +314,7 @@ def _apply_changes(args) -> int:
     output = write_inventory_snapshot(result, result_file)
     markdown_output = write_apply_markdown(result, Path(result_file).with_suffix(".md"))
     failed = int(result["status_counts"].get("FAILED", 0))
-    print(
+    _emit(
         f"Apply results written to {output} and {markdown_output}; "
         f"{result['status_counts'].get('APPLIED', 0)} applied, "
         f"{result['status_counts'].get('UNCHANGED', 0)} unchanged, "
@@ -367,32 +361,20 @@ def _export_report(args) -> int:
         raise ValueError(f"No report artifacts found in {run_dir}")
     manifest = {"schema_version": 1, "source_run_dir": str(run_dir), "files": copied}
     write_inventory_snapshot(manifest, output_dir / "report_manifest.json")
-    print(f"Exported {len(copied)} report artifact(s) to {output_dir}")
+    _emit(f"Exported {len(copied)} report artifact(s) to {output_dir}")
     return EXIT_OK
 
 
 def _load_cli_config(path_value: str | None) -> dict[str, Any]:
     if not path_value:
         return {}
-    path = Path(path_value)
-    if not path.is_file():
-        raise ValueError(f"Config file does not exist: {path}")
-    suffix = path.suffix.lower()
-    if suffix in {".yaml", ".yml"}:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    elif suffix == ".json":
-        data = json.loads(path.read_text(encoding="utf-8"))
-    elif suffix in {".toml", ".tml"}:
-        with path.open("rb") as handle:
-            data = tomllib.load(handle)
-    else:
-        raise ValueError("Config file must use .yaml, .yml, .json, or .toml.")
-    if not isinstance(data, dict):
-        raise ValueError("Config file root must be an object/mapping.")
-    section = data.get("tenable_sc_scan_analysis", data)
-    if not isinstance(section, dict):
-        raise ValueError("tenable_sc_scan_analysis config must be a mapping.")
-    return normalize_config_keys(section)
+    return load_config_section(
+        Path(path_value),
+        section_name="tenable_sc_scan_analysis",
+        root_error="Config file root must be an object/mapping.",
+        section_error="tenable_sc_scan_analysis config must be a mapping.",
+        unsupported_error="Config file must use .yaml, .yml, .json, or .toml.",
+    )
 
 
 def _setting(
@@ -401,25 +383,8 @@ def _setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> Any:
-    cli_value = getattr(args, name, None)
-    if cli_value is not None:
-        return cli_value
-    env_value = env_setting(name, environment_name)
-    if env_value is not None:
-        return env_value
-    config = getattr(args, "_config", {})
-    command_key = normalize_key(args.command)
-    commands = config.get("commands", {})
-    if not isinstance(commands, dict):
-        commands = {}
-    command_config = config.get(command_key, commands.get(command_key, {}))
-    if isinstance(command_config, dict):
-        normalized = {
-            normalize_key(key): value for key, value in command_config.items()
-        }
-        if name in normalized:
-            return normalized[name]
-    return config.get(name, default)
+    resolver = getattr(args, "_settings", SettingsResolver(args))
+    return resolver.get(name, default, environment_name)
 
 
 def _as_bool(value: Any) -> bool:
@@ -432,17 +397,12 @@ def _csv_setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> list[str] | None:
-    value = _setting(args, name, environment_name, default)
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, tuple):
-        return [str(item).strip() for item in value if str(item).strip()]
-    text = str(value).strip()
-    if not text:
-        return None
-    return [item.strip() for item in text.split(",") if item.strip()]
+    resolver = getattr(args, "_settings", SettingsResolver(args))
+    return resolver.csv(name, default, environment_name)
+
+
+def _emit(message: str) -> None:
+    print(message)
 
 
 if __name__ == "__main__":

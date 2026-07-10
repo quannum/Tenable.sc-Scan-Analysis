@@ -12,8 +12,10 @@ from ..io.parsing import parse_csv_list
 from .grouping_config import build_grouping_config
 from .models import GroupingConfig
 from .settings import (
-    env_setting,
-    normalize_config_keys,
+    SettingsResolver,
+    as_path,
+    load_config_section,
+    optional_string,
     parse_bool,
     parse_nonnegative_float,
     parse_positive_int,
@@ -28,11 +30,6 @@ from .subnet_source.source_loader import (
     has_configured_authoritative_source,
     validate_authoritative_source_config,
 )
-
-try:
-    import tomllib
-except ImportError:  # pragma: no cover
-    import tomli as tomllib  # pyright: ignore[reportMissingImports]
 
 
 @dataclass(frozen=True)
@@ -127,31 +124,22 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
 
-    config_file = _as_path(args.config_file)
+    config_file = as_path(args.config_file)
     try:
         config_data = load_config_file(config_file) if config_file else {}
     except (OSError, ValueError, json.JSONDecodeError, yaml.YAMLError) as exc:
         parser.error(str(exc))
 
-    def pick(
-        name: str,
-        default: Any = None,
-        environment_name: str | None = None,
-    ) -> Any:
-        cli_value = getattr(args, name, None)
-        if cli_value is not None:
-            return cli_value
-
-        legacy_names = {
+    resolver = SettingsResolver(
+        args,
+        config_data,
+        legacy_env_names={
             "sc_access_key": ("SC_ACCESS_KEY",),
             "sc_secret_key": ("SC_SECRET_KEY",),
             "sc_url": ("SC_URL",),
-        }.get(name, ())
-        env_value = env_setting(name, environment_name, legacy_names)
-        if env_value is not None:
-            return env_value
-
-        return config_data.get(name, default)
+        },
+    )
+    pick = resolver.get
 
     try:
         dry_run = parse_bool(pick("dry_run", True), "dry_run")
@@ -201,7 +189,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        return parse_csv_list(pick(name, default, environment_name)) or None
+        return resolver.csv(name, default, environment_name)
 
     source_config = build_authoritative_source_config(
         scalar_getter=scalar_getter,
@@ -218,24 +206,24 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         parser.error(str(exc))
 
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
-    output_dir = _as_path(pick("output_dir")) or Path("output")
+    output_dir = as_path(pick("output_dir")) or Path("output")
     run_id_prefix = str(
         pick("run_id_prefix", f"{normalize_job_name(job_name)}-")
     ).strip()
-    latest_summary_file = _as_path(pick("latest_summary_file")) or (
+    latest_summary_file = as_path(pick("latest_summary_file")) or (
         output_dir / "latest_run.json"
     )
-    lock_file = _as_path(pick("lock_file")) or (output_dir / "scheduler.lock")
+    lock_file = as_path(pick("lock_file")) or (output_dir / "scheduler.lock")
 
-    scan_json_dir = _optional_string(pick("scan_json_dir"))
-    asset_json_dir = _optional_string(pick("asset_json_dir"))
-    sc_url = _optional_string(pick("sc_url"))
-    sc_access_key = _optional_string(pick("sc_access_key"))
-    sc_secret_key = _optional_string(pick("sc_secret_key"))
+    scan_json_dir = optional_string(pick("scan_json_dir"))
+    asset_json_dir = optional_string(pick("asset_json_dir"))
+    sc_url = optional_string(pick("sc_url"))
+    sc_access_key = optional_string(pick("sc_access_key"))
+    sc_secret_key = optional_string(pick("sc_secret_key"))
     log_format = str(pick("log_format", "text")).lower()
     if log_format not in {"text", "json"}:
         parser.error("--log-format must be 'text' or 'json'")
-    log_file = _as_path(pick("log_file"))
+    log_file = as_path(pick("log_file"))
     try:
         grouping_config = build_grouping_config(
             mode_value=pick("grouping_mode", "default", "GROUPING_MODE"),
@@ -302,54 +290,19 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
 
 
 def load_config_file(config_file_path: Path) -> dict[str, Any]:
-    if not config_file_path.exists():
-        raise ValueError(f"Config file does not exist: {config_file_path}")
-
-    suffix = config_file_path.suffix.lower()
-    if suffix == ".json":
-        with config_file_path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    elif suffix in {".toml", ".tml"}:
-        with config_file_path.open("rb") as handle:
-            data = tomllib.load(handle)
-    elif suffix in {".yaml", ".yml"}:
-        data = yaml.safe_load(config_file_path.read_text(encoding="utf-8"))
-    else:
-        raise ValueError("Unsupported config file type. Use .yaml, .json, or .toml.")
-
-    if not isinstance(data, dict):
-        raise ValueError("Config file root must be an object/dictionary.")
-
-    section = data.get("tenable_coverage_workflow_service", data)
-    if not isinstance(section, dict):
-        raise ValueError(
+    return load_config_section(
+        config_file_path,
+        section_name="tenable_coverage_workflow_service",
+        root_error="Config file root must be an object/dictionary.",
+        section_error=(
             "Config 'tenable_coverage_workflow_service' section must be an "
             "object/dictionary."
-        )
-
-    return normalize_config_keys(section)
+        ),
+        unsupported_error="Unsupported config file type. Use .yaml, .json, or .toml.",
+    )
 
 
 def normalize_job_name(value: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", str(value).strip().lower())
     normalized = normalized.strip("-")
     return normalized or "tenable-coverage"
-
-
-def _as_path(value: str | Path | None) -> Path | None:
-    if value is None:
-        return None
-    if isinstance(value, Path):
-        return value
-
-    text = str(value).strip()
-    if not text:
-        return None
-    return Path(text)
-
-
-def _optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
