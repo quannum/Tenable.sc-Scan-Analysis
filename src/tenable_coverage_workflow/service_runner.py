@@ -16,6 +16,10 @@ from .service_config import ScheduledServiceConfig, build_service_config
 LOGGER = logging.getLogger(__name__)
 
 
+class SchedulerLockError(RuntimeError):
+    """Raised when a scheduled run cannot start because another run is active."""
+
+
 def main(argv=None) -> int:
     config = build_service_config(argv)
     run_id = build_run_id(config.run_id_prefix)
@@ -61,7 +65,7 @@ def main(argv=None) -> int:
                 config.latest_summary_file,
             )
             return 0
-    except RuntimeError as exc:
+    except SchedulerLockError as exc:
         LOGGER.error("%s", exc)
         return 2
     except Exception as exc:
@@ -192,7 +196,7 @@ def _acquire_lock_descriptor(
                     continue
                 continue
 
-            raise RuntimeError(
+            raise SchedulerLockError(
                 f"Scheduled job '{job_name}' is already running: {lock_file}"
             ) from exc
 

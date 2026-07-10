@@ -84,6 +84,32 @@ class DataAccessTests(unittest.TestCase):
             [{"id": 1, "name": "one"}, {"id": 2, "name": "two"}],
         )
 
+    def test_resource_payload_normalization_handles_nested_response_results(self):
+        self.assertEqual(
+            normalize_resource_list(
+                {
+                    "response": {
+                        "results": [
+                            {"id": 1, "name": "one"},
+                            {"id": 2, "name": "two"},
+                        ]
+                    }
+                }
+            ),
+            [{"id": 1, "name": "one"}, {"id": 2, "name": "two"}],
+        )
+
+    def test_resource_payload_normalization_handles_named_resource_lists(self):
+        self.assertEqual(
+            normalize_resource_list(
+                {
+                    "assetLists": [{"id": 1, "name": "assets"}],
+                    "policies": [{"id": 2, "name": "policy"}],
+                }
+            ),
+            [{"id": 1, "name": "assets"}, {"id": 2, "name": "policy"}],
+        )
+
     def test_live_mode_requires_credentials_and_url(self):
         with self.assertRaises(ValueError) as ctx:
             DataAccess(

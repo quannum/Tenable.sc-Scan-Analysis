@@ -164,9 +164,9 @@ Run with:
 tenable-sc-scan-analysis --config-file config\example-config.yaml analyze-coverage
 ```
 
-The direct `tenable-coverage-detect-plan` entry point is intended for flag/env
-use. Use the unified CLI or scheduled wrapper when you want config-file driven
-runs.
+The direct `tenable-coverage-detect-plan` entry point is flag-driven, with
+environment support for source and Tenable connection settings. Use the unified
+CLI or scheduled wrapper when you want config-file driven runs.
 
 Example config files:
 

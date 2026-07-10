@@ -1,6 +1,6 @@
 # Goal Requirements Audit
 
-This audit maps the active goal to current repository evidence. “Implemented”
+This audit maps the active goal to current repository evidence. "Implemented"
 means code and automated evidence exist in this worktree; it does not claim that
 an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 

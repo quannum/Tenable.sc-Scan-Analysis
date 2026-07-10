@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -285,28 +285,43 @@ class DataAccess:
 
 def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
     """Normalize the list and usable/manageable response shapes used by pyTenable."""
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    if not isinstance(payload, dict):
-        return []
-
     records: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for key in ("usable", "manageable", "repositories", "hosts", "response"):
-        values = payload.get(key)
-        if isinstance(values, dict):
-            values = values.get("results", values.get("items"))
-        if not isinstance(values, list):
+    for item in _iter_resource_records(payload):
+        identity = str(item.get("id", item.get("uuid", repr(sorted(item.items())))))
+        if identity in seen:
             continue
-        for item in values:
-            if not isinstance(item, dict):
-                continue
-            identity = str(item.get("id", item.get("uuid", repr(sorted(item.items())))))
-            if identity in seen:
-                continue
-            seen.add(identity)
-            records.append(item)
+        seen.add(identity)
+        records.append(item)
     return records
+
+
+def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                yield item
+        return
+
+    if not isinstance(payload, dict):
+        return
+
+    for key in (
+        "usable",
+        "manageable",
+        "repositories",
+        "hosts",
+        "assetLists",
+        "asset_lists",
+        "scans",
+        "policies",
+        "credentials",
+        "response",
+        "results",
+        "items",
+    ):
+        if key in payload:
+            yield from _iter_resource_records(payload[key])
 
 
 def _parse_bool(value: Any) -> bool:

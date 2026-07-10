@@ -445,6 +445,51 @@ class ScheduledServiceTests(unittest.TestCase):
             if temp_path.exists():
                 shutil.rmtree(temp_path)
 
+    def test_service_main_writes_failed_state_when_run_fails(self):
+        temp_root = Path.cwd() / ".tmp-test-artifacts"
+        temp_path = temp_root / "scheduled_service_failed_state_case"
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+
+            with patch(
+                "src.tenable_coverage_workflow.service_runner.run_detect_and_plan",
+                side_effect=RuntimeError("simulated run failure"),
+            ):
+                exit_code = service_main(
+                    [
+                        "--job-name",
+                        "nightly-coverage",
+                        "--subnet-as-code-method",
+                        "get_sites",
+                        "--output-dir",
+                        str(output_dir),
+                        "--mode",
+                        "offline",
+                        "--scan-json-dir",
+                        "scans",
+                        "--asset-json-dir",
+                        "assets",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            latest_summary = json.loads(
+                (output_dir / "latest_run.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(latest_summary["status"], "FAILED")
+            self.assertEqual(latest_summary["error"], "simulated run failure")
+            self.assertIn("completed_at", latest_summary)
+            self.assertFalse((output_dir / "scheduler.lock").exists())
+        finally:
+            if temp_path.exists():
+                shutil.rmtree(temp_path)
+
 
 class ServiceLoggingTests(unittest.TestCase):
     def test_service_can_emit_json_logs_with_run_context(self):

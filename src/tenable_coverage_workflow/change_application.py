@@ -445,7 +445,7 @@ def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path
     for operation in result["operations"]:
         lines.extend(
             (
-                f"### {operation['site_code']} — `{operation['cidr']}`",
+                f"### {operation['site_code']} - `{operation['cidr']}`",
                 "",
                 f"- Action: {operation['action']}",
                 f"- Status: {operation['status']}",

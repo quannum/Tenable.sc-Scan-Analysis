@@ -268,7 +268,7 @@ def write_final_audit_report(
 ) -> Path:
     severity_counts = Counter(issue.severity for issue in validation_issues)
     lines = [
-        "# Tenable.sc Scan Analysis — Final Audit Report",
+        "# Tenable.sc Scan Analysis - Final Audit Report",
         "",
         f"- Run ID: `{summary['run_id']}`",
         f"- Started: `{summary['started_at']}`",
