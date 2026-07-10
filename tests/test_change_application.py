@@ -38,7 +38,7 @@ def approved_row(**overrides):
         "CIDR": "10.1.16.0/24",
         "Proposed Action": "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
         "Proposed Asset Name": "NYC01_Servers_VLAN_120",
-        "Proposed Scan Name": "US_East_Server_Assessment",
+        "Proposed Scan Name": "US_East_NYC01_Server_Assessment",
         "Proposed Policy Name": "Credentialed Server Assessment",
         "Approval Status": "APPROVED",
         "Reviewer": "security-reviewer",
@@ -163,7 +163,7 @@ class ChangeApplicationTests(unittest.TestCase):
             }
             data_access.scans[9] = {
                 "id": 9,
-                "name": "US_East_Server_Assessment",
+                "name": "US_East_NYC01_Server_Assessment",
                 "assets": [{"id": 99}],
             }
 

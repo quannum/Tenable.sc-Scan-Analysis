@@ -38,6 +38,11 @@ def normalize_region_name(region: str | None) -> str:
     return normalize_name_part(region, fallback="Global")
 
 
+def _normalize_optional_name_part(value: str | None) -> str | None:
+    normalized = normalize_name_part(value, fallback="")
+    return normalized or None
+
+
 def classify_vlan_role(vlan_name: str | None) -> str:
     normalized = normalize_name_part(vlan_name, fallback="Standard").lower()
     raw = str(vlan_name or "").strip().lower()
@@ -179,28 +184,57 @@ def build_required_asset_name(
     return f"{target.site_code}_{vlan_name}_VLAN_{vlan_tag}"
 
 
+def _scan_scope_segments(target: CoverageTarget) -> list[str]:
+    """Build scan scope in region > site_code > location > global priority."""
+    region = _normalize_optional_name_part(target.region)
+    site_code = _normalize_optional_name_part(target.site_code)
+    location = _normalize_optional_name_part(target.location)
+
+    segments = [segment for segment in (region, site_code or location) if segment]
+    return segments or ["Global"]
+
+
+def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
+    return normalize_name_part(target.description, fallback=fallback)
+
+
+def _compose_scan_name(
+    target: CoverageTarget,
+    description_fallback: str,
+    purpose: str,
+) -> str:
+    return "_".join(
+        [
+            *_scan_scope_segments(target),
+            _scan_description_segment(target, description_fallback),
+            purpose,
+        ]
+    )
+
+
 def build_required_scan_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
     if target.target_type == "PUBLIC":
-        return "Public_External_Assessment"
+        return _compose_scan_name(
+            target,
+            description_fallback="Public",
+            purpose="Assessment",
+        )
     if target.target_type == "PRIVATE_SUPERNET":
-        return f"{normalize_region_name(target.region)}_Discovery"
+        return _compose_scan_name(
+            target,
+            description_fallback="Private",
+            purpose="Discovery",
+        )
 
-    region_name = normalize_region_name(target.region)
     role = resolve_target_role(target, grouping_config)
-    if role == "SERVER":
-        return f"{region_name}_Server_Assessment"
-    if role == "END_USER":
-        return f"{region_name}_End_User_Assessment"
-    if role == "NETWORK":
-        return f"{region_name}_Network_Assessment"
-    if role == "AV":
-        return f"{region_name}_AV_Assessment"
-    if role == "WIRELESS":
-        return f"{region_name}_Wireless_Assessment"
-    return f"{region_name}_{_role_name_segment(role)}_Assessment"
+    return _compose_scan_name(
+        target,
+        description_fallback=_role_name_segment(role),
+        purpose="Assessment",
+    )
 
 
 def build_required_policy_name(

@@ -14,7 +14,7 @@ an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 | Missing, extra, overlap, duplicate, malformed, partial coverage | Implemented | source validation, coverage engine, extra target reporting |
 | Expected asset and scan mapping | Implemented | naming rules, configuration index, coverage results |
 | Region/site/VLAN/scan/repository/policy summaries | Implemented | `coverage_reporting.py` JSON and Markdown outputs |
-| Regional and VLAN scan designs | Implemented | naming rules for discovery, server, network, end-user, AV, standard |
+| Site-aware scan designs | Implemented | naming rules compose region, site/location, description or role fallback, and assessment/discovery purpose |
 | Dry-run proposed changes | Implemented | detect-and-plan defaults and CSV/Markdown audit |
 | Idempotent asset/scan application | Implemented | exact-name reconciliation and repeat-run tests |
 | Explicit mutation safety | Implemented | approved reviewer rows, live mode, repository, `apply-changes --apply` |

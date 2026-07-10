@@ -162,6 +162,8 @@ The current workflow:
 - compares authoritative ranges to actual Tenable.sc scan coverage
 - reports whether the required scan name derived for each target is actually one
   of the scans covering that target
+- derives scan names from region, site code or location, target description or
+  role fallback, and assessment/discovery purpose
 - assigns workflow status:
   - OK
   - PARTIAL

@@ -234,14 +234,14 @@ class ScheduledServiceTests(unittest.TestCase):
             for payload in [
                 {
                     "id": 1,
-                    "name": "US_East_Discovery",
+                    "name": "US_East_NYC01_Private_Discovery",
                     "ipList": "10.1.0.0/16,10.3.0.0/16",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 2,
-                    "name": "US_East_Server_Assessment",
+                    "name": "US_East_NYC01_Server_Assessment",
                     "ipList": "10.1.16.0/24",
                     "assets": [],
                     "schedule": {"enabled": True},
