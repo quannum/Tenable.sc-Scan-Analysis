@@ -60,6 +60,15 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertIn("--include-keywords", help_text)
         self.assertIn("--exclude-keywords", help_text)
         self.assertIn("--filter-disabled-mode", help_text)
+        self.assertNotIn("--subnet-as-code-method", help_text)
+        self.assertNotIn("--source-desired-properties", help_text)
+        self.assertNotIn("--source-address-type", help_text)
+
+    def test_removed_authoritative_source_arguments_are_rejected(self):
+        with self.assertRaises(SystemExit) as context:
+            main(["validate-definitions", "--subnet-as-code-method", "get_sites"])
+
+        self.assertEqual(context.exception.code, 2)
 
     def test_validate_definitions_writes_normalized_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -74,8 +83,6 @@ class ApplicationCliTests(unittest.TestCase):
                 exit_code = main(
                     [
                         "validate-definitions",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-file",
                         str(output),
                     ]
@@ -209,7 +216,6 @@ class ApplicationCliTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_sc_scan_analysis:",
-                        "  subnet_as_code_method: get_sites",
                         "  commands:",
                         "    validate_definitions:",
                         f"      output_file: '{output.as_posix()}'",
@@ -275,7 +281,6 @@ class ApplicationCliTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_sc_scan_analysis:",
-                        "  subnet_as_code_method: get_sites",
                         '  grouping_mode: "vlan_tag"',
                         '  grouping_vlan_tag_prefix: "vlan-"',
                         "  grouping_tag_map:",
@@ -321,7 +326,6 @@ class ApplicationCliTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_sc_scan_analysis:",
-                        "  subnet_as_code_method: get_sites",
                         "  commands:",
                         "    analyze_coverage:",
                         f"      output_dir: '{(root / 'output').as_posix()}'",
@@ -367,7 +371,6 @@ class ApplicationCliTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_sc_scan_analysis:",
-                        "  subnet_as_code_method: get_sites",
                         '  grouping_mode: "by_magic"',
                         "  commands:",
                         "    analyze_coverage:",

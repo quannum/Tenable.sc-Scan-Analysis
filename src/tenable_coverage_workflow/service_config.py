@@ -24,16 +24,11 @@ from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
 )
-from .subnet_source.source_loader import (
-    AuthoritativeSourceConfig,
-    AuthoritativeSourceConfigMixin,
-    has_configured_authoritative_source,
-    validate_authoritative_source_config,
-)
+from .subnet_source.source_loader import AuthoritativeSourceConfig
 
 
 @dataclass(frozen=True)
-class ScheduledServiceConfig(AuthoritativeSourceConfigMixin):
+class ScheduledServiceConfig:
     job_name: str
     source_config: AuthoritativeSourceConfig
     output_dir: Path
@@ -195,16 +190,6 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         scalar_getter=scalar_getter,
         csv_getter=csv_getter,
     )
-    if not has_configured_authoritative_source(source_config):
-        parser.error(
-            "An authoritative source is required. Configure subnet_as_code "
-            "method/query settings."
-        )
-    try:
-        validate_authoritative_source_config(source_config)
-    except ValueError as exc:
-        parser.error(str(exc))
-
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
     output_dir = as_path(pick("output_dir")) or Path("output")
     run_id_prefix = str(

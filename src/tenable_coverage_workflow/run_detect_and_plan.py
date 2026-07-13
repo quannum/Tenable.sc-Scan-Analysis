@@ -39,17 +39,12 @@ from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
 )
-from .subnet_source.source_loader import (
-    AuthoritativeSourceConfigMixin,
-    has_configured_authoritative_source,
-    validate_authoritative_source_config,
-)
 
 LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class DetectAndPlanConfig(AuthoritativeSourceConfigMixin):
+class DetectAndPlanConfig:
     source_config: AuthoritativeSourceConfig
     output_dir: Path
     run_id: str | None
@@ -266,12 +261,6 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         scalar_getter=scalar_getter,
         csv_getter=csv_getter,
     )
-    if not has_configured_authoritative_source(source_config):
-        raise ValueError(
-            "An authoritative source is required: subnet_as_code "
-            "method/query settings."
-        )
-    validate_authoritative_source_config(source_config)
     grouping_config = build_grouping_config(
         mode_value=scalar_getter("grouping_mode", "GROUPING_MODE", "default"),
         prefix_value=scalar_getter(
@@ -363,22 +352,20 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
     audit_logger.emit(
         "run_started",
-        subnet_as_code_method=config.subnet_as_code_method,
-        subnet_as_code_reference_id=config.subnet_as_code_reference_id,
-        subnet_as_code_sites=config.subnet_as_code_sites,
-        subnet_as_code_tags=config.subnet_as_code_tags,
-        subnet_as_code_name=config.subnet_as_code_name,
-        subnet_as_code_network_type=config.subnet_as_code_network_type,
-        subnet_as_code_routing_type=config.subnet_as_code_routing_type,
-        subnet_as_code_desired_properties=config.subnet_as_code_desired_properties,
-        subnet_as_code_address_type=config.subnet_as_code_address_type,
+        authoritative_source="subnet_as_code.get_sites",
+        source_reference_id=config.source_config.reference_id,
+        source_sites=config.source_config.sites,
+        source_tags=config.source_config.tags,
+        source_name=config.source_config.name,
+        source_network_type=config.source_config.network_type,
+        source_routing_type=config.source_config.routing_type,
         output_dir=output_dir,
         dry_run=config.dry_run,
         mode=config.mode,
     )
 
     source_type, connector_result = load_authoritative_source(
-        config.as_authoritative_source_config(),
+        config.source_config,
         audit_logger=audit_logger,
     )
     named_targets = apply_naming_rules_to_targets(
@@ -434,9 +421,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "mode": config.mode,
         "dry_run": config.dry_run,
         "authoritative_source_type": source_type,
-        "authoritative_source": (
-            f"subnet_as_code.{config.subnet_as_code_method or 'get_sites'}"
-        ),
+        "authoritative_source": "subnet_as_code.get_sites",
         "authoritative_units_processed": connector_result.files_processed,
         "authoritative_units_failed": connector_result.files_failed,
         "validation_issue_count": len(connector_result.validation_issues),

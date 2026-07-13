@@ -93,7 +93,7 @@ def build_detect_config(
     run_id: str,
 ) -> DetectAndPlanConfig:
     return DetectAndPlanConfig(
-        source_config=config.as_authoritative_source_config(),
+        source_config=config.source_config,
         output_dir=config.output_dir,
         run_id=run_id,
         dry_run=config.dry_run,

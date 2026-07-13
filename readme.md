@@ -97,7 +97,6 @@ Examples:
 
 ```powershell
 tenable-sc-scan-analysis validate-definitions `
-  --subnet-as-code-method get_sites `
   --output-file C:\output\normalized-sites.json
 
 tenable-sc-scan-analysis collect-tenable `
@@ -105,14 +104,12 @@ tenable-sc-scan-analysis collect-tenable `
   --output-file C:\output\tenable-inventory.json
 
 tenable-sc-scan-analysis analyze-coverage `
-  --subnet-as-code-method get_sites `
   --mode offline `
   --scan-json-dir C:\tenable\scans `
   --asset-json-dir C:\tenable\assets `
   --output-dir C:\output
 
 tenable-sc-scan-analysis propose-changes `
-  --subnet-as-code-method get_sites `
   --mode live `
   --output-dir C:\output
 ```
@@ -146,7 +143,6 @@ Minimal offline config:
 
 ```yaml
 tenable_sc_scan_analysis:
-  subnet_as_code_method: get_sites
   mode: offline
   scan_json_dir: C:/tenable/scans
   asset_json_dir: C:/tenable/assets
@@ -175,14 +171,8 @@ Example config files:
 
 ## Authoritative Source
 
-The authoritative source is `subnet_as_code`. By default the workflow calls
-`get_sites`.
-
-Configure another method with:
-
-- `--subnet-as-code-method`
-- `SUBNET_AS_CODE_METHOD`
-- `subnet_as_code_method` in config
+The authoritative source is `subnet_as_code.get_sites`, which returns complete
+site definitions from the source YAML as JSON.
 
 Optional source filters:
 
@@ -192,12 +182,7 @@ Optional source filters:
 - `source_name` / `--source-name` / `SUBNET_AS_CODE_NAME`
 - `source_network_type` / `--source-network-type` / `SUBNET_AS_CODE_NETWORK_TYPE`
 - `source_routing_type` / `--source-routing-type` / `SUBNET_AS_CODE_ROUTING_TYPE`
-- `source_desired_properties` / `--source-desired-properties` /
-  `SUBNET_AS_CODE_DESIRED_PROPERTIES`
-- `source_address_type` / `--source-address-type` /
-  `SUBNET_AS_CODE_ADDRESS_TYPE`
-
-When `source_sites` is omitted, the selected method queries all returned sites.
+When `source_sites` is omitted, `get_sites` queries all returned sites.
 That is the recommended scheduled setup when new sites or VLANs should be
 detected automatically.
 
@@ -333,8 +318,6 @@ Minimal live service config:
 ```toml
 [tenable_coverage_workflow_service]
 job_name = "tenable-coverage-all-sites"
-subnet_as_code_method = "get_sites"
-
 output_dir = "C:/tenable-output"
 latest_summary_file = "C:/tenable-output/latest_run.json"
 lock_file = "C:/tenable-output/scheduler.lock"
@@ -408,7 +391,6 @@ console scripts after installation or module execution:
 
 ```powershell
 python -m src.tenable_coverage_workflow.application_cli analyze-coverage `
-  --subnet-as-code-method get_sites `
   --mode offline `
   --scan-json-dir C:\tenable\scans `
   --asset-json-dir C:\tenable\assets `

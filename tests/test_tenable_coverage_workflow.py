@@ -302,8 +302,6 @@ class DetectAndPlanCliTests(unittest.TestCase):
         parser = build_argument_parser()
         args = parser.parse_args(
             [
-                "--subnet-as-code-method",
-                "get_sites",
                 "--mode",
                 "offline",
             ]
@@ -316,8 +314,6 @@ class DetectAndPlanCliTests(unittest.TestCase):
         parser = build_argument_parser()
         args = parser.parse_args(
             [
-                "--subnet-as-code-method",
-                "get_sites",
                 "--mode",
                 "live",
             ]
@@ -351,8 +347,6 @@ class DetectAndPlanCliTests(unittest.TestCase):
         parser = build_argument_parser()
         args = parser.parse_args(
             [
-                "--subnet-as-code-method",
-                "get_sites",
                 "--no-dry-run",
             ]
         )
@@ -369,7 +363,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
 
     def test_run_detect_and_plan_rejects_programmatic_non_dry_run(self):
         config = DetectAndPlanConfig(
-            source_config=AuthoritativeSourceConfig(subnet_as_code_method="get_sites"),
+            source_config=AuthoritativeSourceConfig(),
             output_dir=Path("output"),
             run_id="run-001",
             dry_run=False,
@@ -445,8 +439,6 @@ class DetectAndPlanCliTests(unittest.TestCase):
             ):
                 exit_code = detect_and_plan_main(
                     [
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--run-id",

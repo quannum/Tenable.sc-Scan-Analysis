@@ -24,7 +24,6 @@ class ServiceConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "tenable_coverage_workflow_service:",
-                        '  subnet_as_code_method: "get_sites"',
                         "  mode: offline",
                         "  scan_json_dir: scans",
                         "  asset_json_dir: assets",
@@ -39,8 +38,6 @@ class ServiceConfigTests(unittest.TestCase):
 
             config = build_service_config(["--config-file", str(config_file)])
 
-            self.assertEqual(config.subnet_as_code_method, "get_sites")
-            self.assertEqual(config.source_config.subnet_as_code_method, "get_sites")
             self.assertEqual(config.sc_timeout_seconds, 45)
             self.assertEqual(config.sc_retries, 4)
             self.assertEqual(config.sc_backoff_seconds, 2.0)
@@ -63,7 +60,6 @@ class ServiceConfigTests(unittest.TestCase):
                 (
                     "[tenable_coverage_workflow_service]\n"
                     'job_name = "nightly coverage"\n'
-                    'subnet_as_code_method = "get_sites"\n'
                     f'output_dir = "{(temp_path / "output").as_posix()}"\n'
                     'run_id_prefix = "nightly-"\n'
                     "dry_run = true\n"
@@ -83,8 +79,6 @@ class ServiceConfigTests(unittest.TestCase):
             config = build_service_config(["--config-file", str(config_file)])
 
             self.assertEqual(config.job_name, "nightly coverage")
-            self.assertEqual(config.subnet_as_code_method, "get_sites")
-            self.assertEqual(config.source_config.subnet_as_code_method, "get_sites")
             self.assertEqual(config.run_id_prefix, "nightly-")
             self.assertEqual(config.include_keywords, ["Discovery", "Assessment"])
             self.assertEqual(config.exclude_keywords, ["Deprecated"])
@@ -112,7 +106,6 @@ class ServiceConfigTests(unittest.TestCase):
             config_file.write_text(
                 (
                     "[tenable_coverage_workflow_service]\n"
-                    'subnet_as_code_method = "get_sites"\n'
                     'mode = "offline"\n'
                     'scan_json_dir = "scans"\n'
                     'asset_json_dir = "assets"\n'
@@ -146,8 +139,6 @@ class ServiceConfigTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             config = build_service_config(
                 [
-                    "--subnet-as-code-method",
-                    "get_sites",
                     "--mode",
                     "live",
                 ]
@@ -162,8 +153,6 @@ class ServiceConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             build_service_config(
                 [
-                    "--subnet-as-code-method",
-                    "get_sites",
                     "--mode",
                     "offline",
                     "--scan-json-dir",
@@ -181,6 +170,31 @@ class ServiceConfigTests(unittest.TestCase):
 
         self.assertIn("--dry-run", help_text)
         self.assertNotIn("--no-dry-run", help_text)
+        self.assertNotIn("--subnet-as-code-method", help_text)
+        self.assertNotIn("--source-desired-properties", help_text)
+        self.assertNotIn("--source-address-type", help_text)
+
+    def test_service_config_ignores_removed_source_environment_settings(self):
+        env = {
+            "SUBNET_AS_CODE_METHOD": "get_ipaddress",
+            "SUBNET_AS_CODE_DESIRED_PROPERTIES": "site_code",
+            "SUBNET_AS_CODE_ADDRESS_TYPE": "private",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            config = build_service_config(
+                [
+                    "--mode",
+                    "offline",
+                    "--scan-json-dir",
+                    "scans",
+                    "--asset-json-dir",
+                    "assets",
+                ]
+            )
+
+        self.assertIsNone(config.source_config.reference_id)
+        self.assertIsNone(config.source_config.sites)
+        self.assertIsNone(config.source_config.tags)
 
 
 class ScheduledServiceTests(unittest.TestCase):
@@ -260,8 +274,6 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--run-id-prefix",
@@ -321,8 +333,6 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
@@ -369,8 +379,6 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
@@ -427,8 +435,6 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
@@ -465,8 +471,6 @@ class ScheduledServiceTests(unittest.TestCase):
                     [
                         "--job-name",
                         "nightly-coverage",
-                        "--subnet-as-code-method",
-                        "get_sites",
                         "--output-dir",
                         str(output_dir),
                         "--mode",
