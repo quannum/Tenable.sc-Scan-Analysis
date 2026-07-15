@@ -34,10 +34,6 @@ def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
     return cleaned or fallback
 
 
-def normalize_region_name(region: str | None) -> str:
-    return normalize_name_part(region, fallback="Global")
-
-
 def _normalize_optional_name_part(value: str | None) -> str | None:
     normalized = normalize_name_part(value, fallback="")
     return normalized or None
