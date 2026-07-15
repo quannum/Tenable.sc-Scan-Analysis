@@ -3,17 +3,14 @@ job_name = "tenable-coverage-all-sites"
 
 # Authoritative expected-range source:
 # Use subnet_as_code and intentionally leave source_sites unset so the workflow
-# queries all sites returned by the selected method.
-subnet_as_code_method = "get_sites"
+# queries all sites returned by get_sites.
 # source_sites = "NYC,LON"
 # source_tags = "production"
 # source_name = "New York"
 # source_network_type = "private"
 # source_routing_type = "core"
-# source_desired_properties = "site_code,site_name,public_ranges,private_ranges"
-# source_address_type = "trusted-pat"
 
-# Optional VLAN tag grouping for asset/scan naming:
+# Optional VLAN tag grouping for site-code-and-role asset/scan naming:
 # The first tag starting with grouping_vlan_tag_prefix wins.
 # grouping_mode = "vlan_tag"
 # grouping_vlan_tag_prefix = "vlan-"

@@ -1,15 +1,10 @@
 # Authoritative Network Schema
 
 Production input is the subnet-as-code API JSON, obtained by calling the
-internal `subnet_as_code` Python module with query parameters such as `sites`,
-`tags`, `referenceId`, `networkType`, `routingType`, and `desiredProperties`.
+internal `subnet_as_code.get_sites` Python method with query parameters such as
+`sites`, `tags`, `referenceId`, `networkType`, and `routingType`.
 The workflow normalizes the returned Python/JSON payload into the internal site
 model before analysis.
-
-When `subnet_as_code.get_ipaddress(...)` is used, its flat host-record response
-is normalized into site-scoped `/32` targets using each record's `site_code`,
-`ip`, `name`, and `tags`. For full range-oriented coverage analysis, the richer
-site/subnet/range methods remain the better fit when available.
 
 The loader accepts:
 

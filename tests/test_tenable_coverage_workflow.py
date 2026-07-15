@@ -88,7 +88,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "US_East_NYC01_Corp_Wireless_Assessment",
+            "NYC01_End_User_Assessment",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -118,7 +118,7 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(named_target.required_asset_name, "NYC01_Wireless_VLAN_Group")
         self.assertEqual(
             named_target.required_scan_name,
-            "US_East_NYC01_Shared_VLAN_Assessment",
+            "NYC01_Wireless_Assessment",
         )
         self.assertEqual(named_target.required_policy_name, "Wireless Assessment")
 
@@ -152,7 +152,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "US_East_NYC01_Wireless_VLAN_Assessment",
+            "NYC01_End_User_Assessment",
         )
 
     def test_scan_name_scope_falls_back_to_location_then_global(self):
@@ -180,6 +180,19 @@ class PlanningTests(unittest.TestCase):
             vlan_tag=120,
             source_file="sites/unmapped.yaml",
         )
+        grouped_location_target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.4.16.0/24",
+            site_code="",
+            site_name="Remote Office",
+            location="Raleigh, NC",
+            region="US East",
+            description="Wireless VLAN",
+            vlan_name="Corp Wireless",
+            vlan_tag=220,
+            tags=["vlan-workstation"],
+            source_file="sites/remote.yaml",
+        )
 
         self.assertEqual(
             build_required_scan_name(location_only_target),
@@ -188,6 +201,13 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(
             build_required_scan_name(global_target),
             "Global_Server_Assessment",
+        )
+        self.assertEqual(
+            build_required_scan_name(
+                grouped_location_target,
+                GroupingConfig(mode="vlan_tag"),
+            ),
+            "Raleigh_NC_End_User_Assessment",
         )
 
     def test_proposed_changes_map_wrong_scan_gap_and_excluded_statuses(self):

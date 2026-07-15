@@ -12,7 +12,7 @@ reports.
 
 Each coverage run:
 
-1. Calls the configured `subnet_as_code` method.
+1. Calls `subnet_as_code.get_sites`.
 2. Normalizes returned site, public range, private range, VLAN, CIDR, single-IP,
    and explicit `start-end` range data.
 3. Applies asset, scan, and policy naming rules.
@@ -182,6 +182,7 @@ Optional source filters:
 - `source_name` / `--source-name` / `SUBNET_AS_CODE_NAME`
 - `source_network_type` / `--source-network-type` / `SUBNET_AS_CODE_NETWORK_TYPE`
 - `source_routing_type` / `--source-routing-type` / `SUBNET_AS_CODE_ROUTING_TYPE`
+
 When `source_sites` is omitted, `get_sites` queries all returned sites.
 That is the recommended scheduled setup when new sites or VLANs should be
 detected automatically.
@@ -369,6 +370,8 @@ When `grouping_mode` is `vlan_tag`:
 - only tags starting with `grouping_vlan_tag_prefix` are considered
 - the first matching tag wins
 - `grouping_tag_map` translates tags into internal group roles
+- generated VLAN asset groups and scans use the same site-code-and-role naming
+- source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
 
 Example:

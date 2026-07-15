@@ -6,7 +6,6 @@ data:
   service.yaml: |
     tenable_coverage_workflow_service:
       job_name: tenable-coverage-nightly
-      subnet_as_code_method: get_sites
       output_dir: /data/output
       dry_run: true
       mode: live

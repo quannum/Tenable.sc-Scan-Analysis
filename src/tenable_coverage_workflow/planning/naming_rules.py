@@ -194,6 +194,13 @@ def _scan_scope_segments(target: CoverageTarget) -> list[str]:
     return segments or ["Global"]
 
 
+def _grouped_scan_scope_segments(target: CoverageTarget) -> list[str]:
+    """Build grouped VLAN scan scope in site_code > location > global priority."""
+    site_code = _normalize_optional_name_part(target.site_code)
+    location = _normalize_optional_name_part(target.location)
+    return [site_code or location or "Global"]
+
+
 def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
     return normalize_name_part(target.description, fallback=fallback)
 
@@ -227,6 +234,18 @@ def build_required_scan_name(
             target,
             description_fallback="Private",
             purpose="Discovery",
+        )
+
+    grouping_config = grouping_config or GroupingConfig()
+    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    if grouping_tag:
+        role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
+        return "_".join(
+            [
+                *_grouped_scan_scope_segments(target),
+                _role_name_segment(role),
+                "Assessment",
+            ]
         )
 
     role = resolve_target_role(target, grouping_config)
