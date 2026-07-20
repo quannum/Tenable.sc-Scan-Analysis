@@ -33,6 +33,7 @@ def write_proposed_change_audits(
     proposed_changes: list[ProposedChange],
     audit_logger=None,
 ) -> tuple[Path, Path]:
+    """Write proposed change audits"""
     run_directory = Path(run_dir)
     csv_path = _write_csv(run_id, run_directory, proposed_changes)
     md_path = _write_markdown(run_id, run_directory, proposed_changes)
@@ -53,6 +54,7 @@ def _write_csv(
     run_dir: Path,
     proposed_changes: list[ProposedChange],
 ) -> Path:
+    """Create csv files"""
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(CSV_COLUMNS)
@@ -88,6 +90,7 @@ def _write_markdown(
     run_dir: Path,
     proposed_changes: list[ProposedChange],
 ) -> Path:
+    """Create markdown files"""
     groups: dict[tuple[str, str | None], list[ProposedChange]] = defaultdict(list)
     for change in proposed_changes:
         groups[(change.site_code, change.site_name)].append(change)

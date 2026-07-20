@@ -84,6 +84,7 @@ def _relationship_issue(
     label: str,
     severity: str,
 ) -> ValidationIssue:
+    """Create an issue for an invalid relationship between targets"""
     return ValidationIssue(
         source_file=left.source_file or "authoritative-source",
         site_code=left.site_code,
@@ -98,12 +99,14 @@ def _relationship_issue(
 
 
 def _is_expected_parent_child(left: CoverageTarget, right: CoverageTarget) -> bool:
+    """Check whether expected parent child"""
     if left.site_code != right.site_code:
         return False
     return {left.target_type, right.target_type} == {"PRIVATE_SUPERNET", "VLAN"}
 
 
 def _target_identity(target: CoverageTarget) -> str:
+    """Build a stable identity string for a coverage target"""
     return "|".join(
         (
             target.source_file or "",

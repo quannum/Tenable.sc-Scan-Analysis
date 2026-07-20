@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import unittest
+from collections import defaultdict
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,6 +29,7 @@ from src.tenable_coverage_workflow.run_detect_and_plan import (
     build_configuration_index,
     build_detect_and_plan_config,
     run_detect_and_plan,
+    validate_coverage_targets,
 )
 from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
@@ -61,6 +63,37 @@ class PlanningTests(unittest.TestCase):
             named_target.required_policy_name,
             "Credentialed Server Assessment",
         )
+
+    def test_exclude_tag_skips_naming_coverage_plans_and_missing_resources(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.99.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Restricted VLAN",
+            vlan_name="Restricted",
+            vlan_tag=999,
+            tags=["Exclude"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+
+        named_target = apply_naming_rules(target)
+        results = validate_coverage_targets(
+            [named_target],
+            actual_scopes=[],
+            actual_by_scan=defaultdict(list),
+            excluded_by_scan=defaultdict(list),
+        )
+
+        self.assertIsNone(named_target.required_asset_name)
+        self.assertIsNone(named_target.required_scan_name)
+        self.assertEqual(results[0].status, "EXCLUDED")
+        self.assertTrue(results[0].excluded_by_tag)
+        self.assertEqual(results[0].exclusion_tag, "Exclude")
+        self.assertEqual(results[0].gap_count, 0)
+        self.assertEqual(generate_proposed_changes(results, run_id="run-001"), [])
 
     def test_vlan_tag_grouping_can_override_vlan_name_grouping(self):
         target = CoverageTarget(

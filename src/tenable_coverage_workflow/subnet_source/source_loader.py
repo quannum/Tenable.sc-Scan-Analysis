@@ -21,29 +21,30 @@ def load_authoritative_source(
 ) -> tuple[str, SourceLoadResult]:
     """Load complete site definitions from subnet-as-code."""
     try:
-        module = importlib.import_module("subnet_as_code")
+        module = importlib.import_module("rsg_subnet_as_code")
     except ImportError as exc:
         raise RuntimeError(
-            "subnet_as_code module is not installed or importable in this "
+            "rsg_subnet_as_code module is not installed or importable in this "
             "environment."
         ) from exc
 
     try:
         get_sites = module.get_sites
     except AttributeError:
-        raise RuntimeError("subnet_as_code module does not have method 'get_sites'.")
+        raise RuntimeError("rsg_subnet_as_code module does not have method 'get_sites'.")
     if not callable(get_sites):
-        raise RuntimeError("subnet_as_code.get_sites must be callable.")
+        raise RuntimeError("rsg_subnet_as_code.get_sites must be callable.")
 
     payload = get_sites(**_build_get_sites_kwargs(config))
-    return "subnet_as_code", load_json_payload(
+    return "rsg_subnet_as_code", load_json_payload(
         payload,
-        source_file="subnet_as_code.get_sites",
+        source_file="rsg_subnet_as_code.get_sites",
         audit_logger=audit_logger,
     )
 
 
 def _build_get_sites_kwargs(config: AuthoritativeSourceConfig) -> dict[str, Any]:
+    """Build get sites kwargs"""
     values = {
         "referenceId": config.reference_id,
         "sites": config.sites,
@@ -60,6 +61,7 @@ def _build_get_sites_kwargs(config: AuthoritativeSourceConfig) -> dict[str, Any]
 
 
 def _has_value(value: Any) -> bool:
+    """Check for value"""
     if value is None:
         return False
     if isinstance(value, str):

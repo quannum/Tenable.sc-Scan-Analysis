@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover
 
 
 def _load_version() -> str:
+    """Load the package version"""
     pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
     try:
         with pyproject_path.open("rb") as handle:

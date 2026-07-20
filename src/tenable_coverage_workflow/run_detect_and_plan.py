@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from dotenv import load_dotenv
 
-from ..core.scope_utils import parse_scope_item
+from ..core.scope_utils import parse_scope_item, scope_to_interval
 from ..core.tenable_scope_analysis import (
     build_coverage_data,
     build_scope_sheets,
@@ -22,6 +22,7 @@ from ..io.parsing import parse_csv_list
 from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
+from .exclusion_tags import find_exclusion_tag
 from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
@@ -90,6 +91,7 @@ class CoverageSourceConfig:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
+    """Build argument parser"""
     parser = argparse.ArgumentParser(
         description=(
             "Load subnet_as_code scope definitions, validate Tenable.sc "
@@ -159,6 +161,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
+    """Run the command-line workflow"""
     load_dotenv()
     parser = build_argument_parser()
     args = parser.parse_args(argv)
@@ -179,10 +182,12 @@ def main(argv=None) -> int:
 
 class ServiceContextFilter(logging.Filter):
     def __init__(self, extra_context: dict[str, object] | None = None) -> None:
+        """Initialize the object"""
         super().__init__()
         self.extra_context = extra_context or {}
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Filter the requested value"""
         for key, value in self.extra_context.items():
             if not hasattr(record, key):
                 setattr(record, key, value)
@@ -195,6 +200,7 @@ class ServiceContextFilter(logging.Filter):
 
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        """Format the requested value"""
         payload = {
             "timestamp": datetime.fromtimestamp(
                 record.created, tz=timezone.utc
@@ -220,6 +226,7 @@ def configure_logging(
     log_file: Path | None = None,
     extra_context: dict[str, object] | None = None,
 ) -> None:
+    """Configure logging"""
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     stream_handler = logging.StreamHandler()
     if str(log_format).lower() == "json":
@@ -242,16 +249,19 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
+    """Build detect and plan config"""
     resolver = SettingsResolver(args)
 
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
+        """Read one scalar setting"""
         return resolver.get(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
+        """Read one comma-separated setting"""
         return resolver.csv(name, default, environment_name)
 
     if args.dry_run is False:
@@ -320,6 +330,7 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
 
 
 def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceConfig:
+    """Build coverage source config"""
     return CoverageSourceConfig(
         mode=config.mode,
         scan_json_dir=config.scan_json_dir,
@@ -340,6 +351,7 @@ def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceC
 
 
 def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
+    """Run detect and plan"""
     if not config.dry_run:
         raise ValueError("detect-and-plan runs do not support dry_run=false")
 
@@ -430,6 +442,9 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         "gap_count": status_counts.get("GAP", 0),
         "partial_count": status_counts.get("PARTIAL", 0),
         "excluded_count": status_counts.get("EXCLUDED", 0),
+        "tag_excluded_count": sum(
+            result.excluded_by_tag for result in coverage_results
+        ),
         "proposed_changes_count": len(proposed_changes),
         "missing_asset_group_count": sum(
             result.required_asset_present == "No" for result in coverage_results
@@ -461,6 +476,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
 
 
 def load_actual_scope_data(config: CoverageSourceConfig):
+    """Load actual scope data"""
     data_access = DataAccess(config)
     scope_ws, normalized_ws = build_scope_tables()
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
@@ -476,6 +492,7 @@ def load_actual_scope_data(config: CoverageSourceConfig):
 
 
 def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
+    """Build configuration index"""
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
         name = str(asset.get("name") or "").strip()
@@ -506,6 +523,7 @@ def validate_coverage_targets(
     configuration_index=None,
     audit_logger=None,
 ) -> list[CoverageValidationResult]:
+    """Validate coverage targets"""
     coverage_results: list[CoverageValidationResult] = []
     exclusion_impact_by_scan: dict[str, int] = defaultdict(int)
     configuration_index = configuration_index or {}
@@ -513,6 +531,21 @@ def validate_coverage_targets(
     scans_by_name = configuration_index.get("scans_by_name", {})
 
     for target in targets:
+        exclusion_tag = find_exclusion_tag(target.tags)
+        if exclusion_tag:
+            coverage_result = _build_tag_excluded_result(target, exclusion_tag)
+            coverage_results.append(coverage_result)
+            if audit_logger:
+                audit_logger.emit(
+                    "coverage_tag_exclusion_detected",
+                    site_code=coverage_result.site_code,
+                    target_type=coverage_result.target_type,
+                    cidr=coverage_result.cidr,
+                    exclusion_tag=exclusion_tag,
+                    source_file=coverage_result.source_file,
+                )
+            continue
+
         expected = parse_scope_item(target.cidr)
         base_result = calculate_coverage_result(
             scope_item=target.cidr,
@@ -628,7 +661,41 @@ def validate_coverage_targets(
     return coverage_results
 
 
+def _build_tag_excluded_result(
+    target: CoverageTarget, exclusion_tag: str
+) -> CoverageValidationResult:
+    """Build tag excluded result"""
+    expected_start, expected_end = scope_to_interval(parse_scope_item(target.cidr))
+    return CoverageValidationResult(
+        status="EXCLUDED",
+        target_type=target.target_type,
+        cidr=target.cidr,
+        site_code=target.site_code,
+        site_name=target.site_name,
+        region=target.region,
+        location=target.location,
+        description=target.description,
+        vlan_name=target.vlan_name,
+        vlan_tag=target.vlan_tag,
+        covering_scans=[],
+        reason=f"Excluded by authoritative source tag '{exclusion_tag}'.",
+        source_file=target.source_file,
+        required_asset_name=None,
+        required_scan_name=None,
+        required_policy_name=None,
+        exclusion_ip_total=expected_end - expected_start + 1,
+        timezone=target.timezone,
+        tags=list(target.tags),
+        excluded_by_tag=True,
+        exclusion_tag=exclusion_tag,
+        environment=target.environment,
+        business_function=target.business_function,
+        scan_classification=dict(target.scan_classification),
+    )
+
+
 def _resource_name(value) -> str | None:
+    """Read a resource name from a Tenable.sc value"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         return name or None
@@ -636,6 +703,7 @@ def _resource_name(value) -> str | None:
 
 
 def _resource_label(value, fallback_id=None) -> str | None:
+    """Read a readable resource label from a Tenable.sc value"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         if name:
@@ -647,12 +715,14 @@ def _resource_label(value, fallback_id=None) -> str | None:
 
 
 def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
+    """Derive workflow status"""
     if status == "PARTIAL" and exclusion_ip_total > 0:
         return "EXCLUDED"
     return status
 
 
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
+    """Print the summary for a completed run"""
     _emit_lines(
         [
             f"Run ID: {run_id}",
@@ -674,6 +744,7 @@ def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
 
 
 def _emit_lines(lines: list[str]) -> None:
+    """Print several command-line messages"""
     for line in lines:
         print(line)
 

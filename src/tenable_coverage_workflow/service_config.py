@@ -60,6 +60,7 @@ class ScheduledServiceConfig:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
+    """Build argument parser"""
     parser = argparse.ArgumentParser(
         description=(
             "Scheduler-friendly wrapper for the Tenable coverage detect-and-plan "
@@ -115,6 +116,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def build_service_config(argv=None) -> ScheduledServiceConfig:
+    """Build service config"""
     load_dotenv()
     parser = build_argument_parser()
     args = parser.parse_args(argv)
@@ -179,11 +181,13 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
+        """Read one scalar setting"""
         return pick(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
+        """Read one comma-separated setting"""
         return resolver.csv(name, default, environment_name)
 
     source_config = build_authoritative_source_config(
@@ -275,6 +279,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
 
 
 def load_config_file(config_file_path: Path) -> dict[str, Any]:
+    """Load config file"""
     return load_config_section(
         config_file_path,
         section_name="tenable_coverage_workflow_service",
@@ -288,6 +293,7 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
 
 
 def normalize_job_name(value: str) -> str:
+    """Normalize job name"""
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", str(value).strip().lower())
     normalized = normalized.strip("-")
     return normalized or "tenable-coverage"

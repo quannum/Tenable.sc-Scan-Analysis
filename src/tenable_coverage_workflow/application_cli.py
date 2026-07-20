@@ -52,6 +52,7 @@ class TenableAccessConfig:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build parser"""
     parser = argparse.ArgumentParser(prog="tenable-sc-scan-analysis")
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--config-file")
@@ -100,10 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add source arguments"""
     add_authoritative_source_arguments(parser)
 
 
 def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add tenable arguments"""
     parser.add_argument("--mode", choices=("offline", "live"))
     parser.add_argument("--scan-json-dir")
     parser.add_argument("--asset-json-dir")
@@ -122,6 +125,7 @@ def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_filter_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add filter arguments"""
     parser.add_argument("--include-keywords")
     parser.add_argument("--exclude-keywords")
     parser.add_argument("--match-all-include", action="store_true", default=None)
@@ -133,12 +137,14 @@ def _add_filter_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_grouping_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add grouping arguments"""
     parser.add_argument("--grouping-mode", choices=("default", "vlan_tag"))
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument("--grouping-tag-map")
 
 
 def main(argv=None) -> int:
+    """Run the command-line workflow"""
     load_dotenv()
     args = build_parser().parse_args(argv)
     try:
@@ -161,6 +167,7 @@ def main(argv=None) -> int:
 
 
 def _source_config(args):
+    """Build the authoritative source settings from command options"""
     return build_authoritative_source_config(
         scalar_getter=lambda name, environment_name, default=None: _setting(
             args, name, environment_name, default
@@ -172,6 +179,7 @@ def _source_config(args):
 
 
 def _validate_definitions(args) -> int:
+    """Validate definitions"""
     source_type, result = load_authoritative_source(_source_config(args))
     payload = {
         "schema_version": 1,
@@ -193,6 +201,7 @@ def _validate_definitions(args) -> int:
 
 
 def _tenable_config(args) -> TenableAccessConfig:
+    """Build the Tenable.sc connection settings from command options"""
     mode = str(_setting(args, "mode", default="offline")).strip().lower()
     if mode not in {"offline", "live"}:
         raise ValueError("mode must be 'offline' or 'live'.")
@@ -230,6 +239,7 @@ def _tenable_config(args) -> TenableAccessConfig:
 
 
 def _collect_tenable(args) -> int:
+    """Collect tenable"""
     snapshot = collect_tenable_inventory(DataAccess(_tenable_config(args)))
     output_file = _setting(args, "output_file")
     if not output_file:
@@ -247,6 +257,7 @@ def _collect_tenable(args) -> int:
 
 
 def _analyze_or_propose(args) -> int:
+    """Run the analysis or proposal command"""
     source = _source_config(args)
     tenable = _tenable_config(args)
     filter_disabled_mode = str(_setting(args, "filter_disabled_mode", default="ALL"))
@@ -291,6 +302,7 @@ def _analyze_or_propose(args) -> int:
 
 
 def _apply_changes(args) -> int:
+    """Apply changes"""
     if args.apply is not True:
         _emit("Refusing mutation: apply-changes requires the explicit --apply flag.")
         return EXIT_APPLY_REQUIRED
@@ -324,6 +336,7 @@ def _apply_changes(args) -> int:
 
 
 def _export_report(args) -> int:
+    """Export reports for a completed run"""
     run_dir_value = _setting(args, "run_dir")
     output_dir_value = _setting(args, "output_dir")
     if not run_dir_value or not output_dir_value:
@@ -366,6 +379,7 @@ def _export_report(args) -> int:
 
 
 def _load_cli_config(path_value: str | None) -> dict[str, Any]:
+    """Load cli config"""
     if not path_value:
         return {}
     return load_config_section(
@@ -383,11 +397,13 @@ def _setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> Any:
+    """Get one resolved command setting"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.get(name, default, environment_name)
 
 
 def _as_bool(value: Any) -> bool:
+    """Convert to bool"""
     return parse_bool(value, "boolean")
 
 
@@ -397,11 +413,13 @@ def _csv_setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> list[str] | None:
+    """Get one comma-separated command setting"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.csv(name, default, environment_name)
 
 
 def _emit(message: str) -> None:
+    """Print one command-line message"""
     print(message)
 
 

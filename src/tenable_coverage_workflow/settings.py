@@ -16,10 +16,12 @@ ENV_PREFIX = "TCW_"
 
 
 def normalize_key(value: Any) -> str:
+    """Normalize key"""
     return str(value).strip().lower().replace("-", "_")
 
 
 def normalize_config_keys(config_data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize config keys"""
     return {normalize_key(key): value for key, value in config_data.items()}
 
 
@@ -30,6 +32,7 @@ def load_config_section(
     section_error: str,
     unsupported_error: str,
 ) -> dict[str, Any]:
+    """Load config section"""
     if not config_file_path.is_file():
         raise ValueError(f"Config file does not exist: {config_file_path}")
 
@@ -60,6 +63,7 @@ def env_setting(
     environment_name: str | None = None,
     legacy_names: tuple[str, ...] = (),
 ) -> Any:
+    """Read setting"""
     prefixed_environment_name = f"{ENV_PREFIX}{name.upper()}"
     if os.getenv(prefixed_environment_name) is not None:
         return os.getenv(prefixed_environment_name)
@@ -79,6 +83,7 @@ class SettingsResolver:
         command_name: str | None = None,
         legacy_env_names: dict[str, tuple[str, ...]] | None = None,
     ) -> None:
+        """Initialize the object"""
         self.args = args
         self.config_data = config_data or {}
         self.command_name = command_name
@@ -90,6 +95,7 @@ class SettingsResolver:
         default: Any = None,
         environment_name: str | None = None,
     ) -> Any:
+        """Get the requested value"""
         cli_value = getattr(self.args, name, None)
         if cli_value is not None:
             return cli_value
@@ -114,9 +120,11 @@ class SettingsResolver:
         default: Any = None,
         environment_name: str | None = None,
     ) -> list[str] | None:
+        """Read a comma-separated setting as a list"""
         return parse_csv_list(self.get(name, default, environment_name)) or None
 
     def _command_config(self) -> dict[str, Any]:
+        """Read settings for the active command"""
         if not self.command_name:
             return {}
 
@@ -137,6 +145,7 @@ class SettingsResolver:
 
 
 def as_path(value: str | Path | None) -> Path | None:
+    """Convert to path"""
     if value is None:
         return None
     if isinstance(value, Path):
@@ -149,6 +158,7 @@ def as_path(value: str | Path | None) -> Path | None:
 
 
 def optional_string(value: Any) -> str | None:
+    """Get an optional string"""
     if value is None:
         return None
     text = str(value).strip()
@@ -156,6 +166,7 @@ def optional_string(value: Any) -> str | None:
 
 
 def parse_bool(value: Any, field_name: str) -> bool:
+    """Parse bool"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -168,6 +179,7 @@ def parse_bool(value: Any, field_name: str) -> bool:
 
 
 def parse_positive_int(value: Any, field_name: str) -> int:
+    """Parse positive int"""
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
@@ -181,6 +193,7 @@ def parse_positive_int(value: Any, field_name: str) -> int:
 
 
 def parse_nonnegative_float(value: Any, field_name: str) -> float:
+    """Parse nonnegative float"""
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:

@@ -187,6 +187,11 @@ When `source_sites` is omitted, `get_sites` queries all returned sites.
 That is the recommended scheduled setup when new sites or VLANs should be
 detected automatically.
 
+Tag a public range, private range, VLAN range, or individual VLAN IP address
+with `exclude` to mark it intentionally out of scan scope. The tag is
+case-insensitive. Excluded scope remains visible in the final coverage reports,
+but receives no asset-group or scan proposal and does not affect coverage totals.
+
 The workflow supports payloads containing site data directly or under wrapper
 keys such as `site_definition`, `sites`, `locations`, or `data`. Validation
 rejects IPv6 scope, reports invalid CIDRs/ranges, flags duplicate ranges, and

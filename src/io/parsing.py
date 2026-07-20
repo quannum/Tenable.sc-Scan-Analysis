@@ -2,6 +2,7 @@ from typing import Any
 
 
 def parse_csv_list(value: Any) -> list[str]:
+    """Parse csv list"""
     if not value:
         return []
     if isinstance(value, list):
@@ -12,6 +13,7 @@ def parse_csv_list(value: Any) -> list[str]:
 
 
 def parse_string_mapping(value: Any) -> dict[str, str]:
+    """Parse string mapping"""
     if value is None:
         return {}
     if isinstance(value, dict):
@@ -43,7 +45,7 @@ def parse_string_mapping(value: Any) -> dict[str, str]:
     for pair in pairs:
         if "=" not in pair:
             raise ValueError(
-                "Mapping values must use key=value pairs separated by commas."
+                "Mapping values must use key=value pairs separated by commas"
             )
         key, item = pair.split("=", 1)
         key = key.strip()

@@ -76,6 +76,61 @@ class CoverageReportingTests(unittest.TestCase):
         self.assertEqual(summary["missing_asset_groups"], ["LAB01_Servers_VLAN_10"])
         self.assertEqual(summary["dimensions"]["region"][0]["name"], "Test")
 
+    def test_tag_excluded_scope_is_listed_without_missing_resource_findings(self):
+        result = CoverageValidationResult(
+            status="EXCLUDED",
+            target_type="IP_ADDRESS",
+            cidr="10.0.0.25/32",
+            site_code="LAB01",
+            site_name="Lab",
+            region="Test",
+            location=None,
+            description="Excluded host",
+            vlan_name="Restricted",
+            vlan_tag=25,
+            covering_scans=[],
+            reason="Excluded by authoritative source tag 'exclude'.",
+            source_file="lab.json",
+            required_asset_name=None,
+            required_scan_name=None,
+            required_policy_name=None,
+            exclusion_ip_total=1,
+            tags=["exclude"],
+            excluded_by_tag=True,
+            exclusion_tag="exclude",
+        )
+        target = CoverageTarget(
+            target_type="IP_ADDRESS",
+            cidr="10.0.0.25/32",
+            site_code="LAB01",
+            site_name="Lab",
+            location=None,
+            region="Test",
+            description="Excluded host",
+            tags=["exclude"],
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_coverage_reports(
+                Path(directory),
+                coverage_results=[result],
+                targets=[target],
+                actual_scopes=[],
+                validation_issues=[],
+            )
+            markdown = Path(paths["coverage_summary_markdown"]).read_text(
+                encoding="utf-8"
+            )
+
+        summary = build_coverage_summary([result], [])
+        self.assertEqual(summary["missing_asset_groups"], [])
+        self.assertEqual(summary["missing_scans"], [])
+        self.assertEqual(summary["tag_excluded_count"], 1)
+        self.assertEqual(summary["tag_exclusions"][0]["cidr"], "10.0.0.25/32")
+        self.assertIn("## Tag-Excluded Scope", markdown)
+        self.assertIn("10.0.0.25/32", markdown)
+        self.assertIn("`exclude`", markdown)
+
     def test_summary_markdown_lists_policy_mismatches_and_extra_count(self):
         result = CoverageValidationResult(
             status="OK",

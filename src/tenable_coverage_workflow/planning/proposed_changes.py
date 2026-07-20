@@ -4,6 +4,7 @@ from ..models import CoverageValidationResult, ProposedChange
 
 
 def adapt_coverage_result(row: Any) -> CoverageValidationResult:
+    """Adapt coverage result"""
     if isinstance(row, CoverageValidationResult):
         return row
 
@@ -44,6 +45,8 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         required_policy_configured=str(getter("required_policy_configured", "")),
         timezone=getter("timezone"),
         tags=list(getter("tags", []) or []),
+        excluded_by_tag=bool(getter("excluded_by_tag", False)),
+        exclusion_tag=getter("exclusion_tag"),
         environment=getter("environment"),
         business_function=getter("business_function"),
         scan_classification=dict(getter("scan_classification", {}) or {}),
@@ -54,10 +57,13 @@ def generate_proposed_changes(
     coverage_results: list[Any],
     run_id: str,
 ) -> list[ProposedChange]:
+    """Create the asset and scan changes needed for coverage"""
     changes: list[ProposedChange] = []
 
     for row in coverage_results:
         result = adapt_coverage_result(row)
+        if result.excluded_by_tag:
+            continue
         proposed_action = determine_proposed_action(result)
         issue = build_issue(result, proposed_action)
         changes.append(
@@ -86,6 +92,7 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
+    """Determine proposed action"""
     if result.required_asset_present == "No" or result.required_scan_present == "No":
         return _create_or_update_action(result.target_type)
 
@@ -112,6 +119,7 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
 
 
 def _create_or_update_action(target_type: str) -> str:
+    """Create or update action"""
     if target_type == "PUBLIC":
         return "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN"
     if target_type == "PRIVATE_SUPERNET":
@@ -122,6 +130,7 @@ def _create_or_update_action(target_type: str) -> str:
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
+    """Build issue"""
     if proposed_action == "REVIEW_WRONG_SCAN":
         covering_scans = ", ".join(sorted(result.covering_scans)) or "none"
         return (
@@ -144,6 +153,7 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
 
 
 def _build_getter(row: Any):
+    """Build a value getter for a record"""
     if isinstance(row, dict):
         return lambda name, default=None: row.get(name, default)
     return lambda name, default=None: getattr(row, name, default)

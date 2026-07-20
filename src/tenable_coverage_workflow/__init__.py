@@ -32,6 +32,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    """Load a lazily imported attribute"""
     if name in {"DetectAndPlanConfig", "run_detect_and_plan"}:
         from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
 

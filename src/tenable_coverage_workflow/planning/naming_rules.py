@@ -1,6 +1,7 @@
 import re
 from dataclasses import replace
 
+from ..exclusion_tags import find_exclusion_tag
 from ..models import CoverageTarget, GroupingConfig
 
 _NON_WORD_PATTERN = re.compile(r"[^A-Za-z0-9]+")
@@ -28,6 +29,7 @@ _ROLE_ALIAS_MAP = {
 
 
 def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
+    """Normalize name part"""
     text = str(value or "").strip()
     cleaned = _NON_WORD_PATTERN.sub("_", text)
     cleaned = _UNDERSCORE_PATTERN.sub("_", cleaned).strip("_")
@@ -35,11 +37,13 @@ def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
 
 
 def _normalize_optional_name_part(value: str | None) -> str | None:
+    """Normalize optional name part"""
     normalized = normalize_name_part(value, fallback="")
     return normalized or None
 
 
 def classify_vlan_role(vlan_name: str | None) -> str:
+    """Classify vlan role"""
     normalized = normalize_name_part(vlan_name, fallback="Standard").lower()
     raw = str(vlan_name or "").strip().lower()
 
@@ -79,11 +83,13 @@ def classify_vlan_role(vlan_name: str | None) -> str:
 
 
 def _normalize_role_from_value(value: str | None) -> str:
+    """Normalize role from value"""
     normalized = normalize_name_part(value, fallback="STANDARD").upper()
     return _ROLE_ALIAS_MAP.get(normalized.lower(), normalized)
 
 
 def _role_name_segment(role: str) -> str:
+    """Return the readable name segment for a role"""
     known = {
         "SERVER": "Server",
         "END_USER": "End_User",
@@ -98,6 +104,7 @@ def _role_name_segment(role: str) -> str:
 
 
 def _policy_name_for_role(role: str) -> str:
+    """Return the policy name for a role"""
     if role == "SERVER":
         return "Credentialed Server Assessment"
     if role == "END_USER":
@@ -115,6 +122,7 @@ def _extract_vlan_grouping_tag(
     target: CoverageTarget,
     grouping_config: GroupingConfig,
 ) -> str | None:
+    """Extract vlan grouping tag"""
     if target.target_type != "VLAN" or grouping_config.mode != "vlan_tag":
         return None
 
@@ -133,6 +141,7 @@ def _classify_vlan_role_from_grouping_tag(
     grouping_tag: str,
     grouping_config: GroupingConfig,
 ) -> str:
+    """Classify vlan role from grouping tag"""
     normalized_tag = str(grouping_tag).strip().lower()
     tag_map = {
         str(key).strip().lower(): _normalize_role_from_value(str(value).strip())
@@ -153,6 +162,7 @@ def resolve_target_role(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
+    """Resolve target role"""
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
@@ -164,6 +174,7 @@ def build_required_asset_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
+    """Build required asset name"""
     if target.target_type == "PUBLIC":
         return f"{target.site_code}_Public"
     if target.target_type == "PRIVATE_SUPERNET":
@@ -198,6 +209,7 @@ def _grouped_scan_scope_segments(target: CoverageTarget) -> list[str]:
 
 
 def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
+    """Return a safe description segment for a scan name"""
     return normalize_name_part(target.description, fallback=fallback)
 
 
@@ -206,6 +218,7 @@ def _compose_scan_name(
     description_fallback: str,
     purpose: str,
 ) -> str:
+    """Build a scan name from its standard parts"""
     return "_".join(
         [
             *_scan_scope_segments(target),
@@ -219,6 +232,7 @@ def build_required_scan_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
+    """Build required scan name"""
     if target.target_type == "PUBLIC":
         return _compose_scan_name(
             target,
@@ -256,6 +270,7 @@ def build_required_policy_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
+    """Build required policy name"""
     if target.target_type == "PUBLIC":
         return "Public Facing Assessment"
     if target.target_type == "PRIVATE_SUPERNET":
@@ -269,7 +284,10 @@ def apply_naming_rules(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> CoverageTarget:
+    """Apply naming rules"""
     grouping_config = grouping_config or GroupingConfig()
+    if find_exclusion_tag(target.tags):
+        return target
     return replace(
         target,
         required_asset_name=(
@@ -291,4 +309,5 @@ def apply_naming_rules_to_targets(
     targets: list[CoverageTarget],
     grouping_config: GroupingConfig | None = None,
 ) -> list[CoverageTarget]:
+    """Apply naming rules to targets"""
     return [apply_naming_rules(target, grouping_config) for target in targets]

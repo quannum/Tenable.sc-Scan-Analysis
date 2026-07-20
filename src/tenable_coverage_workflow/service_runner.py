@@ -21,6 +21,7 @@ class SchedulerLockError(RuntimeError):
 
 
 def main(argv=None) -> int:
+    """Run the command-line workflow"""
     config = build_service_config(argv)
     run_id = build_run_id(config.run_id_prefix)
     started_at = datetime.now(timezone.utc).isoformat()
@@ -92,6 +93,7 @@ def build_detect_config(
     config: ScheduledServiceConfig,
     run_id: str,
 ) -> DetectAndPlanConfig:
+    """Build detect config"""
     return DetectAndPlanConfig(
         source_config=config.source_config,
         output_dir=config.output_dir,
@@ -120,6 +122,7 @@ def build_detect_config(
 
 
 def build_run_id(run_id_prefix: str) -> str:
+    """Build run id"""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"{run_id_prefix}{timestamp}"
 
@@ -134,6 +137,7 @@ def build_latest_summary_payload(
     run_summary: dict[str, object] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
+    """Build latest summary payload"""
     payload: dict[str, Any] = {
         "job_name": job_name,
         "run_id": run_id,
@@ -152,6 +156,7 @@ def build_latest_summary_payload(
 
 @contextmanager
 def scheduler_lock(lock_file: Path, job_name: str, stale_timeout_seconds: int):
+    """Hold a lock so only one scheduled job runs at a time"""
     lock_file.parent.mkdir(parents=True, exist_ok=True)
     descriptor = None
     descriptor = _acquire_lock_descriptor(
@@ -180,6 +185,7 @@ def _acquire_lock_descriptor(
     job_name: str,
     stale_timeout_seconds: int,
 ):
+    """Create the lock file or wait for a stale lock to clear"""
     while True:
         try:
             return os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -202,6 +208,7 @@ def _acquire_lock_descriptor(
 
 
 def _lock_is_stale(lock_file: Path, stale_timeout_seconds: int) -> bool:
+    """Return whether a lock file is old or belongs to a stopped process"""
     if not lock_file.exists():
         return False
 
@@ -228,6 +235,7 @@ def _lock_is_stale(lock_file: Path, stale_timeout_seconds: int) -> bool:
 
 
 def _read_lock_details(lock_file: Path) -> dict[str, str]:
+    """Read the saved details from a lock file"""
     details: dict[str, str] = {}
     try:
         for line in lock_file.read_text(encoding="utf-8").splitlines():
@@ -241,6 +249,7 @@ def _read_lock_details(lock_file: Path) -> dict[str, str]:
 
 
 def _pid_is_running(pid: int) -> bool:
+    """Return whether a process ID is still running"""
     if pid <= 0:
         return False
 

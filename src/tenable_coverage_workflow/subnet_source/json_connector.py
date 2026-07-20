@@ -9,6 +9,7 @@ from .yaml_connector import flatten_site_definition
 def load_json_payload(
     payload: Any, source_file: str = "json-payload", audit_logger=None
 ) -> SourceLoadResult:
+    """Load json payload"""
     result = SourceLoadResult(files_processed=1)
     sites = extract_site_objects(payload)
     if sites is None:

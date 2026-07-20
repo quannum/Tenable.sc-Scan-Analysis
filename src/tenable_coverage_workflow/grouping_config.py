@@ -9,6 +9,7 @@ def build_grouping_config(
     prefix_value: Any,
     tag_map_value: Any,
 ) -> GroupingConfig:
+    """Build grouping config"""
     mode = str(mode_value or "default").strip() or "default"
     if mode not in {"default", "vlan_tag"}:
         raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")

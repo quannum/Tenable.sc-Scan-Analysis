@@ -11,6 +11,7 @@ from ..models import (
 
 
 def extract_site_objects(payload: Any) -> list[Any] | None:
+    """Extract site objects"""
     if isinstance(payload, list):
         return payload
     if not isinstance(payload, dict):
@@ -42,6 +43,7 @@ def extract_site_objects(payload: Any) -> list[Any] | None:
 def parse_site_object(
     raw: Any, source_file: str
 ) -> tuple[SiteNetworkDefinition | None, list[ValidationIssue]]:
+    """Parse site object"""
     issues: list[ValidationIssue] = []
     if not isinstance(raw, dict):
         return None, [ValidationIssue(source_file, "Site entry must be an object.")]
@@ -176,6 +178,7 @@ def _parse_public_ranges(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[NetworkRange]:
+    """Parse public ranges"""
     if isinstance(value, dict) and isinstance(value.get("subnets"), list):
         ranges: list[NetworkRange] = []
         for index, subnet in enumerate(value["subnets"]):
@@ -217,6 +220,7 @@ def _parse_private_ranges(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[PrivateNetworkRange]:
+    """Parse private ranges"""
     outer_tags: list[str] = []
     outer_metadata: dict[str, object] = {}
     if isinstance(value, dict) and value.get("supernet") is not None:
@@ -324,6 +328,7 @@ def _parse_vlan_blocks(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[VlanRange]:
+    """Parse vlan blocks"""
     name = ""
     vlan_tag = None
     routing = None
@@ -437,6 +442,7 @@ def _parse_network_blocks(
     default_name_keys: tuple[str, ...] = ("name",),
     default_description_keys: tuple[str, ...] = ("description",),
 ) -> list[NetworkRange]:
+    """Parse network blocks"""
     block = value if isinstance(value, dict) else {}
     scope = _extract_scope(block, value)
     scope_label = _scope_label(block)
@@ -503,6 +509,8 @@ def _parse_network_blocks(
             "cidr_value",
             "range",
             "scope",
+            "ip",
+            "address",
             "subnet_mask",
             "subnetmask",
             "tags",
@@ -527,6 +535,7 @@ def _parse_network_blocks(
 
 
 def _extract_scope(block: dict[str, Any], value: Any) -> str | None:
+    """Extract scope"""
     if isinstance(value, str):
         return value.strip()
 
@@ -543,7 +552,7 @@ def _extract_scope(block: dict[str, Any], value: Any) -> str | None:
     if network and subnetmask:
         return f"{network}/{subnetmask}"
 
-    for key in ("cidr_value", "range", "scope"):
+    for key in ("cidr_value", "range", "scope", "ip", "address"):
         text = _text(block.get(key))
         if text:
             return text
@@ -551,6 +560,7 @@ def _extract_scope(block: dict[str, Any], value: Any) -> str | None:
 
 
 def _scope_label(block: dict[str, Any]) -> str:
+    """Describe label"""
     has_network = bool(_text(block.get("network")))
     has_prefix = bool(_text(block.get("cidr")))
     has_mask = bool(_text(block.get("subnet_mask") or block.get("subnetmask")))
@@ -558,6 +568,7 @@ def _scope_label(block: dict[str, Any]) -> str:
 
 
 def _parse_scope(scope: str) -> list[ipaddress.IPv4Network]:
+    """Parse scope"""
     text = str(scope).strip()
     if "-" in text:
         start_text, end_text = text.split("-", 1)
@@ -580,6 +591,7 @@ def _coerce_ip_addresses(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[dict[str, object]]:
+    """Turn IP address input into a list of address records"""
     if value is None:
         return []
     if not isinstance(value, list):
@@ -626,6 +638,7 @@ def _coerce_tags(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[str]:
+    """Turn tag input into a list of tag names"""
     if value is None:
         return []
     if isinstance(value, str):
@@ -644,6 +657,7 @@ def _coerce_tags(
 
 
 def _merge_tags(*values: list[str]) -> list[str]:
+    """Merge tags"""
     result: list[str] = []
     for tags in values:
         for tag in tags:
@@ -654,6 +668,7 @@ def _merge_tags(*values: list[str]) -> list[str]:
 
 
 def _source_metadata(value: Any, consumed_keys: set[str]) -> dict[str, object]:
+    """Keep source fields that the parser did not use"""
     if not isinstance(value, dict):
         return {}
     return {
@@ -664,12 +679,14 @@ def _source_metadata(value: Any, consumed_keys: set[str]) -> dict[str, object]:
 
 
 def _as_list(value: Any) -> list[Any]:
+    """Convert to list"""
     if value is None:
         return []
     return value if isinstance(value, list) else [value]
 
 
 def _first_text(block: dict[str, Any], keys: tuple[str, ...]) -> str:
+    """Return the first non-empty text value for these keys"""
     for key in keys:
         text = _text(block.get(key))
         if text:
@@ -678,9 +695,11 @@ def _first_text(block: dict[str, Any], keys: tuple[str, ...]) -> str:
 
 
 def _text(value: Any) -> str:
+    """Convert a value to trimmed text"""
     return "" if value is None else str(value).strip()
 
 
 def _optional(value: Any) -> str | None:
+    """Get an optional the requested value"""
     text = _text(value)
     return text or None

@@ -138,6 +138,8 @@ class CoverageValidationResult:
     required_policy_configured: str = ""
     timezone: str | None = None
     tags: list[str] = field(default_factory=list)
+    excluded_by_tag: bool = False
+    exclusion_tag: str | None = None
     environment: str | None = None
     business_function: str | None = None
     scan_classification: dict[str, object] = field(default_factory=dict)

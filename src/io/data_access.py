@@ -9,6 +9,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
+    """Load local folders of scan/asset json files retrieved asynchronously (if not using live mode)"""
     data: dict[str, dict[str, Any]] = {}
     if not folder_path:
         return data
@@ -48,22 +49,34 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
 
 class DataAccessConfig(Protocol):
     @property
-    def mode(self) -> str: ...
+    def mode(self) -> str:
+        """Return the selected data-access mode"""
+        ...
 
     @property
-    def scan_json_dir(self) -> str | None: ...
+    def scan_json_dir(self) -> str | None:
+        """Return the offline scan JSON directory"""
+        ...
 
     @property
-    def asset_json_dir(self) -> str | None: ...
+    def asset_json_dir(self) -> str | None:
+        """Return the offline asset JSON directory"""
+        ...
 
     @property
-    def sc_url(self) -> str | None: ...
+    def sc_url(self) -> str | None:
+        """Return the Tenable.sc URL"""
+        ...
 
     @property
-    def sc_access_key(self) -> str | None: ...
+    def sc_access_key(self) -> str | None:
+        """Return the Tenable.sc access key"""
+        ...
 
     @property
-    def sc_secret_key(self) -> str | None: ...
+    def sc_secret_key(self) -> str | None:
+        """Return the Tenable.sc secret key"""
+        ...
 
 
 class DataAccess:
@@ -71,6 +84,7 @@ class DataAccess:
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
     def __init__(self, config: DataAccessConfig) -> None:
+        """Initialize the object"""
         self.config = config
         self.sc: Any = None
         self.offline_scans = {}
@@ -108,6 +122,7 @@ class DataAccess:
 
     @staticmethod
     def _validate_live_config(config: DataAccessConfig) -> None:
+        """Validate live config"""
         missing = []
         if not config.sc_url:
             missing.append("TCW_SC_URL/SC_URL")
@@ -123,6 +138,7 @@ class DataAccess:
             )
 
     def get_scans(self) -> list[dict[str, Any]]:
+        """Get list of scans"""
         if self.config.mode == "live":
             scans_payload = self._call_live(
                 self.sc.scans.list,
@@ -135,6 +151,7 @@ class DataAccess:
         return list(self.offline_scans.values())
 
     def get_scan_details(self, scan_id) -> dict[str, Any]:
+        """Get scan details"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.scans.details(scan_id),
@@ -147,6 +164,7 @@ class DataAccess:
         return details
 
     def get_asset(self, asset_id) -> dict[str, Any]:
+        """Get asset"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.asset_lists.details(asset_id),
@@ -155,25 +173,31 @@ class DataAccess:
         return self.offline_assets.get(str(asset_id), {})
 
     def get_repositories(self) -> list[dict[str, Any]]:
+        """Get repositories"""
         return self._list_live_resource("repositories")
 
     def get_asset_lists(self) -> list[dict[str, Any]]:
+        """Get asset lists"""
         if self.config.mode != "live":
             return list(self.offline_assets.values())
         return self._list_live_resource("asset_lists")
 
     def get_policies(self) -> list[dict[str, Any]]:
+        """Get policies"""
         return self._list_live_resource("policies")
 
     def get_credentials(self) -> list[dict[str, Any]]:
+        """Get credentials"""
         return self._list_live_resource("credentials")
 
     def get_observed_hosts(self) -> list[dict[str, Any]]:
+        """Get observed hosts"""
         return self._list_live_resource("hosts")
 
     def create_static_asset(
         self, name: str, ips: list[str], description: str
     ) -> dict[str, Any]:
+        """Create static asset"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.asset_lists.create(
@@ -188,6 +212,7 @@ class DataAccess:
     def update_static_asset(
         self, asset_id: int, ips: list[str], description: str | None = None
     ) -> dict[str, Any]:
+        """Update static asset"""
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
         if description:
@@ -204,6 +229,7 @@ class DataAccess:
         asset_ids: list[int],
         policy_id: int,
     ) -> dict[str, Any]:
+        """Create scan"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.create(
@@ -222,6 +248,7 @@ class DataAccess:
         repository_id: int,
         policy_id: int,
     ) -> dict[str, Any]:
+        """Update scan configuration"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.edit(
@@ -234,10 +261,12 @@ class DataAccess:
         )
 
     def _require_live_mutation(self) -> None:
+        """Raise an error when a live change is not allowed"""
         if self.config.mode != "live":
             raise RuntimeError("Tenable.sc mutations require live mode")
 
     def _list_live_resource(self, resource_name: str) -> list[dict[str, Any]]:
+        """List one type of resource from Tenable.sc"""
         if self.config.mode != "live":
             return []
         endpoint = getattr(self.sc, resource_name, None)
@@ -253,6 +282,7 @@ class DataAccess:
         return normalize_resource_list(payload)
 
     def _call_live(self, call_fn: Callable[[], Any], operation_name: str) -> Any:
+        """Call Tenable.sc and retry temporary failures"""
         attempts = getattr(self, "live_call_max_retries", self.LIVE_CALL_MAX_RETRIES)
 
         for attempt in range(1, attempts + 1):
@@ -290,6 +320,7 @@ class DataAccess:
 
     @staticmethod
     def _is_retryable_exception(exc: Exception) -> bool:
+        """Check whether retryable exception"""
         retryable_types = (TimeoutError, ConnectionError, OSError)
         if isinstance(exc, retryable_types):
             return True
@@ -304,7 +335,7 @@ class DataAccess:
 
 
 def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
-    """Normalize the list and usable/manageable response shapes used by pyTenable."""
+    """Normalize the list and usable/manageable responses from pyTenable"""
     records: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in _iter_resource_records(payload):
@@ -317,6 +348,7 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
+    """Iterate through resource records"""
     if isinstance(payload, list):
         for item in payload:
             if isinstance(item, dict):
@@ -345,6 +377,7 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
 
 
 def _parse_bool(value: Any) -> bool:
+    """Parse a boolean value"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):

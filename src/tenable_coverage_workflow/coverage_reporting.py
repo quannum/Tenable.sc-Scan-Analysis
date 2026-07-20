@@ -25,6 +25,8 @@ DETAIL_COLUMNS = [
     "location",
     "timezone",
     "tags",
+    "excluded_by_tag",
+    "exclusion_tag",
     "environment",
     "business_function",
     "scan_classification",
@@ -55,6 +57,7 @@ def write_coverage_reports(
     actual_scopes,
     validation_issues: list[ValidationIssue],
 ) -> dict[str, Any]:
+    """Write coverage reports"""
     output_dir = Path(run_dir)
     details = [asdict(result) for result in coverage_results]
     extras = detect_extra_scan_targets(actual_scopes, targets)
@@ -108,6 +111,7 @@ def write_coverage_reports(
 
 
 def build_proposed_exclusions(extras: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build proposed exclusions"""
     proposals = []
     for finding in extras:
         for cidr in finding["extra_cidrs"]:
@@ -126,6 +130,7 @@ def build_proposed_exclusions(extras: list[dict[str, Any]]) -> list[dict[str, An
 def build_coverage_summary(
     results: list[CoverageValidationResult], extras: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    """Build coverage summary"""
     totals = _aggregate(results)
     dimensions = {
         "region": _group_summary(results, lambda item: item.region),
@@ -145,18 +150,40 @@ def build_coverage_summary(
         "schema_version": 1,
         "totals": totals,
         "dimensions": dimensions,
+        "tag_exclusions": [
+            {
+                "site_code": result.site_code,
+                "target_type": result.target_type,
+                "cidr": result.cidr,
+                "vlan_name": result.vlan_name,
+                "vlan_tag": result.vlan_tag,
+                "exclusion_tag": result.exclusion_tag,
+                "source_file": result.source_file,
+            }
+            for result in results
+            if result.excluded_by_tag
+        ],
+        "tag_excluded_count": sum(result.excluded_by_tag for result in results),
         "missing_asset_groups": sorted(
             {
                 result.required_asset_name
                 for result in results
-                if result.required_asset_present == "No" and result.required_asset_name
+                if (
+                    not result.excluded_by_tag
+                    and result.required_asset_present == "No"
+                    and result.required_asset_name
+                )
             }
         ),
         "missing_scans": sorted(
             {
                 result.required_scan_name
                 for result in results
-                if result.required_scan_present == "No" and result.required_scan_name
+                if (
+                    not result.excluded_by_tag
+                    and result.required_scan_present == "No"
+                    and result.required_scan_name
+                )
             }
         ),
         "policy_mismatches": [
@@ -174,6 +201,7 @@ def build_coverage_summary(
 
 
 def _group_summary(results, key_fn) -> list[dict[str, Any]]:
+    """Build coverage totals for each group"""
     grouped = defaultdict(list)
     for result in results:
         grouped[str(key_fn(result) or "UNASSIGNED")].append(result)
@@ -183,6 +211,7 @@ def _group_summary(results, key_fn) -> list[dict[str, Any]]:
 
 
 def _aggregate(results: list[CoverageValidationResult]) -> dict[str, Any]:
+    """Build overall coverage totals"""
     statuses = Counter(result.status for result in results)
     expected = sum(result.expected_size for result in results)
     covered = sum(result.covered_count for result in results)
@@ -198,6 +227,7 @@ def _aggregate(results: list[CoverageValidationResult]) -> dict[str, Any]:
 
 
 def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
+    """Detect extra scan targets"""
     expected_intervals = [
         scope_to_interval(parse_scope_item(target.cidr)) for target in targets
     ]
@@ -240,6 +270,7 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
 
 
 def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
+    """Write details csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=DETAIL_COLUMNS, extrasaction="ignore")
     writer.writeheader()
@@ -253,6 +284,7 @@ def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
 
 
 def _write_dict_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Path:
+    """Write dict csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
@@ -266,6 +298,7 @@ def write_final_audit_report(
     validation_issues: list[ValidationIssue],
     coverage_results: list[CoverageValidationResult],
 ) -> Path:
+    """Write final audit report"""
     severity_counts = Counter(issue.severity for issue in validation_issues)
     lines = [
         "# Tenable.sc Scan Analysis - Final Audit Report",
@@ -290,6 +323,7 @@ def write_final_audit_report(
         f"- Missing/GAP: {summary['gap_count']}",
         f"- Partial: {summary['partial_count']}",
         f"- Exclusion impacted: {summary['excluded_count']}",
+        f"- Tag-excluded scope: {summary.get('tag_excluded_count', 0)}",
         f"- Missing asset groups: {summary['missing_asset_group_count']}",
         f"- Missing required scans: {summary['missing_required_scan_count']}",
         f"- Policy mismatches: {summary['scan_policy_mismatch_count']}",
@@ -300,9 +334,18 @@ def write_final_audit_report(
         f"- Proposed rows: {summary['proposed_changes_count']}",
         "- Approval state: PENDING (no mutation performed by this run)",
         "",
-        "## Artifacts",
-        "",
     ]
+    tag_exclusions = [result for result in coverage_results if result.excluded_by_tag]
+    if tag_exclusions:
+        lines.extend(("## Tag-Excluded Scope", ""))
+        for result in tag_exclusions:
+            lines.append(
+                "- "
+                f"{result.site_code} / {result.target_type} `{result.cidr}`: tagged "
+                f"`{result.exclusion_tag}`"
+            )
+        lines.append("")
+    lines.extend(("## Artifacts", ""))
     artifact_keys = (
         "coverage_results_json",
         "coverage_results_csv",
@@ -323,6 +366,7 @@ def write_final_audit_report(
 
 
 def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
+    """Write summary markdown"""
     totals = summary["totals"]
     lines = [
         "# Coverage Summary",
@@ -333,6 +377,7 @@ def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
         f"- Gap IPs: {totals['gap_ip_count']}",
         f"- Coverage: {totals['coverage_pct']}%",
         f"- Extra/stale scan target findings: {summary['extra_scan_target_count']}",
+        f"- Tag-excluded targets: {summary['tag_excluded_count']}",
         "",
     ]
     for dimension, groups in summary["dimensions"].items():
@@ -361,6 +406,19 @@ def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
                 f"{mismatch['site_code']} / {mismatch['scan']}: expected "
                 f"{mismatch['expected_policy'] or 'N/A'}, configured "
                 f"{mismatch['configured_policy'] or 'N/A'}"
+            )
+    else:
+        lines.append("- None")
+    lines.extend(("", "## Tag-Excluded Scope", ""))
+    if summary["tag_exclusions"]:
+        for exclusion in summary["tag_exclusions"]:
+            vlan = exclusion["vlan_name"] or exclusion["vlan_tag"]
+            vlan_suffix = f" / VLAN {vlan}" if vlan else ""
+            lines.append(
+                "- "
+                f"{exclusion['site_code']} / {exclusion['target_type']} "
+                f"`{exclusion['cidr']}`{vlan_suffix}: tagged "
+                f"`{exclusion['exclusion_tag']}`"
             )
     else:
         lines.append("- None")

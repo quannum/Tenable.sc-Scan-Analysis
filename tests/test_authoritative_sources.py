@@ -131,6 +131,61 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         self.assertIn(("PRIVATE_SUPERNET", "10.10.0.0/16"), targets)
         self.assertIn(("VLAN", "10.10.16.0/24"), targets)
 
+    def test_exclude_tags_are_preserved_for_ranges_vlans_and_individual_ips(self):
+        result = load_json_payload(
+            {
+                "site_code": "EXC01",
+                "public_ranges": [
+                    {"ip": "203.0.113.9", "tags": ["exclude"]},
+                ],
+                "private_ranges": [
+                    {
+                        "cidr": "10.50.0.0/24",
+                        "tags": ["EXCLUDE"],
+                    },
+                    {
+                        "cidr": "10.51.0.0/24",
+                        "vlans": [
+                            {
+                                "name": "Restricted",
+                                "vlan_id": 50,
+                                "cidr": "10.51.0.0/24",
+                                "tags": ["exclude"],
+                                "ip_addresses": [
+                                    {
+                                        "ip": "10.51.0.25",
+                                        "name": "Excluded host",
+                                        "tags": ["exclude"],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                ],
+            }
+        )
+
+        targets = {
+            (target.target_type, target.cidr): target
+            for target in result.coverage_targets
+        }
+
+        self.assertIn(("PUBLIC", "203.0.113.9/32"), targets)
+        self.assertIn(("PRIVATE_SUPERNET", "10.50.0.0/24"), targets)
+        self.assertIn(("VLAN", "10.51.0.0/24"), targets)
+        self.assertIn(("IP_ADDRESS", "10.51.0.25/32"), targets)
+        excluded_targets = (
+            ("PUBLIC", "203.0.113.9/32"),
+            ("PRIVATE_SUPERNET", "10.50.0.0/24"),
+            ("VLAN", "10.51.0.0/24"),
+            ("IP_ADDRESS", "10.51.0.25/32"),
+        )
+        for key in excluded_targets:
+            self.assertIn(
+                "exclude",
+                [tag.lower() for tag in targets[key].tags],
+            )
+
     def test_subnet_as_code_site_definition_json_is_normalized(self):
         payload = {
             "site_definition": [

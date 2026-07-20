@@ -56,6 +56,7 @@ class ApplyOperation:
 
 
 def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
+    """Load approved plan"""
     path = Path(path_value)
     raw_bytes = path.read_bytes()
     fingerprint = hashlib.sha256(raw_bytes).hexdigest()
@@ -140,6 +141,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
 
 class ChangeApplier:
     def __init__(self, data_access: DataAccess, repository_id: int) -> None:
+        """Initialize the object"""
         if data_access.config.mode != "live":
             raise ValueError("apply-changes requires --mode live")
         if int(repository_id) <= 0:
@@ -153,6 +155,7 @@ class ChangeApplier:
         self.policies = self._unique_name_index(data_access.get_policies(), "policy")
 
     def preflight(self, plan: ApprovedPlan) -> None:
+        """Check requirements before applying changes"""
         errors = []
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
@@ -165,6 +168,7 @@ class ChangeApplier:
             raise ValueError("Apply preflight failed: " + "; ".join(errors))
 
     def apply(self, plan: ApprovedPlan) -> dict[str, Any]:
+        """Apply the requested value"""
         self.preflight(plan)
         started_at = datetime.now(timezone.utc)
         operations = []
@@ -219,6 +223,7 @@ class ChangeApplier:
         }
 
     def _apply_change(self, change: ApprovedChange) -> ApplyOperation:
+        """Apply change"""
         asset, asset_status = self._ensure_asset(change)
         asset_id = _resource_id(asset, "asset group", change.asset_name)
         scan, scan_status = self._ensure_scan(change, asset_id)
@@ -241,6 +246,7 @@ class ChangeApplier:
         )
 
     def _ensure_asset(self, change: ApprovedChange) -> tuple[dict[str, Any], str]:
+        """Ensure asset"""
         existing = self.assets.get(change.asset_name)
         if existing is None:
             created = self.data_access.create_static_asset(
@@ -272,6 +278,7 @@ class ChangeApplier:
     def _ensure_scan(
         self, change: ApprovedChange, asset_id: int
     ) -> tuple[dict[str, Any], str]:
+        """Ensure scan"""
         existing = self.scans.get(change.scan_name)
         policy_id = _resource_id(
             self.policies[change.policy_name], "policy", change.policy_name
@@ -312,6 +319,7 @@ class ChangeApplier:
         return merged, "UPDATED"
 
     def _verify_asset(self, asset_id: int, expected_cidr: str) -> None:
+        """Check that an asset group contains the expected CIDR"""
         details = self.data_access.get_asset(asset_id)
         if expected_cidr not in extract_asset_scopes(details):
             raise RuntimeError(
@@ -324,6 +332,7 @@ class ChangeApplier:
         expected_asset_id: int,
         expected_policy_id: int | None = None,
     ) -> None:
+        """Check that a scan has the expected settings"""
         details = self.data_access.get_scan_details(scan_id)
         if expected_asset_id not in extract_scan_asset_ids(details):
             raise RuntimeError(
@@ -346,6 +355,7 @@ class ChangeApplier:
     def _unique_name_index(
         records: list[dict[str, Any]], resource_type: str
     ) -> dict[str, dict[str, Any]]:
+        """Index resources by name and reject duplicate names"""
         result = {}
         for record in records:
             name = _text(record.get("name"))
@@ -361,6 +371,7 @@ class ChangeApplier:
 
 
 def extract_asset_scopes(asset: dict[str, Any]) -> set[str]:
+    """Extract asset scopes"""
     values = []
     type_fields = asset.get("typeFields", {})
     if isinstance(type_fields, dict):
@@ -378,6 +389,7 @@ def extract_asset_scopes(asset: dict[str, Any]) -> set[str]:
 
 
 def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
+    """Extract scan asset ids"""
     values = scan.get("assets", scan.get("assetLists", []))
     if not isinstance(values, list):
         return set()
@@ -396,6 +408,7 @@ def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
 def extract_nested_id(
     record: dict[str, Any], nested_key: str, scalar_key: str
 ) -> int | None:
+    """Extract nested id"""
     value = record.get(nested_key)
     raw_id = value.get("id") if isinstance(value, dict) else record.get(scalar_key)
     if raw_id in (None, ""):
@@ -407,6 +420,7 @@ def extract_nested_id(
 
 
 def _resource_id(record: dict[str, Any], resource_type: str, name: str) -> int:
+    """Read a resource ID or raise a clear error"""
     try:
         return int(record["id"])
     except (KeyError, TypeError, ValueError) as exc:
@@ -416,6 +430,7 @@ def _resource_id(record: dict[str, Any], resource_type: str, name: str) -> int:
 
 
 def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
+    """Read a required text value from a CSV row"""
     value = _text(row.get(column))
     if not value:
         raise ValueError(f"Row {row_number} has no {column}.")
@@ -423,10 +438,12 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
 
 
 def _text(value: Any) -> str:
+    """Convert a value to trimmed text"""
     return "" if value is None else str(value).strip()
 
 
 def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:
+    """Write apply markdown"""
     lines = [
         "# Tenable.sc Apply Audit",
         "",

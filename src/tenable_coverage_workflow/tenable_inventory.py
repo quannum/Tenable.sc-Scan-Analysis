@@ -58,6 +58,7 @@ def _expand_details(
     records: list[dict[str, Any]],
     details_getter: Callable[[Any], dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    """Expand details"""
     expanded = []
     for record in records:
         record_id = record.get("id")
@@ -76,6 +77,7 @@ def _expand_details(
 
 
 def redact_sensitive(value: Any) -> Any:
+    """Redact sensitive"""
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
@@ -91,6 +93,7 @@ def redact_sensitive(value: Any) -> Any:
 
 
 def write_inventory_snapshot(snapshot: dict[str, Any], output_file: str | Path) -> Path:
+    """Write inventory snapshot"""
     path = Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
