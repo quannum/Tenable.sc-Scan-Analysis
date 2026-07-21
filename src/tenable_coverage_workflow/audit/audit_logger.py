@@ -35,7 +35,7 @@ class AuditLogger:
 
 
 def atomic_write_text(path: str | Path, content: str) -> Path:
-    """Write write text"""
+    """Write text"""
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -62,7 +62,7 @@ def atomic_write_text(path: str | Path, content: str) -> Path:
 
 
 def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
-    """Write write json"""
+    """Write json"""
     return atomic_write_text(
         path,
         json.dumps(

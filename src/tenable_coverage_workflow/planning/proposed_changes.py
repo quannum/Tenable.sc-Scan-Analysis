@@ -153,7 +153,7 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
 
 
 def _build_getter(row: Any):
-    """Build a value getter for a record"""
+    """Build value getter for a record"""
     if isinstance(row, dict):
         return lambda name, default=None: row.get(name, default)
     return lambda name, default=None: getattr(row, name, default)

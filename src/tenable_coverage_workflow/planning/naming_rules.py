@@ -104,7 +104,7 @@ def _role_name_segment(role: str) -> str:
 
 
 def _policy_name_for_role(role: str) -> str:
-    """Return the policy name for a role"""
+    """Return proposed policy name for each role"""
     if role == "SERVER":
         return "Credentialed Server Assessment"
     if role == "END_USER":
@@ -122,7 +122,7 @@ def _extract_vlan_grouping_tag(
     target: CoverageTarget,
     grouping_config: GroupingConfig,
 ) -> str | None:
-    """Extract vlan grouping tag"""
+    """Get vlan tag"""
     if target.target_type != "VLAN" or grouping_config.mode != "vlan_tag":
         return None
 
@@ -209,7 +209,7 @@ def _grouped_scan_scope_segments(target: CoverageTarget) -> list[str]:
 
 
 def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
-    """Return a safe description segment for a scan name"""
+    """Return description segment for a scan name"""
     return normalize_name_part(target.description, fallback=fallback)
 
 
@@ -218,7 +218,7 @@ def _compose_scan_name(
     description_fallback: str,
     purpose: str,
 ) -> str:
-    """Build a scan name from its standard parts"""
+    """Build scan name from its standard parts"""
     return "_".join(
         [
             *_scan_scope_segments(target),
