@@ -1,7 +1,7 @@
 # Tenable SC Scan Coverage Analysis
 
 Validate Tenable.sc scan and asset coverage against authoritative network data
-from the internal `subnet_as_code` Python module.
+from the internal `rsg_subnet_as_code` Python module.
 
 The workflow can run against exported Tenable JSON files or the live Tenable.sc
 API. It normalizes expected network scope, compares it with configured scan
@@ -12,7 +12,7 @@ reports.
 
 Each coverage run:
 
-1. Calls `subnet_as_code.get_sites`.
+1. Calls `rsg_subnet_as_code.get_sites`.
 2. Normalizes returned site, public range, private range, VLAN, CIDR, single-IP,
    and explicit `start-end` range data.
 3. Applies asset, scan, and policy naming rules.
@@ -20,6 +20,40 @@ Each coverage run:
 5. Filters scans when requested.
 6. Calculates net coverage after exclusions.
 7. Writes coverage results, proposed changes, audit logs, and summaries.
+
+## Recommended Workflow
+
+Use this sequence for every new or recurring run:
+
+1. Run `validate-definitions` to catch malformed authoritative scope before
+   comparing it to Tenable.sc.
+2. Run `propose-changes` in offline or live mode. This is always dry-run.
+3. Review `coverage_summary.md`, `final_audit_report.md`, and
+   `proposed_changes.csv` in the created run directory.
+4. In `proposed_changes.csv`, set only approved rows to `APPROVED` and add a
+   reviewer name.
+5. Run `apply-changes --apply` in live mode with the correct repository ID.
+6. Review `apply_result.md` and export the run artifacts when needed.
+
+Example offline proposal:
+
+```powershell
+tenable-sc-scan-analysis propose-changes `
+  --mode offline `
+  --scan-json-dir C:\tenable\scans `
+  --asset-json-dir C:\tenable\assets `
+  --output-dir C:\tenable-output
+```
+
+Example live application after review:
+
+```powershell
+tenable-sc-scan-analysis apply-changes `
+  --mode live `
+  --plan-file C:\tenable-output\runs\<run-id>\proposed_changes.csv `
+  --repository-id 7 `
+  --apply
+```
 
 ## Modes
 
@@ -46,7 +80,7 @@ Disabling certificate verification requires `--no-sc-ssl-verify`.
 Requirements:
 
 - Python 3.10+
-- Access to the internal package source for `subnet_as_code>=0.0.1`
+- Access to the internal package that exposes `rsg_subnet_as_code.get_sites`
 - `pyTenable` only when using live mode
 
 Install base dependencies:
@@ -171,7 +205,7 @@ Example config files:
 
 ## Authoritative Source
 
-The authoritative source is `subnet_as_code.get_sites`, which returns complete
+The authoritative source is `rsg_subnet_as_code.get_sites`, which returns complete
 site definitions from the source YAML as JSON.
 
 Optional source filters:
@@ -292,7 +326,8 @@ tenable-sc-scan-analysis apply-changes `
 
 Static assets and scan attachments are reconciled idempotently. Existing target
 ranges and scan assets are retained, matching reruns report `UNCHANGED`, and
-each write is followed by a live details read.
+each write is followed by a live details read that verifies the expected CIDR,
+asset group, repository, and policy.
 
 ## Scheduled Service
 
@@ -368,15 +403,18 @@ release tag, and schedule before deployment.
 
 ## VLAN Tag Grouping
 
-Asset and scan grouping can optionally use VLAN tags from `subnet_as_code`.
+Asset and scan grouping can optionally use VLAN tags from
+`rsg_subnet_as_code`.
 
 When `grouping_mode` is `vlan_tag`:
 
 - only tags starting with `grouping_vlan_tag_prefix` are considered
 - the first matching tag wins
 - `grouping_tag_map` translates tags into internal group roles
-- generated VLAN asset groups and scans use the same site-code-and-role naming
+- generated VLAN asset groups use the site code and grouping tag; scans use the
+  site code and resolved role
 - generated asset and scan names use spaces, and site-code prefixes are uppercase
+- public scans use `<SITE-CODE> Public Assessment`
 - `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
 - Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
 - source descriptions remain available in reporting but do not override grouped scan roles

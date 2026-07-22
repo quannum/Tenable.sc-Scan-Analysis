@@ -2,7 +2,7 @@
 job_name = "tenable-coverage-all-sites"
 
 # Authoritative expected-range source:
-# Use subnet_as_code and intentionally leave source_sites unset so the workflow
+# Use rsg_subnet_as_code and intentionally leave source_sites unset so the workflow
 # queries all sites returned by get_sites.
 # source_sites = "NYC,LON"
 # source_tags = "production"
@@ -14,7 +14,7 @@ job_name = "tenable-coverage-all-sites"
 # The first tag starting with grouping_vlan_tag_prefix wins.
 # grouping_mode = "vlan_tag"
 # grouping_vlan_tag_prefix = "vlan-"
-# grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "WIRELESS" }
+# grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
 
 # Output + scheduler state
 output_dir = "/data/output"
