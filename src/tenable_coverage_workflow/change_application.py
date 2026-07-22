@@ -25,6 +25,7 @@ class ApprovedChange:
     run_id: str
     site_code: str
     cidr: str
+    target_type: str
     proposed_action: str
     asset_name: str
     scan_name: str
@@ -104,6 +105,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 run_id=run_id,
                 site_code=_required_text(row, "Site Code", row_number),
                 cidr=_required_text(row, "CIDR", row_number),
+                target_type=_text(row.get("Target Type")).upper(),
                 proposed_action=_required_text(
                     row, "Proposed Action", row_number
                 ).upper(),
@@ -478,18 +480,29 @@ def _text(value: Any) -> str:
 
 def _build_asset_descriptions(changes: list[ApprovedChange]) -> dict[str, str]:
     """Build managed descriptions for proposed asset groups"""
-    vlan_lines: dict[str, set[str]] = {}
+    scope_lines: dict[str, set[str]] = {}
     for change in changes:
-        if not change.vlan_name:
+        line = _asset_description_line(change)
+        if not line:
             continue
-        grouping_label = change.grouping_tag or f"VLAN {change.vlan_tag or 'N/A'}"
-        line = f"{change.vlan_name} {change.cidr} {grouping_label}"
-        vlan_lines.setdefault(change.asset_name, set()).add(line)
+        scope_lines.setdefault(change.asset_name, set()).add(line)
 
     return {
         asset_name: MANAGED_DESCRIPTION + "\n\n" + "\n".join(sorted(lines))
-        for asset_name, lines in vlan_lines.items()
+        for asset_name, lines in scope_lines.items()
     }
+
+
+def _asset_description_line(change: ApprovedChange) -> str | None:
+    """Build one managed scope line for an approved change"""
+    if change.vlan_name:
+        grouping_label = change.grouping_tag or f"VLAN {change.vlan_tag or 'N/A'}"
+        return f"{change.vlan_name} {change.cidr} {grouping_label}"
+    if change.target_type == "PUBLIC":
+        return f"Public Range {change.cidr}"
+    if change.target_type == "PRIVATE_SUPERNET":
+        return f"Private Supernet {change.cidr}"
+    return None
 
 
 def _merge_asset_description(existing: str, planned: str) -> str:

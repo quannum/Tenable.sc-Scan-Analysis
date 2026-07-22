@@ -13,6 +13,7 @@ COLUMNS = [
     "Run ID",
     "Site Code",
     "CIDR",
+    "Target Type",
     "VLAN Name",
     "VLAN Tag",
     "VLAN Grouping Tag",
@@ -39,13 +40,14 @@ def approved_row(**overrides):
         "Run ID": "run-001",
         "Site Code": "NYC01",
         "CIDR": "10.1.16.0/24",
+        "Target Type": "VLAN",
         "VLAN Name": "vl16-it-services-static",
         "VLAN Tag": "16",
         "VLAN Grouping Tag": "vlan-server",
         "Proposed Action": "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
         "Proposed Asset Name": "NYC01 Servers VLAN 120",
         "Proposed Scan Name": "US East NYC01 Server Assessment",
-        "Proposed Policy Name": "Credentialed Server Assessment",
+        "Proposed Policy Name": "Basic Assessment Policy",
         "Approval Status": "APPROVED",
         "Reviewer": "security-reviewer",
         "Decision Notes": "Approved in change ticket CHG001",
@@ -60,7 +62,7 @@ class FakeDataAccess:
     def __init__(self):
         self.assets = {}
         self.scans = {}
-        self.policies = {30: {"id": 30, "name": "Credentialed Server Assessment"}}
+        self.policies = {30: {"id": 30, "name": "Basic Assessment Policy"}}
         self.calls = []
         self.next_asset_id = 10
         self.next_scan_id = 20
@@ -201,7 +203,7 @@ class ChangeApplicationTests(unittest.TestCase):
                             **{
                                 "Proposed Asset Name": "NYC01 Workstation VLAN Group",
                                 "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "Proposed Policy Name": "Basic Assessment Policy",
                                 "VLAN Grouping Tag": "vlan-workstation",
                             }
                         ),
@@ -210,7 +212,7 @@ class ChangeApplicationTests(unittest.TestCase):
                                 "CIDR": "10.1.17.0/24",
                                 "Proposed Asset Name": "NYC01 Workstation VLAN Group",
                                 "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "Proposed Policy Name": "Basic Assessment Policy",
                                 "VLAN Name": "vl17-it-services-sandbox",
                                 "VLAN Grouping Tag": "vlan-workstation",
                             }
@@ -219,10 +221,6 @@ class ChangeApplicationTests(unittest.TestCase):
                 )
             )
             data_access = FakeDataAccess()
-            data_access.policies[31] = {
-                "id": 31,
-                "name": "Credentialed Workstation Assessment",
-            }
 
             ChangeApplier(data_access, repository_id=7).apply(plan)
 
@@ -232,6 +230,65 @@ class ChangeApplicationTests(unittest.TestCase):
                 "Managed by Tenable.sc Scan Analysis\n\n"
                 "vl16-it-services-static 10.1.16.0/24 vlan-workstation\n"
                 "vl17-it-services-sandbox 10.1.17.0/24 vlan-workstation",
+            )
+
+    def test_public_and_private_assets_include_scope_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(
+                    Path(directory) / "plan.csv",
+                    [
+                        approved_row(
+                            **{
+                                "CIDR": "203.0.113.0/24",
+                                "Target Type": "PUBLIC",
+                                "Proposed Action": "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
+                                "Proposed Asset Name": "NYC01 Public",
+                                "Proposed Scan Name": "NYC01 Public Assessment",
+                                "Proposed Policy Name": "Public Facing Assessment",
+                                "VLAN Name": "",
+                                "VLAN Tag": "",
+                                "VLAN Grouping Tag": "",
+                            }
+                        ),
+                        approved_row(
+                            **{
+                                "CIDR": "10.1.0.0/16",
+                                "Target Type": "PRIVATE_SUPERNET",
+                                "Proposed Action": "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
+                                "Proposed Asset Name": "NYC01 Private Discovery",
+                                "Proposed Scan Name": "NYC01 Private Discovery",
+                                "Proposed Policy Name": "Discovery",
+                                "VLAN Name": "",
+                                "VLAN Tag": "",
+                                "VLAN Grouping Tag": "",
+                            }
+                        ),
+                    ],
+                )
+            )
+            data_access = FakeDataAccess()
+            data_access.policies[31] = {
+                "id": 31,
+                "name": "Public Facing Assessment",
+            }
+            data_access.policies[32] = {"id": 32, "name": "Discovery"}
+
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+
+            descriptions = {
+                asset["name"]: asset["description"]
+                for asset in data_access.assets.values()
+            }
+            self.assertEqual(
+                descriptions["NYC01 Public"],
+                "Managed by Tenable.sc Scan Analysis\n\n"
+                "Public Range 203.0.113.0/24",
+            )
+            self.assertEqual(
+                descriptions["NYC01 Private Discovery"],
+                "Managed by Tenable.sc Scan Analysis\n\n"
+                "Private Supernet 10.1.0.0/16",
             )
 
     def test_separate_vlan_assets_attach_to_the_same_workstation_scan(self):
@@ -244,7 +301,7 @@ class ChangeApplicationTests(unittest.TestCase):
                             **{
                                 "Proposed Asset Name": "NYC01 Workstation VLAN Group",
                                 "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "Proposed Policy Name": "Basic Assessment Policy",
                                 "VLAN Grouping Tag": "vlan-workstation",
                             }
                         ),
@@ -253,7 +310,7 @@ class ChangeApplicationTests(unittest.TestCase):
                                 "CIDR": "10.1.17.0/24",
                                 "Proposed Asset Name": "NYC01 Wireless VLAN Group",
                                 "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "Proposed Policy Name": "Basic Assessment Policy",
                                 "VLAN Name": "vl17-it-services-sandbox",
                                 "VLAN Grouping Tag": "vlan-wireless",
                             }
@@ -262,10 +319,6 @@ class ChangeApplicationTests(unittest.TestCase):
                 )
             )
             data_access = FakeDataAccess()
-            data_access.policies[31] = {
-                "id": 31,
-                "name": "Credentialed Workstation Assessment",
-            }
 
             ChangeApplier(data_access, repository_id=7).apply(plan)
 

@@ -18,6 +18,7 @@ from src.tenable_coverage_workflow.models import (
 )
 from src.tenable_coverage_workflow.planning.naming_rules import (
     apply_naming_rules,
+    build_required_policy_name,
     build_required_scan_name,
 )
 from src.tenable_coverage_workflow.planning.proposed_changes import (
@@ -61,8 +62,24 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_policy_name,
-            "Credentialed Server Assessment",
+            "Basic Assessment Policy",
         )
+
+    def test_public_scan_name_uses_only_the_site_code(self):
+        target = CoverageTarget(
+            target_type="PUBLIC",
+            cidr="203.0.113.0/24",
+            site_code="nyc",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Direct Internet Access",
+        )
+
+        named_target = apply_naming_rules(target)
+
+        self.assertEqual(named_target.required_asset_name, "NYC Public")
+        self.assertEqual(named_target.required_scan_name, "NYC Public Assessment")
 
     def test_exclude_tag_skips_naming_coverage_plans_and_missing_resources(self):
         target = CoverageTarget(
@@ -125,7 +142,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_policy_name,
-            "Credentialed Workstation Assessment",
+            "Basic Assessment Policy",
         )
 
     def test_first_vlan_prefixed_tag_wins(self):
@@ -158,7 +175,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_policy_name,
-            "Credentialed Workstation Assessment",
+            "Basic Assessment Policy",
         )
 
     def test_workstation_and_wireless_tags_share_grouped_names(self):
@@ -216,6 +233,64 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(
             workstation_named.required_policy_name,
             wireless_named.required_policy_name,
+        )
+        self.assertEqual(
+            workstation_named.required_policy_name,
+            "Basic Assessment Policy",
+        )
+
+    def test_vlan_policy_assignment_keeps_network_and_av_specialized(self):
+        targets = {
+            "environment": CoverageTarget(
+                target_type="VLAN",
+                cidr="10.1.50.0/24",
+                site_code="NYC01",
+                site_name="New York Office",
+                location="New York, NY",
+                region="US East",
+                description="Environment VLAN",
+                vlan_name="Environment",
+                vlan_tag=150,
+                tags=["vlan-environment"],
+            ),
+            "network": CoverageTarget(
+                target_type="VLAN",
+                cidr="10.1.51.0/24",
+                site_code="NYC01",
+                site_name="New York Office",
+                location="New York, NY",
+                region="US East",
+                description="Network VLAN",
+                vlan_name="Network",
+                vlan_tag=151,
+                tags=["vlan-network"],
+            ),
+            "av": CoverageTarget(
+                target_type="VLAN",
+                cidr="10.1.52.0/24",
+                site_code="NYC01",
+                site_name="New York Office",
+                location="New York, NY",
+                region="US East",
+                description="AV VLAN",
+                vlan_name="AV",
+                vlan_tag=152,
+                tags=["vlan-av"],
+            ),
+        }
+        config = GroupingConfig(mode="vlan_tag")
+
+        self.assertEqual(
+            build_required_policy_name(targets["environment"], config),
+            "Basic Assessment Policy",
+        )
+        self.assertEqual(
+            build_required_policy_name(targets["network"], config),
+            "Network Infrastructure Assessment",
+        )
+        self.assertEqual(
+            build_required_policy_name(targets["av"], config),
+            "AV / Media Device Assessment",
         )
 
     def test_grouping_tag_map_can_override_role_classification(self):
@@ -605,7 +680,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
             )
             self.assertEqual(
-                public_row["Proposed Scan Name"], "US East NYC01 Public Assessment"
+                public_row["Proposed Scan Name"], "NYC01 Public Assessment"
             )
 
             private_row = next(

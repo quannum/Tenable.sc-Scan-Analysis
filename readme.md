@@ -377,12 +377,15 @@ When `grouping_mode` is `vlan_tag`:
 - `grouping_tag_map` translates tags into internal group roles
 - generated VLAN asset groups and scans use the same site-code-and-role naming
 - generated asset and scan names use spaces, and site-code prefixes are uppercase
-- `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Workstation policy unless a custom tag map overrides either tag
+- `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
+- Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
 - source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
 
-When an approved plan is applied, each managed VLAN asset group includes its
-VLAN name, CIDR, and grouping tag on separate lines in its description.
+When an approved plan is applied, managed asset descriptions list each scope
+on a separate line. VLAN groups include the VLAN name, CIDR, and grouping tag;
+public groups include each public range, and private discovery groups include
+each private supernet.
 
 Example:
 

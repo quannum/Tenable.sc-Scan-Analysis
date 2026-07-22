@@ -119,17 +119,11 @@ def _role_name_segment(role: str) -> str:
 
 def _policy_name_for_role(role: str) -> str:
     """Return proposed policy name for each role"""
-    if role == "SERVER":
-        return "Credentialed Server Assessment"
-    if role == "END_USER":
-        return "Credentialed Workstation Assessment"
     if role == "NETWORK":
         return "Network Infrastructure Assessment"
     if role == "AV":
         return "AV / Media Device Assessment"
-    if role == "WIRELESS":
-        return "Wireless Assessment"
-    return f"{_role_name_segment(role).replace('_', ' ')} Assessment"
+    return "Basic Assessment Policy"
 
 
 def find_vlan_grouping_tag(
@@ -277,11 +271,7 @@ def build_required_scan_name(
 ) -> str:
     """Build required scan name"""
     if target.target_type == "PUBLIC":
-        return _compose_scan_name(
-            target,
-            description_fallback="Public",
-            purpose="Assessment",
-        )
+        return f"{_site_code_prefix(target.site_code)} Public Assessment"
     if target.target_type == "PRIVATE_SUPERNET":
         return _compose_scan_name(
             target,
