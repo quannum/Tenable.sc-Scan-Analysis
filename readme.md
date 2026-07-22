@@ -151,7 +151,10 @@ tenable-sc-scan-analysis propose-changes `
 `collect-tenable` redacts secret-like fields before writing the inventory
 snapshot. Permission failures for individual resource types are recorded in
 `collection_errors`; add `--fail-on-partial` when partial collection should fail
-the command.
+the command. It also creates an `*_reports` folder beside the JSON snapshot with
+readable CSV files for scans, repositories, policies, asset groups, credentials,
+observed hosts, and a collection summary. The scan CSV includes its description,
+schedule, direct targets, and resolved repository, policy, and asset-group names.
 
 `analyze-coverage` and `propose-changes` use the same detect-and-plan pipeline.
 Use `propose-changes` when you explicitly want reviewer-facing proposed-change

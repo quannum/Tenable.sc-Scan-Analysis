@@ -121,6 +121,7 @@ class ApplicationCliTests(unittest.TestCase):
             self.assertEqual(exit_code, EXIT_OK)
             snapshot = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(snapshot["resource_counts"]["scans"], 1)
+            self.assertTrue((root / "inventory_reports" / "scans.csv").exists())
 
     def test_collect_tenable_accepts_live_credentials_and_tcw_env(self):
         with tempfile.TemporaryDirectory() as directory:

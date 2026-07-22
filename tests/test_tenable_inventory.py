@@ -1,3 +1,4 @@
+import csv
 import json
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 from src.tenable_coverage_workflow.tenable_inventory import (
     collect_tenable_inventory,
     redact_sensitive,
+    write_inventory_reports,
     write_inventory_snapshot,
 )
 
@@ -69,6 +71,46 @@ class TenableInventoryTests(unittest.TestCase):
             path = Path(directory) / "inventory.json"
             write_inventory_snapshot({"schema_version": 1}, path)
             self.assertEqual(json.loads(path.read_text()), {"schema_version": 1})
+
+    def test_reports_include_resolved_scan_configuration(self):
+        snapshot = {
+            "resource_counts": {"scans": 1},
+            "collection_errors": {},
+            "resources": {
+                "repositories": [{"id": 1, "name": "Main Repository"}],
+                "asset_groups": [
+                    {"id": 2, "name": "Server VLANs", "ips": "10.0.0.0/24"}
+                ],
+                "scans": [
+                    {
+                        "id": 3,
+                        "name": "Server Assessment",
+                        "description": "Weekly server scan",
+                        "schedule": {"enabled": True},
+                        "repository": {"id": 1},
+                        "policy": {"id": 4},
+                        "assets": [{"id": 2}],
+                        "ipList": "10.0.0.10",
+                    }
+                ],
+                "policies": [{"id": 4, "name": "Basic Assessment Policy"}],
+                "credentials": [],
+                "observed_hosts": [],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            reports = write_inventory_reports(
+                snapshot, Path(directory) / "inventory.json"
+            )
+            with reports["scans"].open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.reader(handle))
+
+        self.assertEqual(rows[0][0:3], ["Scan ID", "Scan Name", "Description"])
+        self.assertEqual(rows[1][0:3], ["3", "Server Assessment", "Weekly server scan"])
+        self.assertEqual(rows[1][6], "Main Repository")
+        self.assertEqual(rows[1][8], "Basic Assessment Policy")
+        self.assertEqual(rows[1][10], "Server VLANs")
 
 
 if __name__ == "__main__":

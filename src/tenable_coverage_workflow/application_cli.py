@@ -28,7 +28,11 @@ from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
 )
-from .tenable_inventory import collect_tenable_inventory, write_inventory_snapshot
+from .tenable_inventory import (
+    collect_tenable_inventory,
+    write_inventory_reports,
+    write_inventory_snapshot,
+)
 
 EXIT_OK = 0
 EXIT_VALIDATION = 2
@@ -247,7 +251,11 @@ def _collect_tenable(args) -> int:
             "collect-tenable requires --output-file or config output_file."
         )
     output = write_inventory_snapshot(snapshot, output_file)
-    _emit(f"Tenable.sc inventory written to {output}")
+    reports = write_inventory_reports(snapshot, output)
+    _emit(
+        f"Tenable.sc inventory written to {output}; readable CSV reports written to "
+        f"{reports['scans'].parent}"
+    )
     if (
         _as_bool(_setting(args, "fail_on_partial", default=False))
         and snapshot["collection_errors"]
