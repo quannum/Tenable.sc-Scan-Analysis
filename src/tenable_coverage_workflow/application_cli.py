@@ -69,15 +69,15 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--output-file")
 
     collect = commands.add_parser(
-        "collect-tenable", help="Collect a secret-safe Tenable.sc inventory snapshot."
+        "collect-tenable", help="Collect a Tenable.sc inventory snapshot."
     )
     _add_tenable_arguments(collect)
     collect.add_argument("--output-file")
     collect.add_argument("--fail-on-partial", action="store_true", default=None)
 
     for name, help_text in (
-        ("analyze-coverage", "Analyze authoritative coverage against Tenable.sc."),
-        ("propose-changes", "Generate dry-run, reviewable proposed changes."),
+        ("analyze-coverage", "Analyze the subnet-as-code definitions against Tenable.sc scans."),
+        ("propose-changes", "Generate dry-run, proposed changes for review."),
     ):
         command = commands.add_parser(name, help=help_text)
         _add_source_arguments(command)
