@@ -328,7 +328,7 @@ class ChangeApplier:
             )
             scan_id = _resource_id(created, "scan", change.scan_name)
             self.scans[change.scan_name] = created
-            self._verify_scan(scan_id, asset_id)
+            self._verify_scan(scan_id, asset_id, policy_id)
             return created, "CREATED"
 
         scan_id = _resource_id(existing, "scan", change.scan_name)

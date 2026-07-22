@@ -160,6 +160,26 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(len(data_access.assets), 1)
             self.assertEqual(len(data_access.scans), 1)
 
+    def test_created_scan_policy_is_verified(self):
+        class WrongPolicyDataAccess(FakeDataAccess):
+            def create_scan(self, name, repository_id, asset_ids, policy_id):
+                scan = super().create_scan(name, repository_id, asset_ids, policy_id)
+                scan["policy"] = {"id": 999}
+                return scan
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            result = ChangeApplier(
+                WrongPolicyDataAccess(),
+                repository_id=7,
+            ).apply(plan)
+
+            operation = result["operations"][0]
+            self.assertEqual(operation["status"], "FAILED")
+            self.assertIn("policy mismatch", operation["message"])
+
     def test_existing_asset_and_scan_are_extended_without_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
             plan = load_approved_plan(
