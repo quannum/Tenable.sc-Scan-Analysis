@@ -31,6 +31,9 @@ class ApprovedChange:
     policy_name: str
     reviewer: str
     decision_notes: str
+    vlan_name: str = ""
+    vlan_tag: str = ""
+    grouping_tag: str = ""
 
 
 @dataclass(frozen=True)
@@ -109,6 +112,9 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 policy_name=_required_text(row, "Proposed Policy Name", row_number),
                 reviewer=reviewer,
                 decision_notes=_text(row.get("Decision Notes")),
+                vlan_name=_text(row.get("VLAN Name")),
+                vlan_tag=_text(row.get("VLAN Tag")),
+                grouping_tag=_text(row.get("VLAN Grouping Tag")),
             )
             try:
                 canonical_cidr = str(ipaddress.ip_network(change.cidr, strict=False))
@@ -172,6 +178,7 @@ class ChangeApplier:
         self.preflight(plan)
         started_at = datetime.now(timezone.utc)
         operations = []
+        asset_descriptions = _build_asset_descriptions(plan.approved_changes)
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
                 operations.append(
@@ -191,7 +198,12 @@ class ChangeApplier:
                 )
                 continue
             try:
-                operations.append(self._apply_change(change))
+                operations.append(
+                    self._apply_change(
+                        change,
+                        asset_descriptions.get(change.asset_name, MANAGED_DESCRIPTION),
+                    )
+                )
             except Exception as exc:
                 operations.append(
                     ApplyOperation(
@@ -222,9 +234,13 @@ class ChangeApplier:
             "operations": [asdict(operation) for operation in operations],
         }
 
-    def _apply_change(self, change: ApprovedChange) -> ApplyOperation:
+    def _apply_change(
+        self,
+        change: ApprovedChange,
+        asset_description: str,
+    ) -> ApplyOperation:
         """Apply change"""
-        asset, asset_status = self._ensure_asset(change)
+        asset, asset_status = self._ensure_asset(change, asset_description)
         asset_id = _resource_id(asset, "asset group", change.asset_name)
         scan, scan_status = self._ensure_scan(change, asset_id)
         scan_id = _resource_id(scan, "scan", change.scan_name)
@@ -245,14 +261,18 @@ class ChangeApplier:
             message="Post-change verification passed.",
         )
 
-    def _ensure_asset(self, change: ApprovedChange) -> tuple[dict[str, Any], str]:
+    def _ensure_asset(
+        self,
+        change: ApprovedChange,
+        asset_description: str,
+    ) -> tuple[dict[str, Any], str]:
         """Ensure asset"""
         existing = self.assets.get(change.asset_name)
         if existing is None:
             created = self.data_access.create_static_asset(
                 change.asset_name,
                 [change.cidr],
-                MANAGED_DESCRIPTION,
+                asset_description,
             )
             asset_id = _resource_id(created, "asset group", change.asset_name)
             self.assets[change.asset_name] = created
@@ -262,13 +282,27 @@ class ChangeApplier:
         asset_id = _resource_id(existing, "asset group", change.asset_name)
         details = self.data_access.get_asset(asset_id) or existing
         current_scopes = extract_asset_scopes(details)
+        description = _merge_asset_description(
+            _text(details.get("description")),
+            asset_description,
+        )
         if change.cidr in current_scopes:
+            if description != _text(details.get("description")):
+                updated = self.data_access.update_static_asset(
+                    asset_id,
+                    sorted(current_scopes),
+                    description,
+                )
+                self._verify_asset(asset_id, change.cidr)
+                merged = updated if isinstance(updated, dict) and updated else details
+                self.assets[change.asset_name] = merged
+                return merged, "UPDATED"
             return details, "UNCHANGED"
         updated_scopes = sorted(current_scopes | {change.cidr})
         updated = self.data_access.update_static_asset(
             asset_id,
             updated_scopes,
-            MANAGED_DESCRIPTION,
+            description,
         )
         self._verify_asset(asset_id, change.cidr)
         merged = updated if isinstance(updated, dict) and updated else details
@@ -440,6 +474,35 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
 def _text(value: Any) -> str:
     """Convert a value to trimmed text"""
     return "" if value is None else str(value).strip()
+
+
+def _build_asset_descriptions(changes: list[ApprovedChange]) -> dict[str, str]:
+    """Build managed descriptions for proposed asset groups"""
+    vlan_lines: dict[str, set[str]] = {}
+    for change in changes:
+        if not change.vlan_name:
+            continue
+        grouping_label = change.grouping_tag or f"VLAN {change.vlan_tag or 'N/A'}"
+        line = f"{change.vlan_name} {change.cidr} {grouping_label}"
+        vlan_lines.setdefault(change.asset_name, set()).add(line)
+
+    return {
+        asset_name: MANAGED_DESCRIPTION + "\n\n" + "\n".join(sorted(lines))
+        for asset_name, lines in vlan_lines.items()
+    }
+
+
+def _merge_asset_description(existing: str, planned: str) -> str:
+    """Add planned VLAN lines without removing existing description text"""
+    if not existing or existing == planned:
+        return planned
+    if planned == MANAGED_DESCRIPTION:
+        return existing
+
+    missing_lines = [line for line in planned.splitlines() if line not in existing]
+    if not missing_lines:
+        return existing
+    return existing.rstrip() + "\n" + "\n".join(missing_lines)
 
 
 def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:

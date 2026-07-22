@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 
-
 EXCLUDE_TAG = "exclude"
 
 

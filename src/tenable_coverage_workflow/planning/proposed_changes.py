@@ -1,6 +1,7 @@
 from typing import Any
 
-from ..models import CoverageValidationResult, ProposedChange
+from ..models import CoverageValidationResult, GroupingConfig, ProposedChange
+from .naming_rules import find_vlan_grouping_tag
 
 
 def adapt_coverage_result(row: Any) -> CoverageValidationResult:
@@ -56,9 +57,11 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
 def generate_proposed_changes(
     coverage_results: list[Any],
     run_id: str,
+    grouping_config: GroupingConfig | None = None,
 ) -> list[ProposedChange]:
     """Create the asset and scan changes needed for coverage"""
     changes: list[ProposedChange] = []
+    grouping_config = grouping_config or GroupingConfig()
 
     for row in coverage_results:
         result = adapt_coverage_result(row)
@@ -85,6 +88,11 @@ def generate_proposed_changes(
                 reviewer=None,
                 decision_notes=None,
                 source_file=result.source_file,
+                grouping_tag=find_vlan_grouping_tag(
+                    result.target_type,
+                    result.tags,
+                    grouping_config,
+                ),
             )
         )
 

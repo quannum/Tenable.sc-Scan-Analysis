@@ -42,7 +42,7 @@ class PlanningTests(unittest.TestCase):
         target = CoverageTarget(
             target_type="VLAN",
             cidr="10.1.16.0/24",
-            site_code="NYC01",
+            site_code="nyc01",
             site_name="New York Office",
             location="New York, NY",
             region="US East",
@@ -54,10 +54,10 @@ class PlanningTests(unittest.TestCase):
 
         named_target = apply_naming_rules(target)
 
-        self.assertEqual(named_target.required_asset_name, "NYC01_Servers_VLAN_120")
+        self.assertEqual(named_target.required_asset_name, "NYC01 Servers VLAN 120")
         self.assertEqual(
             named_target.required_scan_name,
-            "US_East_NYC01_Server_VLAN_Assessment",
+            "US East NYC01 Server VLAN Assessment",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -117,11 +117,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "NYC01_End_User_VLAN_Group",
+            "NYC01 Workstation VLAN Group",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "NYC01_End_User_Assessment",
+            "NYC01 Workstation Assessment",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -148,12 +148,75 @@ class PlanningTests(unittest.TestCase):
             GroupingConfig(mode="vlan_tag", vlan_tag_prefix="vlan-"),
         )
 
-        self.assertEqual(named_target.required_asset_name, "NYC01_Wireless_VLAN_Group")
+        self.assertEqual(
+            named_target.required_asset_name,
+            "NYC01 Wireless VLAN Group",
+        )
         self.assertEqual(
             named_target.required_scan_name,
-            "NYC01_Wireless_Assessment",
+            "NYC01 Workstation Assessment",
         )
-        self.assertEqual(named_target.required_policy_name, "Wireless Assessment")
+        self.assertEqual(
+            named_target.required_policy_name,
+            "Credentialed Workstation Assessment",
+        )
+
+    def test_workstation_and_wireless_tags_share_grouped_names(self):
+        workstation = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.48.0/24",
+            site_code="nyc01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Workstation VLAN",
+            vlan_name="Workstations",
+            vlan_tag=141,
+            tags=["vlan-workstation"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+        wireless = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.49.0/24",
+            site_code="nyc01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Wireless VLAN",
+            vlan_name="Wireless",
+            vlan_tag=142,
+            tags=["vlan-wireless"],
+            source_file="sites/us-east/nyc01.yaml",
+        )
+        config = GroupingConfig(mode="vlan_tag")
+
+        workstation_named = apply_naming_rules(workstation, config)
+        wireless_named = apply_naming_rules(wireless, config)
+
+        self.assertEqual(
+            workstation_named.required_asset_name,
+            "NYC01 Workstation VLAN Group",
+        )
+        self.assertEqual(
+            wireless_named.required_asset_name,
+            "NYC01 Wireless VLAN Group",
+        )
+        self.assertNotEqual(
+            workstation_named.required_asset_name,
+            wireless_named.required_asset_name,
+        )
+        self.assertEqual(
+            workstation_named.required_scan_name,
+            "NYC01 Workstation Assessment",
+        )
+        self.assertEqual(
+            workstation_named.required_scan_name,
+            wireless_named.required_scan_name,
+        )
+        self.assertEqual(
+            workstation_named.required_policy_name,
+            wireless_named.required_policy_name,
+        )
 
     def test_grouping_tag_map_can_override_role_classification(self):
         target = CoverageTarget(
@@ -181,11 +244,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "NYC01_End_User_VLAN_Group",
+            "NYC01 Wireless VLAN Group",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "NYC01_End_User_Assessment",
+            "NYC01 Workstation Assessment",
         )
 
     def test_scan_name_scope_falls_back_to_location_then_global(self):
@@ -229,18 +292,18 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             build_required_scan_name(location_only_target),
-            "Raleigh_NC_Server_Assessment",
+            "Raleigh NC Server Assessment",
         )
         self.assertEqual(
             build_required_scan_name(global_target),
-            "Global_Server_Assessment",
+            "Global Server Assessment",
         )
         self.assertEqual(
             build_required_scan_name(
                 grouped_location_target,
                 GroupingConfig(mode="vlan_tag"),
             ),
-            "Raleigh_NC_End_User_Assessment",
+            "Raleigh NC Workstation Assessment",
         )
 
     def test_proposed_changes_map_wrong_scan_gap_and_excluded_statuses(self):
@@ -455,21 +518,21 @@ class DetectAndPlanCliTests(unittest.TestCase):
             scan_payloads = [
                 {
                     "id": 1,
-                    "name": "US_East_NYC01_Private_Discovery",
+                    "name": "US East NYC01 Private Discovery",
                     "ipList": "10.1.0.0/16,10.3.0.0/16",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 2,
-                    "name": "US_East_NYC01_Server_Assessment",
+                    "name": "US East NYC01 Server Assessment",
                     "ipList": "10.1.16.0/24",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 3,
-                    "name": "US_East_NYC01_End_User_Assessment",
+                    "name": "US East NYC01 Workstation Assessment",
                     "ipList": "10.1.32.0/22",
                     "assets": [],
                     "schedule": {"enabled": True},
@@ -542,7 +605,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
             )
             self.assertEqual(
-                public_row["Proposed Scan Name"], "US_East_NYC01_Public_Assessment"
+                public_row["Proposed Scan Name"], "US East NYC01 Public Assessment"
             )
 
             private_row = next(
@@ -570,7 +633,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             self.assertEqual(end_user_vlan_row["VLAN Tag"], "130")
             self.assertEqual(
                 end_user_vlan_row["Proposed Scan Name"],
-                "US_East_NYC01_End_User_Assessment",
+                "US East NYC01 Workstation Assessment",
             )
 
             markdown = md_path.read_text(encoding="utf-8")
@@ -583,7 +646,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             )
             self.assertIn("region", coverage_summary["dimensions"])
             self.assertIn(
-                "NYC01_Private_Discovery",
+                "NYC01 Private Discovery",
                 coverage_summary["missing_asset_groups"],
             )
             self.assertTrue((run_dir / "coverage_results.csv").is_file())

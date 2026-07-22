@@ -396,7 +396,11 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         configuration_index=configuration_index,
         audit_logger=audit_logger,
     )
-    proposed_changes = generate_proposed_changes(coverage_results, run_id=run_id)
+    proposed_changes = generate_proposed_changes(
+        coverage_results,
+        run_id=run_id,
+        grouping_config=config.grouping_config,
+    )
 
     for change in proposed_changes:
         audit_logger.emit(

@@ -14,7 +14,7 @@ tenable_sc_scan_analysis:
   #   vlan-server: SERVER
   #   vlan-mgmt: NETWORK
   #   vlan-workstation: END_USER
-  #   vlan-wireless: WIRELESS
+  #   vlan-wireless: END_USER
 
   # Tenable data source
   mode: offline

@@ -376,15 +376,20 @@ When `grouping_mode` is `vlan_tag`:
 - the first matching tag wins
 - `grouping_tag_map` translates tags into internal group roles
 - generated VLAN asset groups and scans use the same site-code-and-role naming
+- generated asset and scan names use spaces, and site-code prefixes are uppercase
+- `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Workstation policy unless a custom tag map overrides either tag
 - source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
+
+When an approved plan is applied, each managed VLAN asset group includes its
+VLAN name, CIDR, and grouping tag on separate lines in its description.
 
 Example:
 
 ```toml
 grouping_mode = "vlan_tag"
 grouping_vlan_tag_prefix = "vlan-"
-grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "WIRELESS" }
+grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
 ```
 
 ## Running From Source

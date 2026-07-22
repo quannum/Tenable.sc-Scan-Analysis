@@ -34,6 +34,23 @@ class ScopeMathTests(unittest.TestCase):
         expected = parse_scope_item("10.0.0.10-10.0.0.20")
         self.assertTrue(scope_contains(actual, expected))
 
+    def test_scope_contains_handles_all_scope_type_combinations(self):
+        cases = [
+            ("10.0.0.0/24", "10.0.0.128/25"),
+            ("10.0.0.0/24", "10.0.0.10-10.0.0.20"),
+            ("10.0.0.0-10.0.0.255", "10.0.0.128/25"),
+            ("10.0.0.0-10.0.0.255", "10.0.0.10-10.0.0.20"),
+        ]
+
+        for actual, expected in cases:
+            with self.subTest(actual=actual, expected=expected):
+                self.assertTrue(
+                    scope_contains(
+                        parse_scope_item(actual),
+                        parse_scope_item(expected),
+                    )
+                )
+
     def test_merge_intervals_merges_adjacent_ranges(self):
         merged = merge_intervals([(1, 2), (3, 5), (10, 12)])
         self.assertEqual(merged, [(1, 5), (10, 12)])

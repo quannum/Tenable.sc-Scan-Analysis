@@ -78,9 +78,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
             "importlib.import_module",
             return_value=Module,
         ):
-            source_type, result = load_authoritative_source(
-                AuthoritativeSourceConfig()
-            )
+            source_type, result = load_authoritative_source(AuthoritativeSourceConfig())
 
         self.assertEqual(source_type, "subnet_as_code")
         self.assertEqual(calls[0], {})

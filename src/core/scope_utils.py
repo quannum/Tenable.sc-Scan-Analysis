@@ -54,29 +54,9 @@ def split_scope_items(scope_string):
 
 def scope_contains(actual, expected):
     """Return True when the actual scan scope fully contains the expected scope"""
-    actual_type, actual_value = actual
-    expected_type, expected_value = expected
-
-    if actual_type == "cidr" and expected_type == "cidr":
-        return expected_value.subnet_of(actual_value)
-
-    if actual_type == "cidr" and expected_type == "range":
-        start, end = expected_value
-        return start in actual_value and end in actual_value
-
-    if actual_type == "range" and expected_type == "cidr":
-        return (
-            actual_value[0] <= expected_value.network_address
-            and actual_value[1] >= expected_value.broadcast_address
-        )
-
-    if actual_type == "range" and expected_type == "range":
-        return (
-            actual_value[0] <= expected_value[0]
-            and actual_value[1] >= expected_value[1]
-        )
-
-    return False
+    actual_start, actual_end = scope_to_interval(actual)
+    expected_start, expected_end = scope_to_interval(expected)
+    return actual_start <= expected_start and actual_end >= expected_end
 
 
 def scope_intersects(actual, expected):

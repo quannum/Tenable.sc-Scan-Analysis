@@ -164,3 +164,4 @@ class ProposedChange:
     reviewer: str | None
     decision_notes: str | None
     source_file: str | None
+    grouping_tag: str | None = None

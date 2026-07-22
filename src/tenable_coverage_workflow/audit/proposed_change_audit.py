@@ -14,6 +14,7 @@ CSV_COLUMNS = [
     "CIDR",
     "VLAN Name",
     "VLAN Tag",
+    "VLAN Grouping Tag",
     "Current Status",
     "Issue",
     "Proposed Action",
@@ -69,6 +70,7 @@ def _write_csv(
                 change.cidr,
                 change.vlan_name or "",
                 "" if change.vlan_tag is None else change.vlan_tag,
+                change.grouping_tag or "",
                 change.current_status,
                 change.issue,
                 change.proposed_action,
@@ -127,6 +129,8 @@ def _write_markdown(
                 vlan_label = change.vlan_name or "N/A"
                 vlan_tag = change.vlan_tag if change.vlan_tag is not None else "N/A"
                 lines.append(f"- VLAN: {vlan_label} / {vlan_tag}")
+            if change.grouping_tag:
+                lines.append(f"- VLAN Grouping Tag: {change.grouping_tag}")
             lines.append("")
 
     return atomic_write_text(

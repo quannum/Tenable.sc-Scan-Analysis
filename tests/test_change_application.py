@@ -13,6 +13,9 @@ COLUMNS = [
     "Run ID",
     "Site Code",
     "CIDR",
+    "VLAN Name",
+    "VLAN Tag",
+    "VLAN Grouping Tag",
     "Proposed Action",
     "Proposed Asset Name",
     "Proposed Scan Name",
@@ -36,9 +39,12 @@ def approved_row(**overrides):
         "Run ID": "run-001",
         "Site Code": "NYC01",
         "CIDR": "10.1.16.0/24",
+        "VLAN Name": "vl16-it-services-static",
+        "VLAN Tag": "16",
+        "VLAN Grouping Tag": "vlan-server",
         "Proposed Action": "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
-        "Proposed Asset Name": "NYC01_Servers_VLAN_120",
-        "Proposed Scan Name": "US_East_NYC01_Server_Assessment",
+        "Proposed Asset Name": "NYC01 Servers VLAN 120",
+        "Proposed Scan Name": "US East NYC01 Server Assessment",
         "Proposed Policy Name": "Credentialed Server Assessment",
         "Approval Status": "APPROVED",
         "Reviewer": "security-reviewer",
@@ -95,6 +101,8 @@ class FakeDataAccess:
     def update_static_asset(self, asset_id, ips, description=None):
         self.calls.append(("update_asset", asset_id, tuple(ips)))
         self.assets[asset_id]["typeFields"]["definedIPs"] = ",".join(ips)
+        if description is not None:
+            self.assets[asset_id]["description"] = description
         return self.assets[asset_id]
 
     def create_scan(self, name, repository_id, asset_ids, policy_id):
@@ -158,12 +166,12 @@ class ChangeApplicationTests(unittest.TestCase):
             data_access = FakeDataAccess()
             data_access.assets[8] = {
                 "id": 8,
-                "name": "NYC01_Servers_VLAN_120",
+                "name": "NYC01 Servers VLAN 120",
                 "typeFields": {"definedIPs": "10.1.15.0/24"},
             }
             data_access.scans[9] = {
                 "id": 9,
-                "name": "US_East_NYC01_Server_Assessment",
+                "name": "US East NYC01 Server Assessment",
                 "assets": [{"id": 99}],
             }
 
@@ -177,6 +185,95 @@ class ChangeApplicationTests(unittest.TestCase):
                 "10.1.15.0/24,10.1.16.0/24",
             )
             self.assertEqual(data_access.scans[9]["assets"], [{"id": 8}, {"id": 99}])
+            self.assertEqual(
+                data_access.assets[8]["description"],
+                "Managed by Tenable.sc Scan Analysis\n\n"
+                "vl16-it-services-static 10.1.16.0/24 vlan-server",
+            )
+
+    def test_grouped_vlan_asset_description_lists_each_vlan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(
+                    Path(directory) / "plan.csv",
+                    [
+                        approved_row(
+                            **{
+                                "Proposed Asset Name": "NYC01 Workstation VLAN Group",
+                                "Proposed Scan Name": "NYC01 Workstation Assessment",
+                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "VLAN Grouping Tag": "vlan-workstation",
+                            }
+                        ),
+                        approved_row(
+                            **{
+                                "CIDR": "10.1.17.0/24",
+                                "Proposed Asset Name": "NYC01 Workstation VLAN Group",
+                                "Proposed Scan Name": "NYC01 Workstation Assessment",
+                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "VLAN Name": "vl17-it-services-sandbox",
+                                "VLAN Grouping Tag": "vlan-workstation",
+                            }
+                        ),
+                    ],
+                )
+            )
+            data_access = FakeDataAccess()
+            data_access.policies[31] = {
+                "id": 31,
+                "name": "Credentialed Workstation Assessment",
+            }
+
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+
+            asset = next(iter(data_access.assets.values()))
+            self.assertEqual(
+                asset["description"],
+                "Managed by Tenable.sc Scan Analysis\n\n"
+                "vl16-it-services-static 10.1.16.0/24 vlan-workstation\n"
+                "vl17-it-services-sandbox 10.1.17.0/24 vlan-workstation",
+            )
+
+    def test_separate_vlan_assets_attach_to_the_same_workstation_scan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(
+                    Path(directory) / "plan.csv",
+                    [
+                        approved_row(
+                            **{
+                                "Proposed Asset Name": "NYC01 Workstation VLAN Group",
+                                "Proposed Scan Name": "NYC01 Workstation Assessment",
+                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "VLAN Grouping Tag": "vlan-workstation",
+                            }
+                        ),
+                        approved_row(
+                            **{
+                                "CIDR": "10.1.17.0/24",
+                                "Proposed Asset Name": "NYC01 Wireless VLAN Group",
+                                "Proposed Scan Name": "NYC01 Workstation Assessment",
+                                "Proposed Policy Name": "Credentialed Workstation Assessment",
+                                "VLAN Name": "vl17-it-services-sandbox",
+                                "VLAN Grouping Tag": "vlan-wireless",
+                            }
+                        ),
+                    ],
+                )
+            )
+            data_access = FakeDataAccess()
+            data_access.policies[31] = {
+                "id": 31,
+                "name": "Credentialed Workstation Assessment",
+            }
+
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+
+            self.assertEqual(len(data_access.assets), 2)
+            self.assertEqual(len(data_access.scans), 1)
+            scan = next(iter(data_access.scans.values()))
+            self.assertEqual(scan["name"], "NYC01 Workstation Assessment")
+            self.assertEqual(scan["assets"], [{"id": 10}, {"id": 11}])
 
     def test_missing_policy_fails_preflight_before_mutation(self):
         with tempfile.TemporaryDirectory() as directory:

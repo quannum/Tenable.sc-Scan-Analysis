@@ -6,6 +6,7 @@ from ..models import CoverageTarget, GroupingConfig
 
 _NON_WORD_PATTERN = re.compile(r"[^A-Za-z0-9]+")
 _UNDERSCORE_PATTERN = re.compile(r"_+")
+_SPACE_PATTERN = re.compile(r"\s+")
 _ROLE_ALIAS_MAP = {
     "server": "SERVER",
     "servers": "SERVER",
@@ -40,6 +41,19 @@ def _normalize_optional_name_part(value: str | None) -> str | None:
     """Normalize optional name part"""
     normalized = normalize_name_part(value, fallback="")
     return normalized or None
+
+
+def _display_name_part(value: str | None, fallback: str = "Unknown") -> str:
+    """Normalize a name part for display"""
+    text = str(value or "").strip()
+    cleaned = _NON_WORD_PATTERN.sub(" ", text)
+    cleaned = _SPACE_PATTERN.sub(" ", cleaned).strip()
+    return cleaned or fallback
+
+
+def _site_code_prefix(site_code: str | None) -> str:
+    """Return an uppercase site code for generated names"""
+    return _display_name_part(site_code, fallback="Global").upper()
 
 
 def classify_vlan_role(vlan_name: str | None) -> str:
@@ -92,7 +106,7 @@ def _role_name_segment(role: str) -> str:
     """Return the readable name segment for a role"""
     known = {
         "SERVER": "Server",
-        "END_USER": "End_User",
+        "END_USER": "Workstation",
         "NETWORK": "Network",
         "WIRELESS": "Wireless",
         "AV": "AV",
@@ -100,7 +114,7 @@ def _role_name_segment(role: str) -> str:
     }
     if role in known:
         return known[role]
-    return normalize_name_part(role.title(), fallback="Standard")
+    return _display_name_part(role.title(), fallback="Standard")
 
 
 def _policy_name_for_role(role: str) -> str:
@@ -118,23 +132,32 @@ def _policy_name_for_role(role: str) -> str:
     return f"{_role_name_segment(role).replace('_', ' ')} Assessment"
 
 
-def _extract_vlan_grouping_tag(
-    target: CoverageTarget,
+def find_vlan_grouping_tag(
+    target_type: str,
+    tags: list[str],
     grouping_config: GroupingConfig,
 ) -> str | None:
-    """Get vlan tag"""
-    if target.target_type != "VLAN" or grouping_config.mode != "vlan_tag":
+    """Find the VLAN tag used for grouping"""
+    if target_type != "VLAN" or grouping_config.mode != "vlan_tag":
         return None
 
     prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
     if not prefix:
         return None
 
-    for tag in target.tags:
+    for tag in tags:
         normalized_tag = str(tag).strip()
         if normalized_tag.lower().startswith(prefix):
             return normalized_tag
     return None
+
+
+def _extract_vlan_grouping_tag(
+    target: CoverageTarget,
+    grouping_config: GroupingConfig,
+) -> str | None:
+    """Get vlan tag"""
+    return find_vlan_grouping_tag(target.target_type, target.tags, grouping_config)
 
 
 def _classify_vlan_role_from_grouping_tag(
@@ -152,10 +175,29 @@ def _classify_vlan_role_from_grouping_tag(
         return tag_map[normalized_tag]
 
     prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
-    suffix = normalized_tag[len(prefix) :].strip(" -_") if prefix else normalized_tag
+    matched_prefix = prefix if prefix and normalized_tag.startswith(prefix) else ""
+    suffix = (
+        normalized_tag[len(matched_prefix) :].strip(" -_")
+        if matched_prefix
+        else normalized_tag
+    )
+    if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
+        return "END_USER"
     if not suffix:
         return "STANDARD"
     return _normalize_role_from_value(suffix)
+
+
+def _grouping_tag_name_segment(
+    grouping_tag: str,
+    grouping_config: GroupingConfig,
+) -> str:
+    """Return the readable group name from a VLAN tag"""
+    normalized_tag = str(grouping_tag).strip().lower()
+    prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
+    matched_prefix = prefix if prefix and normalized_tag.startswith(prefix) else ""
+    suffix = normalized_tag[len(matched_prefix) :] if matched_prefix else normalized_tag
+    return _display_name_part(suffix, fallback="VLAN").title()
 
 
 def resolve_target_role(
@@ -175,27 +217,28 @@ def build_required_asset_name(
     grouping_config: GroupingConfig | None = None,
 ) -> str:
     """Build required asset name"""
+    site_code = _site_code_prefix(target.site_code)
     if target.target_type == "PUBLIC":
-        return f"{target.site_code}_Public"
+        return f"{site_code} Public"
     if target.target_type == "PRIVATE_SUPERNET":
-        return f"{target.site_code}_Private_Discovery"
+        return f"{site_code} Private Discovery"
 
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
-        return f"{target.site_code}_{_role_name_segment(role)}_VLAN_Group"
+        group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
+        return f"{site_code} {group_name} VLAN Group"
 
-    vlan_name = normalize_name_part(target.vlan_name, fallback="VLAN")
-    vlan_tag = normalize_name_part(str(target.vlan_tag), fallback="NO_TAG")
-    return f"{target.site_code}_{vlan_name}_VLAN_{vlan_tag}"
+    vlan_name = _display_name_part(target.vlan_name, fallback="VLAN")
+    vlan_tag = _display_name_part(str(target.vlan_tag), fallback="No Tag")
+    return f"{site_code} {vlan_name} VLAN {vlan_tag}"
 
 
 def _scan_scope_segments(target: CoverageTarget) -> list[str]:
     """Build scan scope in region > site_code > location > global priority."""
-    region = _normalize_optional_name_part(target.region)
-    site_code = _normalize_optional_name_part(target.site_code)
-    location = _normalize_optional_name_part(target.location)
+    region = _display_name_part(target.region, fallback="") or None
+    site_code = _site_code_prefix(target.site_code) if target.site_code else None
+    location = _display_name_part(target.location, fallback="") or None
 
     segments = [segment for segment in (region, site_code or location) if segment]
     return segments or ["Global"]
@@ -203,14 +246,14 @@ def _scan_scope_segments(target: CoverageTarget) -> list[str]:
 
 def _grouped_scan_scope_segments(target: CoverageTarget) -> list[str]:
     """Build grouped VLAN scan scope in site_code > location > global priority."""
-    site_code = _normalize_optional_name_part(target.site_code)
-    location = _normalize_optional_name_part(target.location)
+    site_code = _site_code_prefix(target.site_code) if target.site_code else None
+    location = _display_name_part(target.location, fallback="") or None
     return [site_code or location or "Global"]
 
 
 def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
     """Return description segment for a scan name"""
-    return normalize_name_part(target.description, fallback=fallback)
+    return _display_name_part(target.description, fallback=fallback)
 
 
 def _compose_scan_name(
@@ -219,7 +262,7 @@ def _compose_scan_name(
     purpose: str,
 ) -> str:
     """Build scan name from its standard parts"""
-    return "_".join(
+    return " ".join(
         [
             *_scan_scope_segments(target),
             _scan_description_segment(target, description_fallback),
@@ -250,7 +293,7 @@ def build_required_scan_name(
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
-        return "_".join(
+        return " ".join(
             [
                 *_grouped_scan_scope_segments(target),
                 _role_name_segment(role),
