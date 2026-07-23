@@ -268,7 +268,7 @@ class ChangeApplier:
         change: ApprovedChange,
         asset_description: str,
     ) -> tuple[dict[str, Any], str]:
-        """Ensure asset"""
+        """Ensure asset created or updated"""
         existing = self.assets.get(change.asset_name)
         if existing is None:
             created = self.data_access.create_static_asset(
@@ -314,7 +314,7 @@ class ChangeApplier:
     def _ensure_scan(
         self, change: ApprovedChange, asset_id: int
     ) -> tuple[dict[str, Any], str]:
-        """Ensure scan"""
+        """Ensure scan created or updated"""
         existing = self.scans.get(change.scan_name)
         policy_id = _resource_id(
             self.policies[change.policy_name], "policy", change.policy_name

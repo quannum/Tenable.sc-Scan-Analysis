@@ -270,7 +270,7 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
 
 
 def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
-    """Write details csv"""
+    """Write details to csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=DETAIL_COLUMNS, extrasaction="ignore")
     writer.writeheader()
@@ -284,7 +284,7 @@ def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
 
 
 def _write_dict_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Path:
-    """Write dict csv"""
+    """Write dict to csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()

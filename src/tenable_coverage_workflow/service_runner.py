@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class SchedulerLockError(RuntimeError):
-    """Raised when a scheduled run cannot start because another run is active."""
+    """When a scheduled run cannot start because another run is active."""
 
 
 def main(argv=None) -> int:
@@ -156,7 +156,7 @@ def build_latest_summary_payload(
 
 @contextmanager
 def scheduler_lock(lock_file: Path, job_name: str, stale_timeout_seconds: int):
-    """Hold a lock so only one scheduled job runs at a time"""
+    """Lock so only one scheduled job runs at a time"""
     lock_file.parent.mkdir(parents=True, exist_ok=True)
     descriptor = None
     descriptor = _acquire_lock_descriptor(

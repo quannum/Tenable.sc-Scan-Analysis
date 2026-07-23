@@ -21,7 +21,7 @@ SENSITIVE_KEY_PARTS = (
 
 
 def collect_tenable_inventory(data_access: DataAccess) -> dict[str, Any]:
-    """Collect a best-effort, secret-safe Tenable.sc configuration snapshot."""
+    """Collect Tenable.sc configuration snapshot."""
     inventory: dict[str, Any] = {
         "schema_version": 1,
         "collected_at": datetime.now(timezone.utc).isoformat(),

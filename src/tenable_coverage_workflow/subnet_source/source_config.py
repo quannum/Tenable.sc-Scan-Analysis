@@ -23,7 +23,7 @@ SOURCE_ENVIRONMENT_MAP = {
 
 
 def add_authoritative_source_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add authoritative source arguments"""
+    """Add subnet-as-code source arguments"""
     for _, flag in AUTHORITATIVE_SOURCE_ARGUMENTS:
         parser.add_argument(flag)
 
@@ -32,7 +32,7 @@ def build_authoritative_source_config(
     scalar_getter: Callable[[str, str | None, Any], Any],
     csv_getter: Callable[[str, str | None, Any], list[str] | None],
 ) -> AuthoritativeSourceConfig:
-    """Build authoritative source config"""
+    """Build subnet-as-code source config"""
     return AuthoritativeSourceConfig(
         reference_id=scalar_getter(
             "source_reference_id",

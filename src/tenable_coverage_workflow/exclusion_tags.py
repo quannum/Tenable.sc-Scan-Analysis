@@ -6,7 +6,7 @@ EXCLUDE_TAG = "exclude"
 
 
 def find_exclusion_tag(tags: Iterable[object]) -> str | None:
-    """Return the sac source tag that marks a target range as excluded."""
+    """Look for exclude tag in subnet-as-code definitions."""
 
     for tag in tags:
         normalized = str(tag).strip()
