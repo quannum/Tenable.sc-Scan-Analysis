@@ -205,7 +205,7 @@ def _validate_definitions(args) -> int:
 
 
 def _tenable_config(args) -> TenableAccessConfig:
-    """Build the Tenable.sc connection settings from command options"""
+    """Build Tenable.sc connection settings from command options"""
     mode = str(_setting(args, "mode", default="offline")).strip().lower()
     if mode not in {"offline", "live"}:
         raise ValueError("mode must be 'offline' or 'live'.")
@@ -243,7 +243,7 @@ def _tenable_config(args) -> TenableAccessConfig:
 
 
 def _collect_tenable(args) -> int:
-    """Collect tenable"""
+    """Collect Tenable.sc inventory snapshot"""
     snapshot = collect_tenable_inventory(DataAccess(_tenable_config(args)))
     output_file = _setting(args, "output_file")
     if not output_file:
