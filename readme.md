@@ -414,10 +414,10 @@ When `grouping_mode` is `vlan_tag`:
 - only tags starting with `grouping_vlan_tag_prefix` are considered
 - the first matching tag wins
 - `grouping_tag_map` translates tags into internal group roles
-- generated VLAN asset groups use the site code and grouping tag; scans use the
-  site code and resolved role
-- generated asset and scan names use spaces, and site-code prefixes are uppercase
-- public scans use `<SITE-CODE> Public Assessment`
+- generated VLAN asset groups use `RSG Corp <SITE-CODE> VLAN <GROUP>`; scans use
+  `RSG Corp Assessment <SITE-CODE> <ROLE>`
+- public scans use `RSG Corp Assessment <SITE-CODE> Public`; private discovery
+  scans use `RSG Corp Discovery <SITE-CODE> Private`
 - `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
 - Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
 - source descriptions remain available in reporting but do not override grouped scan roles

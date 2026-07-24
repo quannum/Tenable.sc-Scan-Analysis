@@ -7,6 +7,7 @@ from ..models import CoverageTarget, GroupingConfig
 _NON_WORD_PATTERN = re.compile(r"[^A-Za-z0-9]+")
 _UNDERSCORE_PATTERN = re.compile(r"_+")
 _SPACE_PATTERN = re.compile(r"\s+")
+_NAME_PREFIX = "ABC Corp"
 _ROLE_ALIAS_MAP = {
     "server": "SERVER",
     "servers": "SERVER",
@@ -54,6 +55,13 @@ def _display_name_part(value: str | None, fallback: str = "Unknown") -> str:
 def _site_code_prefix(site_code: str | None) -> str:
     """Return an uppercase site code for generated names"""
     return _display_name_part(site_code, fallback="Global").upper()
+
+
+def _scan_site_name(target: CoverageTarget) -> str:
+    """Return site name segment used in scan names"""
+    if str(target.site_code or "").strip():
+        return _site_code_prefix(target.site_code)
+    return _display_name_part(target.location, fallback="Global")
 
 
 def classify_vlan_role(vlan_name: str | None) -> str:
@@ -213,56 +221,19 @@ def build_required_asset_name(
     """Build required asset name"""
     site_code = _site_code_prefix(target.site_code)
     if target.target_type == "PUBLIC":
-        return f"{site_code} Public"
+        return f"{_NAME_PREFIX} {site_code} Public"
     if target.target_type == "PRIVATE_SUPERNET":
-        return f"{site_code} Private Discovery"
+        return f"{_NAME_PREFIX} {site_code} Private Discovery"
 
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
-        return f"{site_code} {group_name} VLAN Group"
+        return f"{_NAME_PREFIX} {site_code} VLAN {group_name}"
 
     vlan_name = _display_name_part(target.vlan_name, fallback="VLAN")
     vlan_tag = _display_name_part(str(target.vlan_tag), fallback="No Tag")
-    return f"{site_code} {vlan_name} VLAN {vlan_tag}"
-
-
-def _scan_scope_segments(target: CoverageTarget) -> list[str]:
-    """Build scan scope in region > site_code > location > global priority."""
-    region = _display_name_part(target.region, fallback="") or None
-    site_code = _site_code_prefix(target.site_code) if target.site_code else None
-    location = _display_name_part(target.location, fallback="") or None
-
-    segments = [segment for segment in (region, site_code or location) if segment]
-    return segments or ["Global"]
-
-
-def _grouped_scan_scope_segments(target: CoverageTarget) -> list[str]:
-    """Build grouped VLAN scan scope in site_code > location > global priority."""
-    site_code = _site_code_prefix(target.site_code) if target.site_code else None
-    location = _display_name_part(target.location, fallback="") or None
-    return [site_code or location or "Global"]
-
-
-def _scan_description_segment(target: CoverageTarget, fallback: str) -> str:
-    """Return description segment for a scan name"""
-    return _display_name_part(target.description, fallback=fallback)
-
-
-def _compose_scan_name(
-    target: CoverageTarget,
-    description_fallback: str,
-    purpose: str,
-) -> str:
-    """Build scan name from its standard parts"""
-    return " ".join(
-        [
-            *_scan_scope_segments(target),
-            _scan_description_segment(target, description_fallback),
-            purpose,
-        ]
-    )
+    return f"{_NAME_PREFIX} {site_code} VLAN {vlan_name} {vlan_tag}"
 
 
 def build_required_scan_name(
@@ -270,32 +241,25 @@ def build_required_scan_name(
     grouping_config: GroupingConfig | None = None,
 ) -> str:
     """Build required scan name"""
+    site_identifier = _scan_site_name(target)
     if target.target_type == "PUBLIC":
-        return f"{_site_code_prefix(target.site_code)} Public Assessment"
+        return f"{_NAME_PREFIX} Assessment {site_identifier} Public"
     if target.target_type == "PRIVATE_SUPERNET":
-        return _compose_scan_name(
-            target,
-            description_fallback="Private",
-            purpose="Discovery",
-        )
+        return f"{_NAME_PREFIX} Discovery {site_identifier} Private"
 
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
-        return " ".join(
-            [
-                *_grouped_scan_scope_segments(target),
-                _role_name_segment(role),
-                "Assessment",
-            ]
+        return (
+            f"{_NAME_PREFIX} Assessment {site_identifier} "
+            f"{_role_name_segment(role)}"
         )
 
     role = resolve_target_role(target, grouping_config)
-    return _compose_scan_name(
-        target,
-        description_fallback=_role_name_segment(role),
-        purpose="Assessment",
+    return (
+        f"{_NAME_PREFIX} Assessment {site_identifier} "
+        f"{_role_name_segment(role)}"
     )
 
 
