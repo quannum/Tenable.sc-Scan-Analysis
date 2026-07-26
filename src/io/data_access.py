@@ -7,6 +7,9 @@ from typing import Any, Callable, Iterator, Protocol
 
 LOGGER = logging.getLogger(__name__)
 
+# This module gives the workflow one interface for offline JSON files and the
+# live Tenable.sc API.
+
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     """Load local folders of scan/asset json files retrieved asynchronously (if not using live mode)"""
@@ -84,13 +87,13 @@ class DataAccess:
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
     def __init__(self, config: DataAccessConfig) -> None:
-        """Initialize the object"""
         self.config = config
         self.sc: Any = None
         self.offline_scans = {}
         self.offline_assets = {}
 
         if config.mode == "live":
+            # Validate settings before importing or connecting to pyTenable.
             self._validate_live_config(config)
             try:
                 from tenable.sc import TenableSC
@@ -117,6 +120,7 @@ class DataAccess:
                 ssl_verify=ssl_verify,
             )
         else:
+            # Offline mode only reads previously collected JSON files.
             self.offline_scans = load_json_folder(config.scan_json_dir)
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
@@ -292,6 +296,7 @@ class DataAccess:
                 if not self._is_retryable_exception(exc) or attempt >= attempts:
                     raise
 
+                # Retry connection-style failures with a longer wait each time.
                 backoff = getattr(
                     self,
                     "live_retry_backoff_seconds",

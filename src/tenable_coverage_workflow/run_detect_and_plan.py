@@ -43,6 +43,9 @@ from .subnet_source.source_config import (
 
 LOGGER = logging.getLogger(__name__)
 
+# This module coordinates the dry-run workflow from source definitions through
+# coverage checks, proposed changes, and report files.
+
 
 @dataclass
 class DetectAndPlanConfig:
@@ -182,7 +185,6 @@ def main(argv=None) -> int:
 
 class ServiceContextFilter(logging.Filter):
     def __init__(self, extra_context: dict[str, object] | None = None) -> None:
-        """Initialize the object"""
         super().__init__()
         self.extra_context = extra_context or {}
 
@@ -376,6 +378,8 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         mode=config.mode,
     )
 
+    # Build expected targets first, then compare them with the Tenable
+    # configuration collected below.
     source_type, connector_result = load_authoritative_source(
         config.source_config,
         audit_logger=audit_logger,
@@ -402,6 +406,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         grouping_config=config.grouping_config,
     )
 
+    # Record every proposal before writing the review files.
     for change in proposed_changes:
         audit_logger.emit(
             "proposed_change_created",
@@ -484,6 +489,7 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     data_access = DataAccess(config)
     scope_ws, normalized_ws = build_scope_tables()
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
+    # Coverage uses normalized scope rows, not the original Tenable text.
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws
     )
@@ -537,6 +543,7 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
+            # A tagged exclusion is reported, but it must not produce a change.
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
@@ -566,6 +573,8 @@ def validate_coverage_targets(
         status = derive_workflow_status(
             base_result.status, base_result.exclusion_ip_total
         )
+        # Exact names distinguish missing resources from scans that merely cover
+        # the same addresses.
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"

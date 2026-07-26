@@ -9,7 +9,6 @@ from typing import Any, cast
 
 class AuditLogger:
     def __init__(self, run_id: str, run_dir: str | Path) -> None:
-        """Initialize the object"""
         self.run_id = run_id
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)

@@ -57,11 +57,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "RSG Corp NYC01 VLAN Servers 120",
+            "ABC Corp NYC01 VLAN Servers 120",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "RSG Corp Assessment NYC01 Server",
+            "ABC Corp Assessment NYC01 Server",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -81,10 +81,10 @@ class PlanningTests(unittest.TestCase):
 
         named_target = apply_naming_rules(target)
 
-        self.assertEqual(named_target.required_asset_name, "RSG Corp NYC Public")
+        self.assertEqual(named_target.required_asset_name, "ABC Corp NYC Public")
         self.assertEqual(
             named_target.required_scan_name,
-            "RSG Corp Assessment NYC Public",
+            "ABC Corp Assessment NYC Public",
         )
 
     def test_exclude_tag_skips_naming_coverage_plans_and_missing_resources(self):
@@ -140,11 +140,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "RSG Corp NYC01 VLAN Workstation",
+            "ABC Corp NYC01 VLAN Workstation",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "RSG Corp Assessment NYC01 Workstation",
+            "ABC Corp Assessment NYC01 Workstation",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -173,11 +173,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "RSG Corp NYC01 VLAN Wireless",
+            "ABC Corp NYC01 VLAN Wireless",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "RSG Corp Assessment NYC01 Workstation",
+            "ABC Corp Assessment NYC01 Workstation",
         )
         self.assertEqual(
             named_target.required_policy_name,
@@ -218,11 +218,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             workstation_named.required_asset_name,
-            "RSG Corp NYC01 VLAN Workstation",
+            "ABC Corp NYC01 VLAN Workstation",
         )
         self.assertEqual(
             wireless_named.required_asset_name,
-            "RSG Corp NYC01 VLAN Wireless",
+            "ABC Corp NYC01 VLAN Wireless",
         )
         self.assertNotEqual(
             workstation_named.required_asset_name,
@@ -230,7 +230,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             workstation_named.required_scan_name,
-            "RSG Corp Assessment NYC01 Workstation",
+            "ABC Corp Assessment NYC01 Workstation",
         )
         self.assertEqual(
             workstation_named.required_scan_name,
@@ -244,6 +244,43 @@ class PlanningTests(unittest.TestCase):
             workstation_named.required_policy_name,
             "Basic Assessment Policy",
         )
+
+    def test_server_role_tags_share_server_scan(self):
+        config = GroupingConfig(mode="vlan_tag")
+        targets = (
+            ("Storage", "10.1.50.0/24"),
+            ("Other", "10.1.51.0/24"),
+            ("Environment", "10.1.52.0/24"),
+        )
+        for group_name, cidr in targets:
+            with self.subTest(group_name=group_name):
+                target = CoverageTarget(
+                    target_type="VLAN",
+                    cidr=cidr,
+                    site_code="NYC01",
+                    site_name="New York Office",
+                    location="New York, NY",
+                    region="US East",
+                    description=f"{group_name} VLAN",
+                    vlan_name=group_name,
+                    vlan_tag=150,
+                    tags=[f"vlan-{group_name.lower()}"],
+                )
+
+                named_target = apply_naming_rules(target, config)
+
+                self.assertEqual(
+                    named_target.required_asset_name,
+                    f"ABC Corp NYC01 VLAN {group_name}",
+                )
+                self.assertEqual(
+                    named_target.required_scan_name,
+                    "ABC Corp Assessment NYC01 Server",
+                )
+                self.assertEqual(
+                    named_target.required_policy_name,
+                    "Basic Assessment Policy",
+                )
 
     def test_vlan_policy_assignment_keeps_network_and_av_specialized(self):
         targets = {
@@ -325,11 +362,11 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             named_target.required_asset_name,
-            "RSG Corp NYC01 VLAN Wireless",
+            "ABC Corp NYC01 VLAN Wireless",
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "RSG Corp Assessment NYC01 Workstation",
+            "ABC Corp Assessment NYC01 Workstation",
         )
 
     def test_scan_name_scope_falls_back_to_location_then_global(self):
@@ -373,18 +410,18 @@ class PlanningTests(unittest.TestCase):
 
         self.assertEqual(
             build_required_scan_name(location_only_target),
-            "RSG Corp Assessment Raleigh NC Server",
+            "ABC Corp Assessment Raleigh NC Server",
         )
         self.assertEqual(
             build_required_scan_name(global_target),
-            "RSG Corp Assessment Global Server",
+            "ABC Corp Assessment Global Server",
         )
         self.assertEqual(
             build_required_scan_name(
                 grouped_location_target,
                 GroupingConfig(mode="vlan_tag"),
             ),
-            "RSG Corp Assessment Raleigh NC Workstation",
+            "ABC Corp Assessment Raleigh NC Workstation",
         )
 
     def test_proposed_changes_map_wrong_scan_gap_and_excluded_statuses(self):
@@ -599,21 +636,21 @@ class DetectAndPlanCliTests(unittest.TestCase):
             scan_payloads = [
                 {
                     "id": 1,
-                    "name": "RSG Corp Discovery NYC01 Private",
+                    "name": "ABC Corp Discovery NYC01 Private",
                     "ipList": "10.1.0.0/16,10.3.0.0/16",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 2,
-                    "name": "RSG Corp Assessment NYC01 Server",
+                    "name": "ABC Corp Assessment NYC01 Server",
                     "ipList": "10.1.16.0/24",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 3,
-                    "name": "RSG Corp Assessment NYC01 Workstation",
+                    "name": "ABC Corp Assessment NYC01 Workstation",
                     "ipList": "10.1.32.0/22",
                     "assets": [],
                     "schedule": {"enabled": True},
@@ -686,7 +723,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
             )
             self.assertEqual(
-                public_row["Proposed Scan Name"], "RSG Corp Assessment NYC01 Public"
+                public_row["Proposed Scan Name"], "ABC Corp Assessment NYC01 Public"
             )
 
             private_row = next(
@@ -714,7 +751,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             self.assertEqual(end_user_vlan_row["VLAN Tag"], "130")
             self.assertEqual(
                 end_user_vlan_row["Proposed Scan Name"],
-                "RSG Corp Assessment NYC01 Workstation",
+                "ABC Corp Assessment NYC01 Workstation",
             )
 
             markdown = md_path.read_text(encoding="utf-8")
@@ -727,7 +764,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             )
             self.assertIn("region", coverage_summary["dimensions"])
             self.assertIn(
-                "RSG Corp NYC01 Private Discovery",
+                "ABC Corp NYC01 Private Discovery",
                 coverage_summary["missing_asset_groups"],
             )
             self.assertTrue((run_dir / "coverage_results.csv").is_file())
@@ -774,6 +811,7 @@ class ScanNameCompatibilityTests(unittest.TestCase):
                     "assets": [],
                 }
 
+        # scope_ws is disabled because the raw scope table has no consumer.
         scope_ws, normalized_ws = build_scope_tables()
         build_scope_sheets(
             scope_ws,
@@ -782,10 +820,10 @@ class ScanNameCompatibilityTests(unittest.TestCase):
             self._config(),
         )
 
-        rows = list(scope_ws.iter_rows(min_row=2, values_only=True))
+        rows = list(normalized_ws.iter_rows(min_row=2, values_only=True))
         self.assertEqual(
             rows,
-            [("Production Weekly", INCLUDE, "Scan", "Direct IP List", "10.1.0.0/24")],
+            [("Production Weekly", "SCAN_IPLIST", INCLUDE, "10.1.0.0/24")],
         )
 
     def test_build_configuration_index_prefers_info_name(self):

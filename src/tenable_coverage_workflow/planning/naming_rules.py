@@ -4,6 +4,8 @@ from dataclasses import replace
 from ..exclusion_tags import find_exclusion_tag
 from ..models import CoverageTarget, GroupingConfig
 
+# Naming rules keep proposals, coverage checks, and later apply operations using
+# the same exact resource names.
 _NON_WORD_PATTERN = re.compile(r"[^A-Za-z0-9]+")
 _UNDERSCORE_PATTERN = re.compile(r"_+")
 _SPACE_PATTERN = re.compile(r"\s+")
@@ -174,6 +176,7 @@ def _classify_vlan_role_from_grouping_tag(
         if str(key).strip() and str(value).strip()
     }
     if normalized_tag in tag_map:
+        # A configured mapping always wins over the built-in tag behavior.
         return tag_map[normalized_tag]
 
     prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
@@ -183,6 +186,8 @@ def _classify_vlan_role_from_grouping_tag(
         if matched_prefix
         else normalized_tag
     )
+    if suffix in {"server", "servers", "storage", "other", "environment"}:
+        return "SERVER"
     if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
         return "END_USER"
     if not suffix:
@@ -228,6 +233,7 @@ def build_required_asset_name(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
+        # Asset groups stay separate by tag even when their scans share a role.
         group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
         return f"{_NAME_PREFIX} {site_code} VLAN {group_name}"
 

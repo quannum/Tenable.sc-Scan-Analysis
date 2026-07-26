@@ -414,11 +414,12 @@ When `grouping_mode` is `vlan_tag`:
 - only tags starting with `grouping_vlan_tag_prefix` are considered
 - the first matching tag wins
 - `grouping_tag_map` translates tags into internal group roles
-- generated VLAN asset groups use `RSG Corp <SITE-CODE> VLAN <GROUP>`; scans use
-  `RSG Corp Assessment <SITE-CODE> <ROLE>`
-- public scans use `RSG Corp Assessment <SITE-CODE> Public`; private discovery
-  scans use `RSG Corp Discovery <SITE-CODE> Private`
+- generated VLAN asset groups use `ABC Corp <SITE-CODE> VLAN <GROUP>`; scans use
+  `ABC Corp Assessment <SITE-CODE> <ROLE>`
+- public scans use `ABC Corp Assessment <SITE-CODE> Public`; private discovery
+  scans use `ABC Corp Discovery <SITE-CODE> Private`
 - `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
+- `vlan-storage`, `vlan-other`, and `vlan-environment` keep separate tag-based asset groups but use the Server Assessment and Basic Assessment Policy unless a custom tag map overrides the tag
 - Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
 - source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
@@ -433,7 +434,7 @@ Example:
 ```toml
 grouping_mode = "vlan_tag"
 grouping_vlan_tag_prefix = "vlan-"
-grouping_tag_map = { vlan-server = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
+grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
 ```
 
 ## Running From Source

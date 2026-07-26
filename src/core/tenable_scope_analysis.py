@@ -18,10 +18,12 @@ from .scope_utils import (
 
 LOGGER = logging.getLogger(__name__)
 
+# This module collects scan targets from several Tenable sources, then compares
+# the resulting address intervals with the expected network definitions.
+
 
 class InMemoryTable:
     def __init__(self, headers: Iterable[str]) -> None:
-        """Initialize the object"""
         self._rows: list[list[Any]] = [list(headers)]
 
     def append(self, row: Iterable[Any]) -> None:
@@ -36,17 +38,20 @@ class InMemoryTable:
             yield tuple(row)
 
 
-def build_scope_tables() -> tuple[InMemoryTable, InMemoryTable]:
+def build_scope_tables() -> tuple[None, InMemoryTable]:
     """Build scope tables"""
-    scope_ws = InMemoryTable(
-        [
-            "Scan Name",
-            "Inclusion Type",
-            "Source Type",
-            "Source Name",
-            "Scope Definition",
-        ]
-    )
+    # Legacy raw-scope collection is disabled for review. Nothing reads this
+    # table after scope collection, so only the normalized table is needed.
+    # scope_ws = InMemoryTable(
+    #     [
+    #         "Scan Name",
+    #         "Inclusion Type",
+    #         "Source Type",
+    #         "Source Name",
+    #         "Scope Definition",
+    #     ]
+    # )
+    scope_ws = None
     normalized_ws = InMemoryTable(
         ["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"]
     )
@@ -216,7 +221,9 @@ def walk_combination(
         inclusion_type = EXCLUDE if in_complement else INCLUDE
 
         if defined:
-            scope_ws.append([scan_name, inclusion_type, "Asset", asset_name, defined])
+            # scope_ws.append(
+            #     [scan_name, inclusion_type, "Asset", asset_name, defined]
+            # )
             normalize_scope(
                 normalized_ws, scan_name, asset_name, inclusion_type, defined
             )
@@ -252,6 +259,8 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
+    # A scan can get targets directly, through static assets, or through
+    # nested combination assets. Normalize every source into the same rows.
     for scan in filtered_scans:
         scan_id = scan.get("id")
         scan_name = extract_scan_name(scan)
@@ -274,7 +283,9 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
         ip_list = details.get("ipList")
         if ip_list and ip_list != "*":
-            scope_ws.append([scan_name, INCLUDE, "Scan", "Direct IP List", ip_list])
+            # scope_ws.append(
+            #     [scan_name, INCLUDE, "Scan", "Direct IP List", ip_list]
+            # )
             normalize_scope(normalized_ws, scan_name, "SCAN_IPLIST", INCLUDE, ip_list)
 
         for asset_ref in details.get("assets", []):
@@ -299,7 +310,9 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 asset_name = asset.get("name") or f"Asset {asset_id}"
 
                 if defined:
-                    scope_ws.append([scan_name, INCLUDE, "Asset", asset_name, defined])
+                    # scope_ws.append(
+                    #     [scan_name, INCLUDE, "Asset", asset_name, defined]
+                    # )
                     normalize_scope(
                         normalized_ws, scan_name, asset_name, INCLUDE, defined
                     )
@@ -442,6 +455,7 @@ def calculate_scan_intervals(
     relevant_exclusions = []
     exclusion_ip_total = 0
 
+    # Keep only the part of each configured scope that overlaps this target.
     for actual_scope in actual_by_scan[scan_name]:
         if not scope_intersects(actual_scope.parsed, expected):
             continue
@@ -475,6 +489,7 @@ def calculate_scan_intervals(
         )
         exclusion_ip_total += loss
 
+    # Merge first so overlapping configured ranges are not counted twice.
     included = merge_intervals(included)
     excluded = merge_intervals(excluded)
 
@@ -505,6 +520,7 @@ def calculate_coverage_result(
     total_included_ips = 0
     exclusion_ip_total = 0
 
+    # Each covering scan can add scope or remove scope through an exclusion.
     for scan_name in covering_scans:
         included_ips, net_intervals, scan_exclusions, scan_excluded_ips = (
             calculate_scan_intervals(
@@ -526,6 +542,7 @@ def calculate_coverage_result(
         if scan_exclusions:
             relevant_exclusions[scan_name].extend(scan_exclusions)
 
+    # Several scans can cover the same addresses, so count the merged result.
     cover_intervals = merge_intervals(cover_intervals)
     covered_count = sum(end - start + 1 for start, end in cover_intervals)
     covered_count = min(covered_count, expected_size)

@@ -11,6 +11,9 @@ from ..core.scope_utils import split_scope_items
 from ..io.data_access import DataAccess
 from .audit.audit_logger import atomic_write_text
 
+# This module applies only reviewed plan rows and verifies each Tenable change
+# before reporting it as successful.
+
 SUPPORTED_ACTIONS = {
     "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
     "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
@@ -149,7 +152,6 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
 
 class ChangeApplier:
     def __init__(self, data_access: DataAccess, repository_id: int) -> None:
-        """Initialize the object"""
         if data_access.config.mode != "live":
             raise ValueError("apply-changes requires --mode live")
         if int(repository_id) <= 0:
@@ -165,6 +167,7 @@ class ChangeApplier:
     def preflight(self, plan: ApprovedPlan) -> None:
         """Check requirements before applying changes"""
         errors = []
+        # Check every named policy before creating or updating anything.
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
                 continue
@@ -183,6 +186,7 @@ class ChangeApplier:
         asset_descriptions = _build_asset_descriptions(plan.approved_changes)
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
+                # Keep manual-review rows visible without applying them.
                 operations.append(
                     ApplyOperation(
                         site_code=change.site_code,
@@ -271,6 +275,7 @@ class ChangeApplier:
         """Ensure asset created or updated"""
         existing = self.assets.get(change.asset_name)
         if existing is None:
+            # A new asset starts with the approved CIDR and managed description.
             created = self.data_access.create_static_asset(
                 change.asset_name,
                 [change.cidr],
@@ -284,6 +289,7 @@ class ChangeApplier:
         asset_id = _resource_id(existing, "asset group", change.asset_name)
         details = self.data_access.get_asset(asset_id) or existing
         current_scopes = extract_asset_scopes(details)
+        # Preserve existing description text while adding managed scope lines.
         description = _merge_asset_description(
             _text(details.get("description")),
             asset_description,
@@ -316,6 +322,7 @@ class ChangeApplier:
     ) -> tuple[dict[str, Any], str]:
         """Ensure scan created or updated"""
         existing = self.scans.get(change.scan_name)
+        # Policy names are resolved here so each Tenable instance uses its own ID.
         policy_id = _resource_id(
             self.policies[change.policy_name], "policy", change.policy_name
         )
@@ -342,6 +349,7 @@ class ChangeApplier:
             and current_policy_id == policy_id
         ):
             return details, "UNCHANGED"
+        # Add this asset without dropping assets already assigned to the scan.
         updated_ids = sorted(current_asset_ids | {asset_id})
         updated = self.data_access.update_scan_configuration(
             scan_id,

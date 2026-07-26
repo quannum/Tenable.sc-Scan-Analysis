@@ -15,6 +15,9 @@ from ..core.scope_utils import (
 from .audit.audit_logger import atomic_write_json, atomic_write_text
 from .models import CoverageTarget, CoverageValidationResult, ValidationIssue
 
+# Reports are derived from coverage results. They do not make or apply Tenable
+# changes.
+
 DETAIL_COLUMNS = [
     "status",
     "target_type",
@@ -60,6 +63,7 @@ def write_coverage_reports(
     """Write coverage reports"""
     output_dir = Path(run_dir)
     details = [asdict(result) for result in coverage_results]
+    # Extra targets are configured scan addresses outside authoritative scope.
     extras = detect_extra_scan_targets(actual_scopes, targets)
     proposed_exclusions = build_proposed_exclusions(extras)
     summary = build_coverage_summary(coverage_results, extras)
@@ -240,6 +244,7 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
             end = min(actual_end, expected_end)
             if start <= end:
                 overlaps.append((start, end))
+        # Subtract the expected overlaps to find only the unowned scan scope.
         extras = subtract_intervals(
             [(actual_start, actual_end)], merge_intervals(overlaps)
         )

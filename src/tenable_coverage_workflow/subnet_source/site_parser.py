@@ -9,6 +9,9 @@ from ..models import (
     VlanRange,
 )
 
+# Source definitions can use several field names. This module turns those
+# variations into one consistent site, network, and VLAN model.
+
 
 def extract_site_objects(payload: Any) -> list[Any] | None:
     """Extract site objects"""
@@ -48,6 +51,7 @@ def parse_site_object(
     if not isinstance(raw, dict):
         return None, [ValidationIssue(source_file, "Site entry must be an object.")]
 
+    # Accept common source aliases before validating the required fields.
     site_code = _text(raw.get("site_code") or raw.get("code"))
     if not site_code:
         issues.append(
@@ -62,6 +66,7 @@ def parse_site_object(
     site_name = _text(raw.get("site_name") or raw.get("name")) or site_code
 
     public_ranges: list[NetworkRange] = []
+    # A source can provide a single block or a list of blocks under either name.
     for index, value in enumerate(
         _as_list(
             raw.get(
@@ -390,6 +395,7 @@ def _parse_vlan_blocks(
             },
         )
 
+    # Parse the VLAN network separately so one VLAN can contain multiple ranges.
     parsed_ranges = _parse_network_blocks(
         value,
         source_file=source_file,

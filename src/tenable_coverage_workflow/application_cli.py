@@ -105,12 +105,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add source arguments"""
     add_authoritative_source_arguments(parser)
 
 
 def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add tenable arguments"""
     parser.add_argument("--mode", choices=("offline", "live"))
     parser.add_argument("--scan-json-dir")
     parser.add_argument("--asset-json-dir")
@@ -129,7 +127,6 @@ def _add_tenable_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_filter_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add filter arguments"""
     parser.add_argument("--include-keywords")
     parser.add_argument("--exclude-keywords")
     parser.add_argument("--match-all-include", action="store_true", default=None)
@@ -141,7 +138,6 @@ def _add_filter_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_grouping_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add grouping arguments"""
     parser.add_argument("--grouping-mode", choices=("default", "vlan_tag"))
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument("--grouping-tag-map")
@@ -183,7 +179,6 @@ def _source_config(args):
 
 
 def _validate_definitions(args) -> int:
-    """Validate definitions"""
     source_type, result = load_authoritative_source(_source_config(args))
     payload = {
         "schema_version": 1,
@@ -243,7 +238,6 @@ def _tenable_config(args) -> TenableAccessConfig:
 
 
 def _collect_tenable(args) -> int:
-    """Collect Tenable.sc inventory snapshot"""
     snapshot = collect_tenable_inventory(DataAccess(_tenable_config(args)))
     output_file = _setting(args, "output_file")
     if not output_file:
@@ -310,7 +304,6 @@ def _analyze_or_propose(args) -> int:
 
 
 def _apply_changes(args) -> int:
-    """Apply changes"""
     if args.apply is not True:
         _emit("Refusing mutation: apply-changes requires the explicit --apply flag.")
         return EXIT_APPLY_REQUIRED
@@ -427,7 +420,6 @@ def _csv_setting(
 
 
 def _emit(message: str) -> None:
-    """Print one command-line message"""
     print(message)
 
 

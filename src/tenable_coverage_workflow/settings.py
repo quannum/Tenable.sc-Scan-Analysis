@@ -16,12 +16,10 @@ ENV_PREFIX = "TCW_"
 
 
 def normalize_key(value: Any) -> str:
-    """Normalize key"""
     return str(value).strip().lower().replace("-", "_")
 
 
 def normalize_config_keys(config_data: dict[str, Any]) -> dict[str, Any]:
-    """Normalize config keys"""
     return {normalize_key(key): value for key, value in config_data.items()}
 
 
@@ -63,7 +61,6 @@ def env_setting(
     environment_name: str | None = None,
     legacy_names: tuple[str, ...] = (),
 ) -> Any:
-    """Read setting"""
     prefixed_environment_name = f"{ENV_PREFIX}{name.upper()}"
     if os.getenv(prefixed_environment_name) is not None:
         return os.getenv(prefixed_environment_name)
@@ -83,7 +80,6 @@ class SettingsResolver:
         command_name: str | None = None,
         legacy_env_names: dict[str, tuple[str, ...]] | None = None,
     ) -> None:
-        """Initialize the object"""
         self.args = args
         self.config_data = config_data or {}
         self.command_name = command_name
@@ -145,7 +141,6 @@ class SettingsResolver:
 
 
 def as_path(value: str | Path | None) -> Path | None:
-    """Convert to path"""
     if value is None:
         return None
     if isinstance(value, Path):
@@ -158,7 +153,6 @@ def as_path(value: str | Path | None) -> Path | None:
 
 
 def optional_string(value: Any) -> str | None:
-    """Get an optional string"""
     if value is None:
         return None
     text = str(value).strip()
@@ -166,7 +160,6 @@ def optional_string(value: Any) -> str | None:
 
 
 def parse_bool(value: Any, field_name: str) -> bool:
-    """Parse bool"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -179,7 +172,6 @@ def parse_bool(value: Any, field_name: str) -> bool:
 
 
 def parse_positive_int(value: Any, field_name: str) -> int:
-    """Parse positive int"""
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
@@ -193,7 +185,6 @@ def parse_positive_int(value: Any, field_name: str) -> int:
 
 
 def parse_nonnegative_float(value: Any, field_name: str) -> float:
-    """Parse nonnegative float"""
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:

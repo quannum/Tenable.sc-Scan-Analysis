@@ -248,14 +248,14 @@ class ScheduledServiceTests(unittest.TestCase):
             for payload in [
                 {
                     "id": 1,
-                    "name": "RSG Corp Discovery NYC01 Private",
+                    "name": "ABC Corp Discovery NYC01 Private",
                     "ipList": "10.1.0.0/16,10.3.0.0/16",
                     "assets": [],
                     "schedule": {"enabled": True},
                 },
                 {
                     "id": 2,
-                    "name": "RSG Corp Assessment NYC01 Server",
+                    "name": "ABC Corp Assessment NYC01 Server",
                     "ipList": "10.1.16.0/24",
                     "assets": [],
                     "schedule": {"enabled": True},
