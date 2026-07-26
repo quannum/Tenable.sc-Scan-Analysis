@@ -263,10 +263,7 @@ def build_required_scan_name(
         )
 
     role = resolve_target_role(target, grouping_config)
-    return (
-        f"{_NAME_PREFIX} Assessment {site_identifier} "
-        f"{_role_name_segment(role)}"
-    )
+    return f"{_NAME_PREFIX} Assessment {site_identifier} " f"{_role_name_segment(role)}"
 
 
 def build_required_policy_name(

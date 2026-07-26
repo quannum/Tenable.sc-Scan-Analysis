@@ -306,8 +306,7 @@ class ChangeApplicationTests(unittest.TestCase):
             }
             self.assertEqual(
                 descriptions["NYC01 Public"],
-                "Managed by Tenable.sc Scan Analysis\n\n"
-                "Public Range 203.0.113.0/24",
+                "Managed by Tenable.sc Scan Analysis\n\n" "Public Range 203.0.113.0/24",
             )
             self.assertEqual(
                 descriptions["NYC01 Private Discovery"],
