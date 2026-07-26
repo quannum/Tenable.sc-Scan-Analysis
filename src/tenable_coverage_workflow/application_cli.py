@@ -76,7 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--fail-on-partial", action="store_true", default=None)
 
     for name, help_text in (
-        ("analyze-coverage", "Analyze the subnet-as-code definitions against Tenable.sc scans."),
+        (
+            "analyze-coverage",
+            "Analyze the subnet-as-code definitions against Tenable.sc scans.",
+        ),
         ("propose-changes", "Generate dry-run, proposed changes for review."),
     ):
         command = commands.add_parser(name, help=help_text)

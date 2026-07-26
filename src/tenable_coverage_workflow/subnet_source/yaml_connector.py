@@ -1,8 +1,8 @@
+from ..exclusion_tags import find_exclusion_tag
 from ..models import (
     CoverageTarget,
     SiteNetworkDefinition,
 )
-from ..exclusion_tags import find_exclusion_tag
 
 
 def flatten_site_definition(

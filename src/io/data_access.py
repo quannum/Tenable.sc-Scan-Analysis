@@ -12,7 +12,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
-    """Load local folders of scan/asset json files retrieved asynchronously (if not using live mode)"""
     data: dict[str, dict[str, Any]] = {}
     if not folder_path:
         return data

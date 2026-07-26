@@ -262,7 +262,9 @@ class ChangeApplicationTests(unittest.TestCase):
                             **{
                                 "CIDR": "203.0.113.0/24",
                                 "Target Type": "PUBLIC",
-                                "Proposed Action": "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
+                                "Proposed Action": (
+                                    "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN"
+                                ),
                                 "Proposed Asset Name": "NYC01 Public",
                                 "Proposed Scan Name": "NYC01 Public Assessment",
                                 "Proposed Policy Name": "Public Facing Assessment",
@@ -275,7 +277,9 @@ class ChangeApplicationTests(unittest.TestCase):
                             **{
                                 "CIDR": "10.1.0.0/16",
                                 "Target Type": "PRIVATE_SUPERNET",
-                                "Proposed Action": "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
+                                "Proposed Action": (
+                                    "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN"
+                                ),
                                 "Proposed Asset Name": "NYC01 Private Discovery",
                                 "Proposed Scan Name": "NYC01 Private Discovery",
                                 "Proposed Policy Name": "Discovery",

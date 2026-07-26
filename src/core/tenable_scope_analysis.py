@@ -115,7 +115,10 @@ def extract_scan_name(scan) -> str:
 
 
 def filter_scans(scans, config):
-    """Optionally filter scans by keyword or enabled/disabled status and log number of scans after filter"""
+    """Filter scans by name and enabled status
+
+    Log the number of scans before and after filtering
+    """
     if (
         not config.include_keywords
         and not config.exclude_keywords
