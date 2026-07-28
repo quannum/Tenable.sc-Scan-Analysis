@@ -1,7 +1,9 @@
 import ipaddress
 import unittest
+from dataclasses import dataclass, field
 from unittest.mock import patch
 
+from src.tenable_coverage_workflow.models import NetworkRange, VlanRange
 from src.tenable_coverage_workflow.subnet_source import (
     AuthoritativeSourceConfig,
     load_authoritative_source,
@@ -138,6 +140,45 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         self.assertEqual(source_type, "rsg_subnet_as_code")
         self.assertEqual(calls[0], {})
         self.assertEqual(result.site_definitions[0].site_code, "ALL01")
+
+    def test_object_records_and_sites_wrapper_create_coverage_targets(self):
+        @dataclass(frozen=True)
+        class SiteRecord:
+            site_code: str
+            site_name: str
+            private_ranges: list[NetworkRange] = field(default_factory=list)
+            public_ranges: list[NetworkRange] = field(default_factory=list)
+
+        payload = {
+            "sites": [
+                SiteRecord(
+                    site_code="OBJ01",
+                    site_name="Object Site",
+                    private_ranges=[
+                        NetworkRange(
+                            cidr="10.80.0.0/16",
+                            vlans=[
+                                VlanRange(
+                                    vlan_name="Servers",
+                                    display_name="Servers",
+                                    vlan=120,
+                                    cidr="10.80.16.0/24",
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ]
+        }
+
+        result = load_json_payload(payload)
+
+        self.assertEqual(result.files_failed, 0)
+        targets = {
+            (target.target_type, target.cidr) for target in result.coverage_targets
+        }
+        self.assertIn(("PRIVATE_SUPERNET", "10.80.0.0/16"), targets)
+        self.assertIn(("VLAN", "10.80.16.0/24"), targets)
 
     def test_stable_payload_flattens_public_private_and_vlan_scope(self):
         payload = {

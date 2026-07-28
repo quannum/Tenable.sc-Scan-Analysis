@@ -1,4 +1,5 @@
 import ipaddress
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from ...core.scope_utils import parse_scope_item, scope_contains
@@ -17,16 +18,27 @@ from ..models import (
 
 def extract_site_objects(payload: Any) -> list[dict[str, Any]] | None:
     """Return the site_definition records from a subnet-as-code payload"""
+    payload = _as_mapping(payload)
+    if isinstance(payload, list):
+        return _site_records(payload)
     if not isinstance(payload, dict):
         return None
 
-    site_definition = payload.get("site_definition")
-    if isinstance(site_definition, dict):
-        return [site_definition]
-    if isinstance(site_definition, list) and all(
-        isinstance(item, dict) for item in site_definition
+    for key in (
+        "site_definition",
+        "site_definitions",
+        "sites",
+        "locations",
+        "data",
+        "items",
     ):
-        return site_definition
+        site_definition = _as_mapping(payload.get(key))
+        if isinstance(site_definition, dict):
+            return [site_definition]
+        if isinstance(site_definition, list):
+            sites = _site_records(site_definition)
+            if sites is not None:
+                return sites
     return None
 
 
@@ -34,7 +46,16 @@ def parse_site_object(
     raw: dict[str, Any], source_file: str
 ) -> tuple[SiteNetworkDefinition | None, list[ValidationIssue]]:
     """Parse one subnet-as-code site_definition record"""
+    raw = _as_mapping(raw)
     issues: list[ValidationIssue] = []
+    if not isinstance(raw, dict):
+        issues.append(
+            ValidationIssue(
+                source_file=source_file,
+                message="Site definition must be an object.",
+            )
+        )
+        return None, issues
     site_code = _required_text(raw, "site_code", source_file, None, issues)
     site_name = _required_text(raw, "site_name", source_file, site_code, issues)
     if not site_code or not site_name:
@@ -87,6 +108,7 @@ def _parse_public_ranges(
     for index, raw_range in enumerate(
         _required_list(value, "public_ranges", source_file, site_code, issues)
     ):
+        raw_range = _as_mapping(raw_range)
         field_name = f"public_ranges[{index}]"
         if not isinstance(raw_range, dict):
             cidr = _parse_network(
@@ -150,6 +172,7 @@ def _parse_private_ranges(
     for index, raw_range in enumerate(
         _required_list(value, "private_ranges", source_file, site_code, issues)
     ):
+        raw_range = _as_mapping(raw_range)
         field_name = f"private_ranges[{index}]"
         if not isinstance(raw_range, dict):
             cidr = _parse_network(
@@ -212,6 +235,7 @@ def _parse_subnets(
     for index, raw_subnet in enumerate(
         _required_list(value, field_name, source_file, site_code, issues)
     ):
+        raw_subnet = _as_mapping(raw_subnet)
         item_field = f"{field_name}[{index}]"
         if not isinstance(raw_subnet, dict):
             cidr = _parse_network(
@@ -286,6 +310,7 @@ def _parse_network(
     issues: list[ValidationIssue],
 ) -> str | None:
     """Build a canonical IPv4 CIDR from network and cidr fields"""
+    value = _as_mapping(value)
     if isinstance(value, str):
         return _parse_scope_text(value, source_file, site_code, field_name, issues)
     if not isinstance(value, dict):
@@ -396,6 +421,7 @@ def _parse_ip_addresses(
     for index, raw_address in enumerate(
         _required_list(value, field_name, source_file, site_code, issues)
     ):
+        raw_address = _as_mapping(raw_address)
         item_field = f"{field_name}[{index}]"
         if not isinstance(raw_address, dict):
             _issue(issues, source_file, site_code, item_field, "must be an object.")
@@ -526,8 +552,9 @@ def _required_list(
     issues: list[ValidationIssue],
 ) -> list[Any]:
     """Return a source list or record a validation issue"""
-    if isinstance(value, list):
-        return value
+    value = _as_mapping(value)
+    if isinstance(value, (list, tuple)):
+        return list(value)
     _issue(issues, source_file, site_code, field_name, "must be a list.")
     return []
 
@@ -541,6 +568,11 @@ def _required_text(
     parent_field: str = "",
 ) -> str | None:
     """Return a required text field or record a validation issue"""
+    value = _as_mapping(value)
+    if not isinstance(value, dict):
+        field_name = f"{parent_field}.{key}" if parent_field else key
+        _issue(issues, source_file, site_code, field_name, "is required.")
+        return None
     text = _optional_text(value.get(key))
     if text:
         return text
@@ -579,6 +611,33 @@ def _optional_text(value: Any) -> str | None:
     """Convert an optional scalar source value to text"""
     text = "" if value is None else str(value).strip()
     return text or None
+
+
+def _site_records(value: list[Any]) -> list[dict[str, Any]] | None:
+    """Convert a list of site-like records into dicts"""
+    records = [_as_mapping(item) for item in value]
+    if all(isinstance(item, dict) for item in records):
+        return records
+    return None
+
+
+def _as_mapping(value: Any) -> Any:
+    """Convert dataclass or object records from source connectors into dicts"""
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    if isinstance(value, (dict, list, str)) or value is None:
+        return value
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        return value.model_dump()
+    if hasattr(value, "dict") and callable(value.dict):
+        return value.dict()
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+    return value
 
 
 def _issue(
