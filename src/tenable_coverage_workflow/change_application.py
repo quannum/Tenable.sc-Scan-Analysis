@@ -5,10 +5,9 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from ..core.scope_utils import split_scope_items
-from ..io.data_access import DataAccess
 from .audit.audit_logger import atomic_write_text
 
 # This module applies only reviewed plan rows and verifies each Tenable change
@@ -60,6 +59,36 @@ class ApplyOperation:
     asset_id: int | None
     scan_id: int | None
     message: str
+
+
+class ChangeDataAccess(Protocol):
+    config: Any
+
+    def get_asset_lists(self) -> list[dict[str, Any]]: ...
+
+    def get_scans(self) -> list[dict[str, Any]]: ...
+
+    def get_policies(self) -> list[dict[str, Any]]: ...
+
+    def get_asset(self, asset_id: int) -> dict[str, Any]: ...
+
+    def get_scan_details(self, scan_id: int) -> dict[str, Any]: ...
+
+    def create_static_asset(
+        self, name: str, ips: list[str], description: str
+    ) -> dict[str, Any]: ...
+
+    def update_static_asset(
+        self, asset_id: int, ips: list[str], description: str | None = None
+    ) -> dict[str, Any]: ...
+
+    def create_scan(
+        self, name: str, repository_id: int, asset_ids: list[int], policy_id: int
+    ) -> dict[str, Any]: ...
+
+    def update_scan_configuration(
+        self, scan_id: int, asset_ids: list[int], repository_id: int, policy_id: int
+    ) -> dict[str, Any]: ...
 
 
 def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
@@ -151,7 +180,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
 
 
 class ChangeApplier:
-    def __init__(self, data_access: DataAccess, repository_id: int) -> None:
+    def __init__(self, data_access: ChangeDataAccess, repository_id: int) -> None:
         if data_access.config.mode != "live":
             raise ValueError("apply-changes requires --mode live")
         if int(repository_id) <= 0:

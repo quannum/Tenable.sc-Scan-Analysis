@@ -627,10 +627,12 @@ def _as_mapping(value: Any) -> Any:
         return asdict(value)
     if isinstance(value, (dict, list, str)) or value is None:
         return value
-    if hasattr(value, "model_dump") and callable(value.model_dump):
-        return value.model_dump()
-    if hasattr(value, "dict") and callable(value.dict):
-        return value.dict()
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump()
+    dict_method = getattr(value, "dict", None)
+    if callable(dict_method):
+        return dict_method()
     if hasattr(value, "__dict__"):
         return {
             key: item
