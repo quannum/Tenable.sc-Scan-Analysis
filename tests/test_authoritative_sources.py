@@ -1,3 +1,4 @@
+import ipaddress
 import unittest
 from unittest.mock import patch
 
@@ -6,6 +7,56 @@ from src.tenable_coverage_workflow.subnet_source import (
     load_authoritative_source,
     load_json_payload,
 )
+
+
+def _subnet(
+    vlan_name: str,
+    vlan: int,
+    network: str,
+    cidr: str,
+    tags: list[str] | None = None,
+    **extra,
+) -> dict[str, object]:
+    return {
+        "vlan_name": vlan_name,
+        "display_name": vlan_name.replace("-", " ").title(),
+        "vlan": vlan,
+        "network": network,
+        "subnet_mask": str(
+            ipaddress.ip_network(f"{network}/{cidr.lstrip('/')}").netmask
+        ),
+        "cidr": cidr,
+        "tags": tags or [],
+        **extra,
+    }
+
+
+def _network_range(
+    network: str,
+    cidr: str,
+    subnets: list[dict[str, object]],
+    **extra,
+) -> dict[str, object]:
+    return {
+        "supernet": {"network": network, "cidr": cidr},
+        "subnets": subnets,
+        **extra,
+    }
+
+
+def _site(
+    site_code: str,
+    public_ranges: list[dict[str, object]] | None = None,
+    private_ranges: list[dict[str, object]] | None = None,
+    **extra,
+) -> dict[str, object]:
+    return {
+        "site_code": site_code,
+        "site_name": f"{site_code} Site",
+        "public_ranges": public_ranges or [],
+        "private_ranges": private_ranges or [],
+        **extra,
+    }
 
 
 class JsonAuthoritativeSourceTests(unittest.TestCase):
@@ -18,11 +69,13 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                 calls.append(kwargs)
                 return {
                     "site_definition": [
-                        {
-                            "site_code": "API01",
-                            "site_name": "Module Site",
-                            "private_ranges": ["10.9.0.0/24"],
-                        }
+                        _site(
+                            "API01",
+                            private_ranges=[
+                                _network_range("10.9.0.0", "/24", [])
+                            ],
+                            site_name="Module Site",
+                        )
                     ]
                 }
 
@@ -42,7 +95,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(source_type, "subnet_as_code")
+        self.assertEqual(source_type, "rsg_subnet_as_code")
         self.assertEqual(result.site_definitions[0].site_code, "API01")
         self.assertEqual(
             calls[0],
@@ -65,11 +118,13 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                 calls.append(kwargs)
                 return {
                     "site_definition": [
-                        {
-                            "site_code": "ALL01",
-                            "site_name": "All Sites Example",
-                            "private_ranges": ["10.42.0.0/24"],
-                        }
+                        _site(
+                            "ALL01",
+                            private_ranges=[
+                                _network_range("10.42.0.0", "/24", [])
+                            ],
+                            site_name="All Sites Example",
+                        )
                     ]
                 }
 
@@ -80,37 +135,47 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         ):
             source_type, result = load_authoritative_source(AuthoritativeSourceConfig())
 
-        self.assertEqual(source_type, "subnet_as_code")
+        self.assertEqual(source_type, "rsg_subnet_as_code")
         self.assertEqual(calls[0], {})
         self.assertEqual(result.site_definitions[0].site_code, "ALL01")
 
-    def test_normalized_json_preserves_metadata_and_flattens_ranges(self):
+    def test_stable_payload_flattens_public_private_and_vlan_scope(self):
         payload = {
-            "sites": [
-                {
-                    "site_code": "NYC01",
-                    "site_name": "New York",
-                    "region": "US East",
-                    "timezone": "America/New_York",
-                    "tags": ["office", "tier-1"],
-                    "environment": "production",
-                    "business_function": "corporate",
-                    "scan_classification": {"server": "credentialed"},
-                    "public_ranges": ["203.0.113.0-203.0.113.7"],
-                    "private_ranges": [
-                        {
-                            "cidr": "10.10.0.0/16",
-                            "name": "NYC private",
-                            "vlans": [
-                                {
-                                    "name": "Servers",
-                                    "vlan_id": 120,
-                                    "cidr": "10.10.16.0/24",
-                                }
+            "site_definition": [
+                _site(
+                    "NYC01",
+                    public_ranges=[
+                        _network_range(
+                            "203.0.113.0",
+                            "/29",
+                            [
+                                _subnet(
+                                    "vl300-internet",
+                                    300,
+                                    "203.0.113.0",
+                                    "/29",
+                                    ["internet"],
+                                )
                             ],
-                        }
+                        )
                     ],
-                }
+                    private_ranges=[
+                        _network_range(
+                            "10.10.0.0",
+                            "/16",
+                            [
+                                _subnet(
+                                    "vl120-servers",
+                                    120,
+                                    "10.10.16.0",
+                                    "/24",
+                                    ["vlan-server"],
+                                )
+                            ],
+                        )
+                    ],
+                    timezone="America/New_York",
+                )
             ]
         }
 
@@ -120,8 +185,6 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         self.assertEqual(len(result.site_definitions), 1)
         site = result.site_definitions[0]
         self.assertEqual(site.timezone, "America/New_York")
-        self.assertEqual(site.tags, ["office", "tier-1"])
-        self.assertEqual(site.scan_classification["server"], "credentialed")
         targets = {
             (target.target_type, target.cidr) for target in result.coverage_targets
         }
@@ -132,34 +195,61 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
     def test_exclude_tags_are_preserved_for_ranges_vlans_and_individual_ips(self):
         result = load_json_payload(
             {
-                "site_code": "EXC01",
-                "public_ranges": [
-                    {"ip": "203.0.113.9", "tags": ["exclude"]},
-                ],
-                "private_ranges": [
-                    {
-                        "cidr": "10.50.0.0/24",
-                        "tags": ["EXCLUDE"],
-                    },
-                    {
-                        "cidr": "10.51.0.0/24",
-                        "vlans": [
-                            {
-                                "name": "Restricted",
-                                "vlan_id": 50,
-                                "cidr": "10.51.0.0/24",
-                                "tags": ["exclude"],
-                                "ip_addresses": [
-                                    {
-                                        "ip": "10.51.0.25",
-                                        "name": "Excluded host",
-                                        "tags": ["exclude"],
-                                    }
+                "site_definition": [
+                    _site(
+                        "EXC01",
+                        public_ranges=[
+                            _network_range(
+                                "203.0.113.0",
+                                "/24",
+                                [
+                                    _subnet(
+                                        "vl300-internet",
+                                        300,
+                                        "203.0.113.0",
+                                        "/24",
+                                        ["exclude"],
+                                        ip_addresses=[
+                                            {
+                                                "ip": "203.0.113.9",
+                                                "name": "Excluded public host",
+                                                "tags": ["exclude"],
+                                            }
+                                        ],
+                                    )
                                 ],
-                            }
+                            )
                         ],
-                    },
-                ],
+                        private_ranges=[
+                            _network_range(
+                                "10.50.0.0",
+                                "/24",
+                                [],
+                                tags=["EXCLUDE"],
+                            ),
+                            _network_range(
+                                "10.51.0.0",
+                                "/24",
+                                [
+                                    _subnet(
+                                        "vl50-restricted",
+                                        50,
+                                        "10.51.0.0",
+                                        "/24",
+                                        ["exclude"],
+                                        ip_addresses=[
+                                            {
+                                                "ip": "10.51.0.25",
+                                                "name": "Excluded host",
+                                                "tags": ["exclude"],
+                                            }
+                                        ],
+                                    )
+                                ],
+                            ),
+                        ],
+                    )
+                ]
             }
         )
 
@@ -168,12 +258,14 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
             for target in result.coverage_targets
         }
 
-        self.assertIn(("PUBLIC", "203.0.113.9/32"), targets)
+        self.assertIn(("PUBLIC", "203.0.113.0/24"), targets)
+        self.assertIn(("IP_ADDRESS", "203.0.113.9/32"), targets)
         self.assertIn(("PRIVATE_SUPERNET", "10.50.0.0/24"), targets)
         self.assertIn(("VLAN", "10.51.0.0/24"), targets)
         self.assertIn(("IP_ADDRESS", "10.51.0.25/32"), targets)
         excluded_targets = (
-            ("PUBLIC", "203.0.113.9/32"),
+            ("PUBLIC", "203.0.113.0/24"),
+            ("IP_ADDRESS", "203.0.113.9/32"),
             ("PRIVATE_SUPERNET", "10.50.0.0/24"),
             ("VLAN", "10.51.0.0/24"),
             ("IP_ADDRESS", "10.51.0.25/32"),
@@ -192,6 +284,9 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                     "site_name": "Company New York",
                     "site_type": "Studio",
                     "email_domain": "@Company.com",
+                    "everyone_at": "EveryoneCompanysNYC@Company.com",
+                    "vcenter_endpoint": "companyadcvcn4.company.example.corp",
+                    "content_library": "abcADC-ContentLibrary",
                     "timezone": "EST",
                     "utc_offset": -5,
                     "grid_code": "nyc",
@@ -259,24 +354,30 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         site = result.site_definitions[0]
         self.assertEqual(site.site_type, "Studio")
         self.assertEqual(site.utc_offset, "-5")
-        self.assertEqual(site.source_metadata["email_domain"], "@Company.com")
-        self.assertEqual(site.source_metadata["grid_code"], "nyc")
+        self.assertEqual(site.email_domain, "@Company.com")
+        self.assertEqual(site.everyone_at, "EveryoneCompanysNYC@Company.com")
+        self.assertEqual(site.vcenter_endpoint, "companyadcvcn4.company.example.corp")
+        self.assertEqual(site.content_library, "abcADC-ContentLibrary")
+        self.assertEqual(site.grid_code, "nyc")
         self.assertEqual(site.public_ranges[0].cidr, "187.127.231.0/27")
-        self.assertEqual(site.public_ranges[0].name, "Direct Internet Access")
+        self.assertEqual(
+            site.public_ranges[0].subnets[0].display_name,
+            "Direct Internet Access",
+        )
         self.assertEqual(site.private_ranges[0].cidr, "192.168.0.0/16")
         self.assertEqual(
-            site.private_ranges[0].source_metadata["dhcp-options"]["domain-name"],
+            site.private_ranges[0].dhcp_options["domain-name"],
             "Company.example.corp",
         )
 
         vlan = site.private_ranges[0].vlans[0]
-        self.assertEqual(vlan.name, "vl16-it-services-static")
-        self.assertEqual(vlan.vlan_tag, 16)
+        self.assertEqual(vlan.vlan_name, "vl16-it-services-static")
+        self.assertEqual(vlan.vlan, 16)
         self.assertEqual(vlan.routing, "core")
         self.assertEqual(vlan.gateway, "192.168.16.1")
         self.assertEqual(vlan.dhcp_start, "192.168.16.130")
         self.assertEqual(vlan.dhcp_end, "192.168.16.150")
-        self.assertEqual(vlan.ip_addresses[0]["ip"], "192.168.16.200")
+        self.assertEqual(vlan.ip_addresses[0].ip, "192.168.16.200")
 
         targets = {
             (target.target_type, target.cidr): target
@@ -294,19 +395,31 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
     def test_invalid_vlan_is_reported_and_not_flattened(self):
         result = load_json_payload(
             {
-                "site_code": "BOS01",
-                "private_ranges": [
-                    {
-                        "cidr": "10.20.0.0/16",
-                        "vlans": [{"name": "bad", "cidr": "10.30.0.0/24"}],
-                    }
-                ],
+                "site_definition": [
+                    _site(
+                        "BOS01",
+                        private_ranges=[
+                            _network_range(
+                                "10.20.0.0",
+                                "/16",
+                                [
+                                    _subnet(
+                                        "vl100-outside",
+                                        100,
+                                        "10.30.0.0",
+                                        "/24",
+                                    )
+                                ],
+                            )
+                        ],
+                    )
+                ]
             }
         )
 
         self.assertTrue(
             any(
-                "outside parent private range" in issue.message
+                "outside parent range" in issue.message
                 for issue in result.validation_issues
             )
         )
@@ -317,12 +430,47 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
     def test_duplicate_and_unexpected_overlap_are_reported(self):
         result = load_json_payload(
             {
-                "sites": [
-                    {"site_code": "ONE", "public_ranges": ["192.0.2.0/25"]},
-                    {
-                        "site_code": "TWO",
-                        "public_ranges": ["192.0.2.0/25", "192.0.2.64/26"],
-                    },
+                "site_definition": [
+                    _site(
+                        "ONE",
+                        public_ranges=[
+                            _network_range(
+                                "192.0.2.0",
+                                "/25",
+                                [
+                                    _subnet(
+                                        "vl100-one",
+                                        100,
+                                        "192.0.2.0",
+                                        "/25",
+                                    )
+                                ],
+                            )
+                        ],
+                    ),
+                    _site(
+                        "TWO",
+                        public_ranges=[
+                            _network_range(
+                                "192.0.2.0",
+                                "/25",
+                                [
+                                    _subnet(
+                                        "vl200-two",
+                                        200,
+                                        "192.0.2.0",
+                                        "/25",
+                                    ),
+                                    _subnet(
+                                        "vl201-overlap",
+                                        201,
+                                        "192.0.2.64",
+                                        "/26",
+                                    ),
+                                ],
+                            )
+                        ],
+                    ),
                 ]
             }
         )
@@ -333,12 +481,25 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
 
     def test_ipv6_is_rejected_during_definition_validation(self):
         result = load_json_payload(
-            {"site_code": "V6", "public_ranges": ["2001:db8::/64"]}
+            {
+                "site_definition": [
+                    _site(
+                        "V6",
+                        public_ranges=[
+                            _network_range(
+                                "2001:db8::",
+                                "/64",
+                                [],
+                            )
+                        ],
+                    )
+                ]
+            }
         )
 
         self.assertEqual(result.coverage_targets, [])
         self.assertTrue(
-            any("IPv6 scope" in issue.message for issue in result.validation_issues)
+            any("uses IPv6" in issue.message for issue in result.validation_issues)
         )
 
 

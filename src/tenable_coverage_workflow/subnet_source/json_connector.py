@@ -2,8 +2,8 @@ from typing import Any
 
 from ..models import SourceLoadResult, ValidationIssue
 from .site_parser import extract_site_objects, parse_site_object
+from .target_builder import build_coverage_targets
 from .validation import add_relationship_issues
-from .yaml_connector import flatten_site_definition
 
 
 def load_json_payload(
@@ -18,9 +18,8 @@ def load_json_payload(
             ValidationIssue(
                 source_file=source_file,
                 message=(
-                    "JSON root must be a site object, a list of sites, or an "
-                    "object containing a 'site_definition', 'sites', "
-                    "'locations', or 'data' list."
+                    "Authoritative data must be an object containing a "
+                    "'site_definition' object or list."
                 ),
             )
         )
@@ -34,7 +33,7 @@ def load_json_payload(
             result.files_failed += 1
             continue
         result.site_definitions.append(definition)
-        targets = flatten_site_definition(definition)
+        targets = build_coverage_targets(definition)
         result.coverage_targets.extend(targets)
         if audit_logger:
             audit_logger.emit(

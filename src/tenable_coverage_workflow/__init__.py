@@ -3,14 +3,14 @@
 from .models import (
     CoverageTarget,
     CoverageValidationResult,
-    NetworkRange,
+    IpAddress,
     PrivateNetworkRange,
     ProposedChange,
+    PublicNetworkRange,
     SiteNetworkDefinition,
     SourceLoadResult,
     ValidationIssue,
     VlanRange,
-    YamlConnectorResult,
 )
 from .service_config import ScheduledServiceConfig
 
@@ -18,15 +18,15 @@ __all__ = [
     "CoverageTarget",
     "CoverageValidationResult",
     "DetectAndPlanConfig",
-    "NetworkRange",
+    "IpAddress",
     "PrivateNetworkRange",
     "ProposedChange",
+    "PublicNetworkRange",
     "ScheduledServiceConfig",
     "SiteNetworkDefinition",
     "SourceLoadResult",
     "ValidationIssue",
     "VlanRange",
-    "YamlConnectorResult",
     "run_detect_and_plan",
 ]
 

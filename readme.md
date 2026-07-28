@@ -211,6 +211,14 @@ Example config files:
 The authoritative source is `rsg_subnet_as_code.get_sites`, which returns complete
 site definitions from the source YAML as JSON.
 
+The supported payload has one `site_definition` object or list. Each site uses
+`site_code`, `site_name`, optional site metadata, `public_ranges`, and
+`private_ranges`. A range contains a `supernet` with `network` and `cidr`, plus
+`subnets`. Each subnet uses `vlan_name`, `display_name`, `vlan`, `network`,
+`subnet_mask`, `cidr`, `gateway`, `routing`, optional DHCP fields, tags, and
+optional individual IP address records. The program validates this stable
+subnet-as-code structure instead of guessing alternate key names or layouts.
+
 Optional source filters:
 
 - `source_reference_id` / `--source-reference-id` / `SUBNET_AS_CODE_REFERENCE_ID`
@@ -229,11 +237,9 @@ with `exclude` to mark it intentionally out of scan scope. The tag is
 case-insensitive. Excluded scope remains visible in the final coverage reports,
 but receives no asset-group or scan proposal and does not affect coverage totals.
 
-The workflow supports payloads containing site data directly or under wrapper
-keys such as `site_definition`, `sites`, `locations`, or `data`. Validation
-rejects IPv6 scope, reports invalid CIDRs/ranges, flags duplicate ranges, and
-warns on unexpected overlaps except for expected private-supernet-to-VLAN
-containment.
+Validation rejects IPv6 scope, reports invalid CIDRs and subnet-mask mismatches,
+flags duplicate ranges, and warns on unexpected overlaps except for expected
+private-supernet-to-VLAN containment.
 
 ## Scan Filtering
 

@@ -2,175 +2,74 @@ import ipaddress
 from typing import Any
 
 from ..models import (
-    NetworkRange,
+    IpAddress,
     PrivateNetworkRange,
+    PublicNetworkRange,
     SiteNetworkDefinition,
     ValidationIssue,
     VlanRange,
 )
 
-# Source definitions can use several field names. This module turns those
-# variations into one consistent site, network, and VLAN model.
+# subnet-as-code returns one stable payload shape. Keep the source boundary
+# strict so schema changes are found during validation instead of guessed at.
 
 
-def extract_site_objects(payload: Any) -> list[Any] | None:
-    """Extract site objects"""
-    if isinstance(payload, list):
-        return payload
+def extract_site_objects(payload: Any) -> list[dict[str, Any]] | None:
+    """Return the site_definition records from a subnet-as-code payload"""
     if not isinstance(payload, dict):
         return None
 
     site_definition = payload.get("site_definition")
-    if isinstance(site_definition, list):
-        return site_definition
     if isinstance(site_definition, dict):
         return [site_definition]
-
-    for key in ("sites", "locations", "data", "items"):
-        value = payload.get(key)
-        if isinstance(value, list):
-            return value
-        if isinstance(value, dict):
-            nested_site_definition = value.get("site_definition")
-            if isinstance(nested_site_definition, list):
-                return nested_site_definition
-            if isinstance(nested_site_definition, dict):
-                return [nested_site_definition]
-            for nested_key in ("sites", "locations", "items", "data"):
-                nested = value.get(nested_key)
-                if isinstance(nested, list):
-                    return nested
-    return [payload]
+    if isinstance(site_definition, list) and all(
+        isinstance(item, dict) for item in site_definition
+    ):
+        return site_definition
+    return None
 
 
 def parse_site_object(
-    raw: Any, source_file: str
+    raw: dict[str, Any], source_file: str
 ) -> tuple[SiteNetworkDefinition | None, list[ValidationIssue]]:
-    """Parse site object"""
+    """Parse one subnet-as-code site_definition record"""
     issues: list[ValidationIssue] = []
-    if not isinstance(raw, dict):
-        return None, [ValidationIssue(source_file, "Site entry must be an object.")]
-
-    # Accept common source aliases before validating the required fields.
-    site_code = _text(raw.get("site_code") or raw.get("code"))
-    if not site_code:
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                message="site_code is required.",
-                field_name="site_code",
-            )
-        )
+    site_code = _required_text(raw, "site_code", source_file, None, issues)
+    site_name = _required_text(raw, "site_name", source_file, site_code, issues)
+    if not site_code or not site_name:
         return None, issues
 
-    site_name = _text(raw.get("site_name") or raw.get("name")) or site_code
-
-    public_ranges: list[NetworkRange] = []
-    # A source can provide a single block or a list of blocks under either name.
-    for index, value in enumerate(
-        _as_list(
-            raw.get(
-                "public_ranges",
-                raw.get("public_networks", raw.get("public_network_definition")),
-            )
-        )
-    ):
-        public_ranges.extend(
-            _parse_public_ranges(
-                value,
-                source_file=source_file,
-                site_code=site_code,
-                field_name=f"public_ranges[{index}]",
-                issues=issues,
-            )
-        )
-
-    private_ranges: list[PrivateNetworkRange] = []
-    for index, value in enumerate(
-        _as_list(
-            raw.get(
-                "private_ranges",
-                raw.get("private_networks", raw.get("private_network_definition")),
-            )
-        )
-    ):
-        private_ranges.extend(
-            _parse_private_ranges(
-                value,
-                source_file=source_file,
-                site_code=site_code,
-                field_name=f"private_ranges[{index}]",
-                issues=issues,
-            )
-        )
-
+    public_ranges = _parse_public_ranges(
+        raw.get("public_ranges", []), source_file, site_code, issues
+    )
+    private_ranges = _parse_private_ranges(
+        raw.get("private_ranges", []), source_file, site_code, issues
+    )
     if not public_ranges and not private_ranges:
         issues.append(
             ValidationIssue(
                 source_file=source_file,
                 site_code=site_code,
-                message="Site contains no valid network ranges.",
+                message="Site contains no valid public or private ranges.",
             )
         )
         return None, issues
 
-    tags = _coerce_tags(
-        raw.get("tags"),
-        source_file=source_file,
-        site_code=site_code,
-        field_name="tags",
-        issues=issues,
-    )
-    classification = raw.get("scan_classification", raw.get("scan_metadata", {}))
-    if not isinstance(classification, dict):
-        classification = {"value": classification}
-
     return (
         SiteNetworkDefinition(
             source_file=source_file,
-            site_name=site_name,
             site_code=site_code,
-            description=_optional(raw.get("description")),
-            location=_optional(raw.get("location")),
-            region=_optional(raw.get("region")),
-            timezone=_optional(raw.get("timezone")),
-            site_type=_optional(raw.get("site_type")),
-            utc_offset=_optional(raw.get("utc_offset")),
-            tags=tags,
-            environment=_optional(raw.get("environment")),
-            business_function=_optional(
-                raw.get("business_function") or raw.get("function")
-            ),
-            scan_classification=classification,
+            site_name=site_name,
+            site_type=_optional_text(raw.get("site_type")),
+            email_domain=_optional_text(raw.get("email_domain")),
+            everyone_at=_optional_text(raw.get("everyone_at")),
+            vcenter_endpoint=_optional_text(raw.get("vcenter_endpoint")),
+            content_library=_optional_text(raw.get("content_library")),
+            timezone=_optional_text(raw.get("timezone")),
+            utc_offset=_optional_text(raw.get("utc_offset")),
+            grid_code=_optional_text(raw.get("grid_code")),
             public_ranges=public_ranges,
             private_ranges=private_ranges,
-            source_metadata=_source_metadata(
-                raw,
-                {
-                    "site_code",
-                    "code",
-                    "site_name",
-                    "name",
-                    "description",
-                    "location",
-                    "region",
-                    "timezone",
-                    "site_type",
-                    "utc_offset",
-                    "tags",
-                    "environment",
-                    "business_function",
-                    "function",
-                    "scan_classification",
-                    "scan_metadata",
-                    "public_ranges",
-                    "public_networks",
-                    "public_network_definition",
-                    "private_ranges",
-                    "private_networks",
-                    "private_network_definition",
-                },
-            ),
         ),
         issues,
     )
@@ -180,532 +79,415 @@ def _parse_public_ranges(
     value: Any,
     source_file: str,
     site_code: str,
-    field_name: str,
     issues: list[ValidationIssue],
-) -> list[NetworkRange]:
-    """Parse public ranges"""
-    if isinstance(value, dict) and isinstance(value.get("subnets"), list):
-        ranges: list[NetworkRange] = []
-        for index, subnet in enumerate(value["subnets"]):
-            ranges.extend(
-                _parse_network_blocks(
-                    subnet,
-                    source_file=source_file,
-                    site_code=site_code,
-                    field_name=f"{field_name}.subnets[{index}]",
-                    issues=issues,
-                    default_name_keys=("display_name", "vlan_name", "name"),
-                    default_description_keys=("description", "display_name"),
+) -> list[PublicNetworkRange]:
+    """Parse the public_ranges records for one site"""
+    ranges: list[PublicNetworkRange] = []
+    for index, raw_range in enumerate(
+        _required_list(value, "public_ranges", source_file, site_code, issues)
+    ):
+        field_name = f"public_ranges[{index}]"
+        if not isinstance(raw_range, dict):
+            _issue(issues, source_file, site_code, field_name, "must be an object.")
+            continue
+        cidr = _parse_network(
+            raw_range.get("supernet"),
+            source_file,
+            site_code,
+            f"{field_name}.supernet",
+            issues,
+        )
+        subnets = _parse_subnets(
+            raw_range.get("subnets"), source_file, site_code, field_name, issues
+        )
+        if not cidr or not subnets:
+            continue
+        subnets = _contained_subnets(
+            cidr, subnets, source_file, site_code, field_name, issues
+        )
+        if subnets:
+            ranges.append(
+                PublicNetworkRange(
+                    cidr=cidr,
+                    tags=_parse_tags(
+                        raw_range.get("tags"),
+                        source_file,
+                        site_code,
+                        f"{field_name}.tags",
+                        issues,
+                    ),
+                    subnets=subnets,
                 )
             )
-        if ranges:
-            return ranges
-
-    if isinstance(value, dict) and value.get("supernet") is not None:
-        return _parse_network_blocks(
-            value.get("supernet"),
-            source_file=source_file,
-            site_code=site_code,
-            field_name=f"{field_name}.supernet",
-            issues=issues,
-        )
-    return _parse_network_blocks(
-        value,
-        source_file=source_file,
-        site_code=site_code,
-        field_name=field_name,
-        issues=issues,
-    )
+    return ranges
 
 
 def _parse_private_ranges(
     value: Any,
     source_file: str,
     site_code: str,
-    field_name: str,
     issues: list[ValidationIssue],
 ) -> list[PrivateNetworkRange]:
-    """Parse private ranges"""
-    outer_tags: list[str] = []
-    outer_metadata: dict[str, object] = {}
-    if isinstance(value, dict) and value.get("supernet") is not None:
-        parent_input = value.get("supernet")
-        raw_vlans = value.get("vlans", value.get("subnets", []))
-        outer_tags = _coerce_tags(
-            value.get("tags"),
-            source_file=source_file,
-            site_code=site_code,
-            field_name=f"{field_name}.tags",
-            issues=issues,
+    """Parse the private_ranges records for one site"""
+    ranges: list[PrivateNetworkRange] = []
+    for index, raw_range in enumerate(
+        _required_list(value, "private_ranges", source_file, site_code, issues)
+    ):
+        field_name = f"private_ranges[{index}]"
+        if not isinstance(raw_range, dict):
+            _issue(issues, source_file, site_code, field_name, "must be an object.")
+            continue
+        cidr = _parse_network(
+            raw_range.get("supernet"),
+            source_file,
+            site_code,
+            f"{field_name}.supernet",
+            issues,
         )
-        outer_metadata = _source_metadata(
-            value,
-            {"supernet", "vlans", "subnets", "tags"},
+        vlans = _parse_subnets(
+            raw_range.get("subnets"), source_file, site_code, field_name, issues
         )
-    else:
-        parent_input = value
-        raw_vlans = value.get("vlans", []) if isinstance(value, dict) else []
-
-    if raw_vlans is None:
-        raw_vlans = []
-    if not isinstance(raw_vlans, list):
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                site_code=site_code,
-                field_name=f"{field_name}.vlans",
-                message=f"{field_name}.vlans must be a list.",
-            )
-        )
-        raw_vlans = []
-
-    parent_ranges = _parse_network_blocks(
-        parent_input,
-        source_file=source_file,
-        site_code=site_code,
-        field_name=(
-            f"{field_name}.supernet"
-            if isinstance(value, dict) and value.get("supernet") is not None
-            else field_name
-        ),
-        issues=issues,
-    )
-
-    private_ranges: list[PrivateNetworkRange] = []
-    for parent in parent_ranges:
-        parent_network = ipaddress.ip_network(parent.cidr, strict=False)
-        vlans: list[VlanRange] = []
-        for index, raw_vlan in enumerate(raw_vlans):
-            vlan_field = f"{field_name}.vlans[{index}]"
-            for vlan in _parse_vlan_blocks(
-                raw_vlan,
-                source_file=source_file,
-                site_code=site_code,
-                field_name=vlan_field,
-                issues=issues,
-            ):
-                vlan_network = ipaddress.ip_network(vlan.cidr, strict=False)
-                if isinstance(parent_network, ipaddress.IPv4Network) and isinstance(
-                    vlan_network, ipaddress.IPv4Network
-                ):
-                    vlan_is_child = vlan_network.subnet_of(parent_network)
-                elif isinstance(parent_network, ipaddress.IPv6Network) and isinstance(
-                    vlan_network, ipaddress.IPv6Network
-                ):
-                    vlan_is_child = vlan_network.subnet_of(parent_network)
-                else:
-                    vlan_is_child = False
-                if not vlan_is_child:
-                    issues.append(
-                        ValidationIssue(
-                            source_file=source_file,
-                            site_code=site_code,
-                            field_name=vlan_field,
-                            message=(
-                                f"VLAN CIDR {vlan.cidr} is outside parent private "
-                                f"range {parent.cidr}."
-                            ),
-                        )
-                    )
-                    continue
-                vlans.append(vlan)
-
-        private_ranges.append(
+        if not cidr:
+            continue
+        ranges.append(
             PrivateNetworkRange(
-                name=parent.name,
-                description=parent.description,
-                cidr=parent.cidr,
-                network=parent.network,
-                prefix_length=parent.prefix_length,
-                subnetmask=parent.subnetmask,
-                tags=_merge_tags(parent.tags, outer_tags),
-                source_metadata={**outer_metadata, **parent.source_metadata},
-                vlans=vlans,
+                cidr=cidr,
+                tags=_parse_tags(
+                    raw_range.get("tags"),
+                    source_file,
+                    site_code,
+                    f"{field_name}.tags",
+                    issues,
+                ),
+                dhcp_options=_parse_dhcp_options(
+                    raw_range.get("dhcp-options"),
+                    source_file,
+                    site_code,
+                    f"{field_name}.dhcp-options",
+                    issues,
+                ),
+                vlans=_contained_subnets(
+                    cidr, vlans, source_file, site_code, field_name, issues
+                ),
             )
         )
-    return private_ranges
+    return ranges
 
 
-def _parse_vlan_blocks(
+def _parse_subnets(
     value: Any,
+    source_file: str,
+    site_code: str,
+    parent_field: str,
+    issues: list[ValidationIssue],
+) -> list[VlanRange]:
+    """Parse the subnets list used for public and private VLAN records"""
+    subnets: list[VlanRange] = []
+    field_name = f"{parent_field}.subnets"
+    for index, raw_subnet in enumerate(
+        _required_list(value, field_name, source_file, site_code, issues)
+    ):
+        item_field = f"{field_name}[{index}]"
+        if not isinstance(raw_subnet, dict):
+            _issue(issues, source_file, site_code, item_field, "must be an object.")
+            continue
+        vlan_name = _required_text(
+            raw_subnet, "vlan_name", source_file, site_code, issues, item_field
+        )
+        cidr = _parse_network(raw_subnet, source_file, site_code, item_field, issues)
+        vlan = _parse_vlan_number(
+            raw_subnet.get("vlan"),
+            source_file,
+            site_code,
+            f"{item_field}.vlan",
+            issues,
+        )
+        if not vlan_name or not cidr:
+            continue
+        _validate_subnet_mask(
+            raw_subnet.get("subnet_mask"),
+            cidr,
+            source_file,
+            site_code,
+            f"{item_field}.subnet_mask",
+            issues,
+        )
+        subnets.append(
+            VlanRange(
+                vlan_name=vlan_name,
+                display_name=_optional_text(raw_subnet.get("display_name")),
+                vlan=vlan,
+                cidr=cidr,
+                gateway=_optional_text(raw_subnet.get("gateway")),
+                routing=_optional_text(raw_subnet.get("routing")),
+                dhcp_start=_optional_text(raw_subnet.get("dhcp-start")),
+                dhcp_end=_optional_text(raw_subnet.get("dhcp-end")),
+                tags=_parse_tags(
+                    raw_subnet.get("tags"),
+                    source_file,
+                    site_code,
+                    f"{item_field}.tags",
+                    issues,
+                ),
+                ip_addresses=_parse_ip_addresses(
+                    raw_subnet.get("ip_addresses"),
+                    source_file,
+                    site_code,
+                    f"{item_field}.ip_addresses",
+                    issues,
+                ),
+            )
+        )
+    return subnets
+
+
+def _parse_network(
+    value: Any,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> str | None:
+    """Build a canonical IPv4 CIDR from network and cidr fields"""
+    if not isinstance(value, dict):
+        _issue(issues, source_file, site_code, field_name, "must be an object.")
+        return None
+    network = _required_text(
+        value, "network", source_file, site_code, issues, field_name
+    )
+    prefix = _required_text(
+        value, "cidr", source_file, site_code, issues, field_name
+    )
+    if not network or not prefix:
+        return None
+    try:
+        parsed = ipaddress.ip_network(
+            f"{network}/{prefix.lstrip('/')}".strip(), strict=False
+        )
+    except ValueError as exc:
+        _issue(
+            issues,
+            source_file,
+            site_code,
+            field_name,
+            f"has an invalid CIDR: {exc}",
+        )
+        return None
+    if parsed.version != 4:
+        _issue(
+            issues,
+            source_file,
+            site_code,
+            field_name,
+            "uses IPv6, which is unsupported.",
+        )
+        return None
+    return str(parsed)
+
+
+def _parse_vlan_number(
+    value: Any,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> int | None:
+    """Read an optional numeric VLAN identifier"""
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        _issue(issues, source_file, site_code, field_name, "must be a number.")
+        return None
+
+
+def _parse_ip_addresses(
+    value: Any,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> list[IpAddress]:
+    """Parse IP address records attached to one VLAN"""
+    if value is None:
+        return []
+    records: list[IpAddress] = []
+    for index, raw_address in enumerate(
+        _required_list(value, field_name, source_file, site_code, issues)
+    ):
+        item_field = f"{field_name}[{index}]"
+        if not isinstance(raw_address, dict):
+            _issue(issues, source_file, site_code, item_field, "must be an object.")
+            continue
+        address = _required_text(
+            raw_address, "ip", source_file, site_code, issues, item_field
+        )
+        if not address:
+            continue
+        try:
+            parsed = ipaddress.ip_address(address)
+        except ValueError as exc:
+            _issue(
+                issues,
+                source_file,
+                site_code,
+                item_field,
+                f"has an invalid IP: {exc}",
+            )
+            continue
+        if parsed.version != 4:
+            _issue(
+                issues,
+                source_file,
+                site_code,
+                item_field,
+                "uses IPv6, which is unsupported.",
+            )
+            continue
+        records.append(
+            IpAddress(
+                ip=str(parsed),
+                name=_optional_text(raw_address.get("name")),
+                tags=_parse_tags(
+                    raw_address.get("tags"),
+                    source_file,
+                    site_code,
+                    f"{item_field}.tags",
+                    issues,
+                ),
+            )
+        )
+    return records
+
+
+def _contained_subnets(
+    parent_cidr: str,
+    subnets: list[VlanRange],
     source_file: str,
     site_code: str,
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[VlanRange]:
-    """Parse vlan blocks"""
-    name = ""
-    vlan_tag = None
-    routing = None
-    gateway = None
-    dhcp_start = None
-    dhcp_end = None
-    ip_addresses: list[dict[str, object]] = []
-    tags: list[str] = []
-    metadata: dict[str, object] = {}
-
-    if isinstance(value, dict):
-        name = _text(
-            value.get("name") or value.get("vlan_name") or value.get("display_name")
-        )
-        vlan_tag = value.get("vlan_id", value.get("vlan_tag", value.get("vlan")))
-        routing = _optional(value.get("routing"))
-        gateway = _optional(value.get("gateway"))
-        dhcp_start = _optional(value.get("dhcp-start") or value.get("dhcp_start"))
-        dhcp_end = _optional(value.get("dhcp-end") or value.get("dhcp_end"))
-        tags = _coerce_tags(
-            value.get("tags"),
-            source_file=source_file,
-            site_code=site_code,
-            field_name=f"{field_name}.tags",
-            issues=issues,
-        )
-        ip_addresses = _coerce_ip_addresses(
-            value.get("ip_addresses"),
-            source_file=source_file,
-            site_code=site_code,
-            field_name=f"{field_name}.ip_addresses",
-            issues=issues,
-        )
-        metadata = _source_metadata(
-            value,
-            {
-                "name",
-                "vlan_name",
-                "display_name",
-                "vlan",
-                "vlan_id",
-                "vlan_tag",
-                "description",
-                "network",
-                "cidr",
-                "cidr_value",
-                "range",
-                "scope",
-                "subnet_mask",
-                "subnetmask",
-                "routing",
-                "gateway",
-                "dhcp-start",
-                "dhcp_start",
-                "dhcp-end",
-                "dhcp_end",
-                "tags",
-                "ip_addresses",
-            },
-        )
-
-    # Parse the VLAN network separately so one VLAN can contain multiple ranges.
-    parsed_ranges = _parse_network_blocks(
-        value,
-        source_file=source_file,
-        site_code=site_code,
-        field_name=field_name,
-        issues=issues,
-        default_name_keys=("name", "vlan_name", "display_name"),
-        default_description_keys=("description", "display_name"),
-    )
-    if not name:
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                site_code=site_code,
-                field_name=field_name,
-                message=f"{field_name} must include a VLAN name.",
-            )
-        )
-        return []
-
-    vlans: list[VlanRange] = []
-    for parsed in parsed_ranges:
-        vlans.append(
-            VlanRange(
-                name=name,
-                vlan_tag=vlan_tag,
-                description=parsed.description,
-                cidr=parsed.cidr,
-                network=parsed.network,
-                prefix_length=parsed.prefix_length,
-                subnetmask=parsed.subnetmask,
-                tags=tags,
-                routing=routing,
-                gateway=gateway,
-                dhcp_start=dhcp_start,
-                dhcp_end=dhcp_end,
-                ip_addresses=ip_addresses,
-                source_metadata=metadata,
-            )
-        )
-    return vlans
-
-
-def _parse_network_blocks(
-    value: Any,
-    source_file: str,
-    site_code: str,
-    field_name: str,
-    issues: list[ValidationIssue],
-    default_name_keys: tuple[str, ...] = ("name",),
-    default_description_keys: tuple[str, ...] = ("description",),
-) -> list[NetworkRange]:
-    """Parse network blocks"""
-    block = value if isinstance(value, dict) else {}
-    scope = _extract_scope(block, value)
-    scope_label = _scope_label(block)
-    if not scope:
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                site_code=site_code,
-                field_name=field_name,
-                message=f"{field_name} must contain a CIDR or IP range.",
-            )
-        )
-        return []
-
-    try:
-        networks = _parse_scope(scope)
-    except ValueError as exc:
-        if "IPv6 is not supported" in str(exc):
-            issues.append(
-                ValidationIssue(
-                    source_file=source_file,
-                    site_code=site_code,
-                    field_name=field_name,
-                    message=(
-                        f"IPv6 scope '{scope}' is not supported by Tenable "
-                        "scope analysis."
-                    ),
-                )
-            )
-            return []
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                site_code=site_code,
-                field_name=field_name,
-                message=(
-                    f"Invalid CIDR '{scope}': {exc}"
-                    if scope_label == "CIDR"
-                    else f"Invalid network scope '{scope}': {exc}"
-                ),
-            )
-        )
-        return []
-
-    tags = _coerce_tags(
-        block.get("tags"),
-        source_file=source_file,
-        site_code=site_code,
-        field_name=f"{field_name}.tags",
-        issues=issues,
-    )
-    name = _first_text(block, default_name_keys)
-    description = _first_text(block, default_description_keys)
-
-    metadata = _source_metadata(
-        block,
-        {
-            "name",
-            "vlan_name",
-            "display_name",
-            "description",
-            "network",
-            "cidr",
-            "cidr_value",
-            "range",
-            "scope",
-            "ip",
-            "address",
-            "subnet_mask",
-            "subnetmask",
-            "tags",
-            "supernet",
-            "subnets",
-        },
-    )
-
-    return [
-        NetworkRange(
-            name=name or None,
-            description=description or None,
-            cidr=str(network),
-            network=str(network.network_address),
-            prefix_length=network.prefixlen,
-            subnetmask=str(network.netmask),
-            tags=list(tags),
-            source_metadata=dict(metadata),
-        )
-        for network in networks
-    ]
-
-
-def _extract_scope(block: dict[str, Any], value: Any) -> str | None:
-    """Extract scope"""
-    if isinstance(value, str):
-        return value.strip()
-
-    direct_cidr = _text(block.get("cidr"))
-    if direct_cidr and "/" in direct_cidr and not block.get("network"):
-        return direct_cidr
-
-    network = _text(block.get("network"))
-    cidr = _text(block.get("cidr"))
-    if network and cidr:
-        return f"{network}/{cidr.lstrip('/')}"
-
-    subnetmask = _text(block.get("subnet_mask") or block.get("subnetmask"))
-    if network and subnetmask:
-        return f"{network}/{subnetmask}"
-
-    for key in ("cidr_value", "range", "scope", "ip", "address"):
-        text = _text(block.get(key))
-        if text:
-            return text
-    return None
-
-
-def _scope_label(block: dict[str, Any]) -> str:
-    """Describe label"""
-    has_network = bool(_text(block.get("network")))
-    has_prefix = bool(_text(block.get("cidr")))
-    has_mask = bool(_text(block.get("subnet_mask") or block.get("subnetmask")))
-    return "CIDR" if has_network and (has_prefix or has_mask) else "network scope"
-
-
-def _parse_scope(scope: str) -> list[ipaddress.IPv4Network]:
-    """Parse scope"""
-    text = str(scope).strip()
-    if "-" in text:
-        start_text, end_text = text.split("-", 1)
-        start = ipaddress.ip_address(start_text.strip())
-        end = ipaddress.ip_address(end_text.strip())
-        if start.version != 4 or end.version != 4:
-            raise ValueError("IPv6 is not supported")
-        return list(ipaddress.summarize_address_range(start, end))
-
-    network = ipaddress.ip_network(text, strict=False)
-    if network.version != 4:
-        raise ValueError("IPv6 is not supported")
-    return [network]
-
-
-def _coerce_ip_addresses(
-    value: Any,
-    source_file: str,
-    site_code: str,
-    field_name: str,
-    issues: list[ValidationIssue],
-) -> list[dict[str, object]]:
-    """Turn IP address input into a list of address records"""
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        issues.append(
-            ValidationIssue(
-                source_file=source_file,
-                site_code=site_code,
-                field_name=field_name,
-                message=f"{field_name} must be a list.",
-            )
-        )
-        return []
-
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(value):
-        if not isinstance(entry, dict):
-            issues.append(
-                ValidationIssue(
-                    source_file=source_file,
-                    site_code=site_code,
-                    field_name=f"{field_name}[{index}]",
-                    message=f"{field_name}[{index}] must be an object.",
-                )
-            )
+    """Keep only VLANs contained by their public or private supernet"""
+    parent = ipaddress.ip_network(parent_cidr)
+    contained: list[VlanRange] = []
+    for subnet in subnets:
+        if ipaddress.ip_network(subnet.cidr).subnet_of(parent):
+            contained.append(subnet)
             continue
-        record = {str(key): entry[key] for key in entry}
-        record_tags = record.get("tags")
-        if record_tags is not None:
-            record["tags"] = _coerce_tags(
-                record_tags,
-                source_file=source_file,
-                site_code=site_code,
-                field_name=f"{field_name}[{index}].tags",
-                issues=issues,
-            )
-        records.append(record)
-    return records
+        _issue(
+            issues,
+            source_file,
+            site_code,
+            field_name,
+            f"VLAN CIDR {subnet.cidr} is outside parent range {parent_cidr}.",
+        )
+    return contained
 
 
-def _coerce_tags(
+def _validate_subnet_mask(
+    value: Any,
+    cidr: str,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> None:
+    """Report a subnet mask that disagrees with the supplied CIDR"""
+    subnet_mask = _optional_text(value)
+    if subnet_mask and subnet_mask != str(ipaddress.ip_network(cidr).netmask):
+        _issue(
+            issues,
+            source_file,
+            site_code,
+            field_name,
+            f"does not match CIDR {cidr}.",
+        )
+
+
+def _parse_dhcp_options(
+    value: Any,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> dict[str, object]:
+    """Copy the optional dhcp-options mapping from a private range"""
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return {str(key): raw_value for key, raw_value in value.items()}
+    _issue(issues, source_file, site_code, field_name, "must be an object.")
+    return {}
+
+
+def _parse_tags(
     value: Any,
     source_file: str,
     site_code: str,
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[str]:
-    """Turn tag input into a list of tag names"""
+    """Read tags from their one supported list format"""
     if value is None:
         return []
-    if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
+    if not isinstance(value, list):
+        _issue(issues, source_file, site_code, field_name, "must be a list.")
+        return []
+    return [str(tag).strip() for tag in value if str(tag).strip()]
+
+
+def _required_list(
+    value: Any,
+    field_name: str,
+    source_file: str,
+    site_code: str,
+    issues: list[ValidationIssue],
+) -> list[Any]:
+    """Return a source list or record a validation issue"""
     if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
+        return value
+    _issue(issues, source_file, site_code, field_name, "must be a list.")
+    return []
+
+
+def _required_text(
+    value: dict[str, Any],
+    key: str,
+    source_file: str,
+    site_code: str | None,
+    issues: list[ValidationIssue],
+    parent_field: str = "",
+) -> str | None:
+    """Return a required text field or record a validation issue"""
+    text = _optional_text(value.get(key))
+    if text:
+        return text
+    field_name = f"{parent_field}.{key}" if parent_field else key
+    _issue(issues, source_file, site_code, field_name, "is required.")
+    return None
+
+
+def _optional_text(value: Any) -> str | None:
+    """Convert an optional scalar source value to text"""
+    text = "" if value is None else str(value).strip()
+    return text or None
+
+
+def _issue(
+    issues: list[ValidationIssue],
+    source_file: str,
+    site_code: str | None,
+    field_name: str,
+    message: str,
+) -> None:
+    """Add one source validation issue"""
     issues.append(
         ValidationIssue(
             source_file=source_file,
             site_code=site_code,
             field_name=field_name,
-            message=f"{field_name} must be a list or comma-separated string.",
+            message=f"{field_name} {message}",
         )
     )
-    return []
-
-
-def _merge_tags(*values: list[str]) -> list[str]:
-    """Merge tags"""
-    result: list[str] = []
-    for tags in values:
-        for tag in tags:
-            normalized = str(tag).strip()
-            if normalized and normalized not in result:
-                result.append(normalized)
-    return result
-
-
-def _source_metadata(value: Any, consumed_keys: set[str]) -> dict[str, object]:
-    """Keep source fields that the parser did not use"""
-    if not isinstance(value, dict):
-        return {}
-    return {
-        str(key): raw_value
-        for key, raw_value in value.items()
-        if str(key) not in consumed_keys
-    }
-
-
-def _as_list(value: Any) -> list[Any]:
-    """Convert to list"""
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
-
-
-def _first_text(block: dict[str, Any], keys: tuple[str, ...]) -> str:
-    """Return the first non-empty text value for these keys"""
-    for key in keys:
-        text = _text(block.get(key))
-        if text:
-            return text
-    return ""
-
-
-def _text(value: Any) -> str:
-    """Convert a value to trimmed text"""
-    return "" if value is None else str(value).strip()
-
-
-def _optional(value: Any) -> str | None:
-    """Get an optional the requested value"""
-    text = _text(value)
-    return text or None

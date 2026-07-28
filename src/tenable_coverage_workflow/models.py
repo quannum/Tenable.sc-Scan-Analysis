@@ -9,58 +9,56 @@ class GroupingConfig:
 
 
 @dataclass(frozen=True)
-class NetworkRange:
-    name: str | None
-    description: str | None
-    cidr: str
-    network: str
-    prefix_length: int
-    subnetmask: str | None
+class IpAddress:
+    ip: str
+    name: str | None = None
     tags: list[str] = field(default_factory=list)
-    source_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class VlanRange:
-    name: str
-    vlan_tag: str | int | None
-    description: str | None
+    vlan_name: str
+    display_name: str | None
+    vlan: int | None
     cidr: str
-    network: str
-    prefix_length: int
-    subnetmask: str | None
-    tags: list[str] = field(default_factory=list)
-    routing: str | None = None
     gateway: str | None = None
+    routing: str | None = None
     dhcp_start: str | None = None
     dhcp_end: str | None = None
-    ip_addresses: list[dict[str, object]] = field(default_factory=list)
-    source_metadata: dict[str, object] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    ip_addresses: list[IpAddress] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
-class PrivateNetworkRange(NetworkRange):
+class PublicNetworkRange:
+    cidr: str
+    tags: list[str] = field(default_factory=list)
+    subnets: list[VlanRange] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PrivateNetworkRange:
+    cidr: str
+    tags: list[str] = field(default_factory=list)
+    dhcp_options: dict[str, object] = field(default_factory=dict)
     vlans: list[VlanRange] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class SiteNetworkDefinition:
     source_file: str
-    site_name: str
     site_code: str
-    description: str | None
-    location: str | None
-    region: str | None
-    timezone: str | None = None
+    site_name: str
     site_type: str | None = None
+    email_domain: str | None = None
+    everyone_at: str | None = None
+    vcenter_endpoint: str | None = None
+    content_library: str | None = None
+    timezone: str | None = None
     utc_offset: str | None = None
-    tags: list[str] = field(default_factory=list)
-    environment: str | None = None
-    business_function: str | None = None
-    scan_classification: dict[str, object] = field(default_factory=dict)
-    public_ranges: list[NetworkRange] = field(default_factory=list)
+    grid_code: str | None = None
+    public_ranges: list[PublicNetworkRange] = field(default_factory=list)
     private_ranges: list[PrivateNetworkRange] = field(default_factory=list)
-    source_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -101,10 +99,6 @@ class SourceLoadResult:
     validation_issues: list[ValidationIssue] = field(default_factory=list)
     files_processed: int = 0
     files_failed: int = 0
-
-
-# Historical compatibility alias from when authoritative inputs were YAML-centric.
-YamlConnectorResult = SourceLoadResult
 
 
 @dataclass(frozen=True)
