@@ -1,6 +1,7 @@
 import ipaddress
 from typing import Any
 
+from ...core.scope_utils import parse_scope_item, scope_contains
 from ..models import (
     IpAddress,
     PrivateNetworkRange,
@@ -88,23 +89,39 @@ def _parse_public_ranges(
     ):
         field_name = f"public_ranges[{index}]"
         if not isinstance(raw_range, dict):
-            _issue(issues, source_file, site_code, field_name, "must be an object.")
+            cidr = _parse_network(
+                raw_range, source_file, site_code, field_name, issues
+            )
+            if cidr:
+                ranges.append(
+                    PublicNetworkRange(
+                        cidr=cidr,
+                        subnets=[_synthetic_subnet(cidr, "Public Range")],
+                    )
+                )
             continue
         cidr = _parse_network(
-            raw_range.get("supernet"),
+            raw_range.get("supernet", raw_range),
             source_file,
             site_code,
             f"{field_name}.supernet",
             issues,
         )
-        subnets = _parse_subnets(
-            raw_range.get("subnets"), source_file, site_code, field_name, issues
+        subnets = (
+            _parse_subnets(
+                _subnet_records(raw_range), source_file, site_code, field_name, issues
+            )
+            if _has_subnet_records(raw_range)
+            else []
         )
-        if not cidr or not subnets:
+        if not cidr:
             continue
-        subnets = _contained_subnets(
-            cidr, subnets, source_file, site_code, field_name, issues
-        )
+        if subnets:
+            subnets = _contained_subnets(
+                cidr, subnets, source_file, site_code, field_name, issues
+            )
+        else:
+            subnets = [_synthetic_subnet(cidr, _optional_text(raw_range.get("name")))]
         if subnets:
             ranges.append(
                 PublicNetworkRange(
@@ -135,17 +152,25 @@ def _parse_private_ranges(
     ):
         field_name = f"private_ranges[{index}]"
         if not isinstance(raw_range, dict):
-            _issue(issues, source_file, site_code, field_name, "must be an object.")
+            cidr = _parse_network(
+                raw_range, source_file, site_code, field_name, issues
+            )
+            if cidr:
+                ranges.append(PrivateNetworkRange(cidr=cidr))
             continue
         cidr = _parse_network(
-            raw_range.get("supernet"),
+            raw_range.get("supernet", raw_range),
             source_file,
             site_code,
             f"{field_name}.supernet",
             issues,
         )
-        vlans = _parse_subnets(
-            raw_range.get("subnets"), source_file, site_code, field_name, issues
+        vlans = (
+            _parse_subnets(
+                _subnet_records(raw_range), source_file, site_code, field_name, issues
+            )
+            if _has_subnet_records(raw_range)
+            else []
         )
         if not cidr:
             continue
@@ -189,14 +214,23 @@ def _parse_subnets(
     ):
         item_field = f"{field_name}[{index}]"
         if not isinstance(raw_subnet, dict):
-            _issue(issues, source_file, site_code, item_field, "must be an object.")
+            cidr = _parse_network(
+                raw_subnet, source_file, site_code, item_field, issues
+            )
+            if cidr:
+                subnets.append(_synthetic_subnet(cidr, None))
             continue
-        vlan_name = _required_text(
-            raw_subnet, "vlan_name", source_file, site_code, issues, item_field
+        vlan_name = _required_text_any(
+            raw_subnet,
+            ("vlan_name", "name"),
+            source_file,
+            site_code,
+            issues,
+            item_field,
         )
         cidr = _parse_network(raw_subnet, source_file, site_code, item_field, issues)
         vlan = _parse_vlan_number(
-            raw_subnet.get("vlan"),
+            _first_value(raw_subnet, "vlan", "vlan_id", "vlan_tag"),
             source_file,
             site_code,
             f"{item_field}.vlan",
@@ -215,7 +249,10 @@ def _parse_subnets(
         subnets.append(
             VlanRange(
                 vlan_name=vlan_name,
-                display_name=_optional_text(raw_subnet.get("display_name")),
+                display_name=(
+                    _optional_text(raw_subnet.get("display_name"))
+                    or _optional_text(raw_subnet.get("name"))
+                ),
                 vlan=vlan,
                 cidr=cidr,
                 gateway=_optional_text(raw_subnet.get("gateway")),
@@ -249,9 +286,18 @@ def _parse_network(
     issues: list[ValidationIssue],
 ) -> str | None:
     """Build a canonical IPv4 CIDR from network and cidr fields"""
+    if isinstance(value, str):
+        return _parse_scope_text(value, source_file, site_code, field_name, issues)
     if not isinstance(value, dict):
         _issue(issues, source_file, site_code, field_name, "must be an object.")
         return None
+    if "network" not in value and "cidr" in value:
+        cidr = _required_text(
+            value, "cidr", source_file, site_code, issues, field_name
+        )
+        if not cidr:
+            return None
+        return _parse_scope_text(cidr, source_file, site_code, field_name, issues)
     network = _required_text(
         value, "network", source_file, site_code, issues, field_name
     )
@@ -260,11 +306,31 @@ def _parse_network(
     )
     if not network or not prefix:
         return None
+    return _parse_scope_text(
+        f"{network}/{prefix.lstrip('/')}", source_file, site_code, field_name, issues
+    )
+
+
+def _parse_scope_text(
+    value: str,
+    source_file: str,
+    site_code: str,
+    field_name: str,
+    issues: list[ValidationIssue],
+) -> str | None:
+    """Parse a direct CIDR, range, or IP address into canonical scope text"""
     try:
-        parsed = ipaddress.ip_network(
-            f"{network}/{prefix.lstrip('/')}".strip(), strict=False
-        )
+        parsed_type, parsed_value = parse_scope_item(value)
     except ValueError as exc:
+        if "IPv6 is not supported" in str(exc):
+            _issue(
+                issues,
+                source_file,
+                site_code,
+                field_name,
+                "uses IPv6, which is unsupported.",
+            )
+            return None
         _issue(
             issues,
             source_file,
@@ -273,16 +339,30 @@ def _parse_network(
             f"has an invalid CIDR: {exc}",
         )
         return None
-    if parsed.version != 4:
-        _issue(
-            issues,
-            source_file,
-            site_code,
-            field_name,
-            "uses IPv6, which is unsupported.",
-        )
-        return None
-    return str(parsed)
+    if parsed_type == "cidr":
+        return str(parsed_value)
+    start_ip, end_ip = parsed_value
+    return f"{start_ip}-{end_ip}"
+
+
+def _synthetic_subnet(cidr: str, display_name: str | None) -> VlanRange:
+    """Create a subnet record for direct range formats without nested VLAN data"""
+    return VlanRange(
+        vlan_name=display_name or "network-range",
+        display_name=display_name,
+        vlan=None,
+        cidr=cidr,
+    )
+
+
+def _has_subnet_records(value: dict[str, Any]) -> bool:
+    """Check for either supported subnet list key"""
+    return "subnets" in value or "vlans" in value
+
+
+def _subnet_records(value: dict[str, Any]) -> Any:
+    """Return the supported subnet list value from a range object"""
+    return value.get("subnets") if "subnets" in value else value.get("vlans")
 
 
 def _parse_vlan_number(
@@ -370,10 +450,10 @@ def _contained_subnets(
     issues: list[ValidationIssue],
 ) -> list[VlanRange]:
     """Keep only VLANs contained by their public or private supernet"""
-    parent = ipaddress.ip_network(parent_cidr)
+    parent = parse_scope_item(parent_cidr)
     contained: list[VlanRange] = []
     for subnet in subnets:
-        if ipaddress.ip_network(subnet.cidr).subnet_of(parent):
+        if scope_contains(parent, parse_scope_item(subnet.cidr)):
             contained.append(subnet)
             continue
         _issue(
@@ -466,6 +546,32 @@ def _required_text(
         return text
     field_name = f"{parent_field}.{key}" if parent_field else key
     _issue(issues, source_file, site_code, field_name, "is required.")
+    return None
+
+
+def _required_text_any(
+    value: dict[str, Any],
+    keys: tuple[str, ...],
+    source_file: str,
+    site_code: str | None,
+    issues: list[ValidationIssue],
+    parent_field: str = "",
+) -> str | None:
+    """Return the first populated text field from a set of aliases"""
+    for key in keys:
+        text = _optional_text(value.get(key))
+        if text:
+            return text
+    field_name = f"{parent_field}.{keys[0]}" if parent_field else keys[0]
+    _issue(issues, source_file, site_code, field_name, "is required.")
+    return None
+
+
+def _first_value(value: dict[str, Any], *keys: str) -> Any:
+    """Return the first present and non-empty value from a dict"""
+    for key in keys:
+        if key in value and value[key] not in (None, ""):
+            return value[key]
     return None
 
 
