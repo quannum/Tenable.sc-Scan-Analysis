@@ -232,6 +232,38 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(updated["repo"], 7)
         self.assertEqual(updated["policy_id"], 30)
 
+    def test_live_dynamic_asset_methods_use_supported_pytenable_arguments(self):
+        tenable_module = types.ModuleType("tenable")
+        tenable_sc_module = types.ModuleType("tenable.sc")
+        tenable_sc_module.TenableSC = FakeTenableSC
+        tenable_module.sc = tenable_sc_module
+        rules = {
+            "operator": "all",
+            "children": [{"type": "clause", "filterName": "lastseen"}],
+        }
+        with patch.dict(
+            sys.modules,
+            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            clear=False,
+        ):
+            access = DataAccess(make_config())
+
+        dynamic = access.create_dynamic_asset("Recent Hosts", rules, "managed")
+        combination = access.create_combination_asset("Target", 21, 22, "managed")
+        updated = access.update_combination_asset(23, 21, 22, "managed")
+
+        self.assertEqual(dynamic["type"], "dynamic")
+        self.assertEqual(dynamic["rules"], rules)
+        self.assertEqual(
+            combination["combinations"],
+            {
+                "operator": "difference",
+                "operand1": {"id": 21},
+                "operand2": {"id": 22},
+            },
+        )
+        self.assertEqual(updated["type"], "combination")
+
     def test_live_mode_retries_retryable_errors(self):
         tenable_module = types.ModuleType("tenable")
         tenable_sc_module = types.ModuleType("tenable.sc")

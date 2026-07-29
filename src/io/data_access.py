@@ -225,6 +225,78 @@ class DataAccess:
             operation_name=f"asset_lists.edit({asset_id})",
         )
 
+    def create_dynamic_asset(
+        self, name: str, rules: dict[str, Any], description: str
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.asset_lists.create(
+                name,
+                "dynamic",
+                rules=rules,
+                description=description,
+            ),
+            operation_name=f"asset_lists.create({name})",
+        )
+
+    def update_dynamic_asset(
+        self,
+        asset_id: int,
+        rules: dict[str, Any],
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_live_mutation()
+        kwargs: dict[str, Any] = {"type": "dynamic", "rules": rules}
+        if description:
+            kwargs["description"] = description
+        return self._call_live(
+            lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
+            operation_name=f"asset_lists.edit({asset_id})",
+        )
+
+    def create_combination_asset(
+        self,
+        name: str,
+        included_asset_id: int,
+        excluded_asset_id: int,
+        description: str,
+    ) -> dict[str, Any]:
+        """Create an asset list that subtracts one dynamic group from another"""
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.asset_lists.create(
+                name,
+                "combination",
+                combinations=_difference_definition(
+                    included_asset_id, excluded_asset_id
+                ),
+                description=description,
+            ),
+            operation_name=f"asset_lists.create({name})",
+        )
+
+    def update_combination_asset(
+        self,
+        asset_id: int,
+        included_asset_id: int,
+        excluded_asset_id: int,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update an asset list that subtracts one dynamic group from another"""
+        self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "type": "combination",
+            "combinations": _difference_definition(
+                included_asset_id, excluded_asset_id
+            ),
+        }
+        if description:
+            kwargs["description"] = description
+        return self._call_live(
+            lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
+            operation_name=f"asset_lists.edit({asset_id})",
+        )
+
     def create_scan(
         self,
         name: str,
@@ -349,6 +421,17 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
         seen.add(identity)
         records.append(item)
     return records
+
+
+def _difference_definition(
+    included_asset_id: int, excluded_asset_id: int
+) -> dict[str, Any]:
+    """Build the Tenable.sc asset-list difference definition"""
+    return {
+        "operator": "difference",
+        "operand1": {"id": int(included_asset_id)},
+        "operand2": {"id": int(excluded_asset_id)},
+    }
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
