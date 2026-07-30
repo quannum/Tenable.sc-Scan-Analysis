@@ -83,6 +83,8 @@ class DataAccess:
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
     def __init__(self, config: DataAccessConfig) -> None:
+        if config.mode not in {"offline", "live"}:
+            raise ValueError("mode must be 'offline' or 'live'")
         self.config = config
         self.sc: Any = None
         self.offline_scans = {}
@@ -204,7 +206,7 @@ class DataAccess:
     ) -> dict[str, Any]:
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
-        if description:
+        if description is not None:
             kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
@@ -343,6 +345,12 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
         return
 
     if not isinstance(payload, dict):
+        return
+
+    # Detail-style endpoints can return one resource directly instead of a
+    # collection wrapper.  Treat that response as the one record it contains.
+    if "id" in payload or "uuid" in payload:
+        yield payload
         return
 
     for key in (

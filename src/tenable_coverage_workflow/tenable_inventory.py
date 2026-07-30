@@ -4,9 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
-
-from ..io.data_access import DataAccess
+from typing import Any, Callable, Protocol
 
 SENSITIVE_KEY_PARTS = (
     "password",
@@ -20,8 +18,58 @@ SENSITIVE_KEY_PARTS = (
 )
 
 
-def collect_tenable_inventory(data_access: DataAccess) -> dict[str, Any]:
-    """Collect Tenable.sc configuration snapshot."""
+class InventoryDataAccessConfig(Protocol):
+    """Config field kept in an inventory snapshot."""
+
+    @property
+    def mode(self) -> str:
+        """Return the data access mode."""
+        ...
+
+
+class InventoryDataAccess(Protocol):
+    """The read-only data access surface required for inventory collection"""
+
+    @property
+    def config(self) -> InventoryDataAccessConfig:
+        """Return the selected data access config"""
+        ...
+
+    def get_repositories(self) -> list[dict[str, Any]]:
+        """List repositories"""
+        ...
+
+    def get_asset_lists(self) -> list[dict[str, Any]]:
+        """List asset groups"""
+        ...
+
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
+        """Read one asset group"""
+        ...
+
+    def get_scans(self) -> list[dict[str, Any]]:
+        """List scans"""
+        ...
+
+    def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
+        """Read one scan"""
+        ...
+
+    def get_policies(self) -> list[dict[str, Any]]:
+        """List policies"""
+        ...
+
+    def get_credentials(self) -> list[dict[str, Any]]:
+        """List credentials"""
+        ...
+
+    def get_observed_hosts(self) -> list[dict[str, Any]]:
+        """List observed hosts"""
+        ...
+
+
+def collect_tenable_inventory(data_access: InventoryDataAccess) -> dict[str, Any]:
+    """Collect Tenable.sc configuration snapshot"""
     inventory: dict[str, Any] = {
         "schema_version": 1,
         "collected_at": datetime.now(timezone.utc).isoformat(),

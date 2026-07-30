@@ -5,7 +5,6 @@ from .naming_rules import find_vlan_grouping_tag
 
 
 def adapt_coverage_result(row: Any) -> CoverageValidationResult:
-    """Adapt coverage result"""
     if isinstance(row, CoverageValidationResult):
         return row
 

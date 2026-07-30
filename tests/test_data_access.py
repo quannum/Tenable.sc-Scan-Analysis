@@ -1,26 +1,40 @@
 import json
 import shutil
 import sys
+import tempfile
 import types
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from src.io.data_access import DataAccess, load_json_folder, normalize_resource_list
 
 
-def make_config(**overrides):
-    defaults = {
+@dataclass
+class TestDataAccessConfig:
+    mode: str = "live"
+    sc_url: str | None = "https://tenable.local"
+    sc_access_key: str | None = "access"
+    sc_secret_key: str | None = "secret"
+    scan_json_dir: str | None = None
+    asset_json_dir: str | None = None
+    sc_ssl_verify: str | bool = True
+
+
+def make_config(**overrides: Any) -> TestDataAccessConfig:
+    defaults: dict[str, Any] = {
         "mode": "live",
         "sc_url": "https://tenable.local",
         "sc_access_key": "access",
         "sc_secret_key": "secret",
         "scan_json_dir": None,
         "asset_json_dir": None,
+        "sc_ssl_verify": True,
     }
     defaults.update(overrides)
-    return SimpleNamespace(**defaults)
+    return TestDataAccessConfig(**defaults)
 
 
 class FakeScans:
@@ -109,6 +123,16 @@ class DataAccessTests(unittest.TestCase):
             ),
             [{"id": 1, "name": "assets"}, {"id": 2, "name": "policy"}],
         )
+
+    def test_resource_payload_normalization_handles_a_single_resource(self):
+        self.assertEqual(
+            normalize_resource_list({"id": 1, "name": "one"}),
+            [{"id": 1, "name": "one"}],
+        )
+
+    def test_invalid_mode_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "mode must be 'offline' or 'live'"):
+            DataAccess(make_config(mode="invalid"))
 
     def test_live_mode_requires_credentials_and_url(self):
         with self.assertRaises(ValueError) as ctx:
@@ -254,11 +278,7 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(sleep_mock.call_count, 2)
 
     def test_offline_duplicate_ids_replace_previous_object(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "duplicate_id_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-data-access-"))
 
         scan_dir = temp_path / "scans"
         asset_dir = temp_path / "assets"
@@ -292,11 +312,7 @@ class DataAccessTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_load_json_folder_skips_non_object_json_roots(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "non_object_json_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-data-access-"))
 
         try:
             (temp_path / "array.json").write_text(

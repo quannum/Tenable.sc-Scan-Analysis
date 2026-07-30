@@ -2,11 +2,13 @@ import csv
 import json
 import os
 import shutil
+import tempfile
 import unittest
 from collections import defaultdict
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from src.constants import INCLUDE
@@ -618,13 +620,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             run_detect_and_plan(config)
 
     def test_detect_and_plan_cli_writes_audits_for_bad_subnet_records(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "detect_and_plan_case"
-
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-detect-plan-"))
 
         try:
             scan_dir = temp_path / "scans"
@@ -829,15 +825,15 @@ class ScanNameCompatibilityTests(unittest.TestCase):
     def test_build_configuration_index_prefers_info_name(self):
         class FakeDataAccess:
             @staticmethod
-            def get_asset_lists():
+            def get_asset_lists() -> list[dict[str, Any]]:
                 return []
 
             @staticmethod
-            def get_scans():
+            def get_scans() -> list[dict[str, Any]]:
                 return [{"id": 7, "name": "fallback", "info": {"name": "Canonical"}}]
 
             @staticmethod
-            def get_scan_details(scan_id):
+            def get_scan_details(scan_id: Any) -> dict[str, Any]:
                 self.assertEqual(scan_id, 7)
                 return {"id": 7, "info": {"name": "Canonical"}, "assets": []}
 

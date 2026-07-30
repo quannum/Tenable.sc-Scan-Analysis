@@ -2,8 +2,9 @@ import csv
 import json
 import tempfile
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 
 from src.tenable_coverage_workflow.tenable_inventory import (
     collect_tenable_inventory,
@@ -13,22 +14,27 @@ from src.tenable_coverage_workflow.tenable_inventory import (
 )
 
 
-class FakeDataAccess:
-    config = SimpleNamespace(mode="live")
+@dataclass(frozen=True)
+class FakeInventoryConfig:
+    mode: str = "live"
 
-    def get_repositories(self):
+
+class FakeDataAccess:
+    config = FakeInventoryConfig()
+
+    def get_repositories(self) -> list[dict[str, Any]]:
         return [{"id": 1, "name": "Main"}]
 
-    def get_asset_lists(self):
+    def get_asset_lists(self) -> list[dict[str, Any]]:
         return [{"id": 2, "name": "Servers"}]
 
-    def get_asset(self, asset_id):
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
         return {"id": asset_id, "name": "Servers", "password": "do-not-write"}
 
-    def get_scans(self):
+    def get_scans(self) -> list[dict[str, Any]]:
         return [{"id": 3, "name": "Assessment"}]
 
-    def get_scan_details(self, scan_id):
+    def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
         return {
             "id": scan_id,
             "name": "Assessment",
@@ -36,13 +42,13 @@ class FakeDataAccess:
             "ipList": "10.0.0.0/24",
         }
 
-    def get_policies(self):
+    def get_policies(self) -> list[dict[str, Any]]:
         return [{"id": 4, "name": "Policy"}]
 
-    def get_credentials(self):
+    def get_credentials(self) -> list[dict[str, Any]]:
         return [{"id": 5, "name": "Credential", "secretKey": "nope"}]
 
-    def get_observed_hosts(self):
+    def get_observed_hosts(self) -> list[dict[str, Any]]:
         raise PermissionError("host query denied")
 
 

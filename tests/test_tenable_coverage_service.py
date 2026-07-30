@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -13,11 +14,7 @@ from src.tenable_coverage_workflow.service_runner import main as service_main
 
 class ServiceConfigTests(unittest.TestCase):
     def test_service_config_loads_yaml_and_transport_controls(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "service_yaml_config_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-        temp_path.mkdir(parents=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-config-"))
         try:
             config_file = temp_path / "service.yaml"
             config_file.write_text(
@@ -47,12 +44,7 @@ class ServiceConfigTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_config_loads_from_toml(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "service_config_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-config-"))
 
         try:
             config_file = temp_path / "service.toml"
@@ -94,12 +86,7 @@ class ServiceConfigTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_config_supports_vlan_tag_grouping(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "service_grouping_config_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-config-"))
 
         try:
             config_file = temp_path / "service.toml"
@@ -230,13 +217,7 @@ class ScheduledServiceTests(unittest.TestCase):
         return Module
 
     def test_service_main_writes_latest_summary_and_run_artifacts(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "scheduled_service_case"
-
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-run-"))
 
         try:
             scan_dir = temp_path / "scans"
@@ -313,12 +294,7 @@ class ScheduledServiceTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_main_returns_lock_conflict_code_when_lock_exists(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "scheduled_service_lock_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-run-"))
 
         try:
             output_dir = temp_path / "output"
@@ -351,12 +327,7 @@ class ScheduledServiceTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_main_recovers_stale_lock(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "scheduled_service_stale_lock_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-run-"))
 
         try:
             output_dir = temp_path / "output"
@@ -398,12 +369,7 @@ class ScheduledServiceTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_main_writes_running_state_before_work_execution(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "scheduled_service_running_state_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-run-"))
 
         try:
             output_dir = temp_path / "output"
@@ -452,12 +418,7 @@ class ScheduledServiceTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_service_main_writes_failed_state_when_run_fails(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "scheduled_service_failed_state_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-service-run-"))
 
         try:
             output_dir = temp_path / "output"

@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from dotenv import load_dotenv
 
@@ -45,6 +45,22 @@ LOGGER = logging.getLogger(__name__)
 
 # This module coordinates the dry-run workflow from source definitions through
 # coverage checks, proposed changes, and report files.
+
+
+class ConfigurationDataAccess(Protocol):
+    """The read-only data access surface needed to index configuration."""
+
+    def get_asset_lists(self) -> list[dict[str, Any]]:
+        """List asset groups."""
+        ...
+
+    def get_scans(self) -> list[dict[str, Any]]:
+        """List scans."""
+        ...
+
+    def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
+        """Read one scan's configuration."""
+        ...
 
 
 @dataclass
@@ -492,7 +508,9 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     )
 
 
-def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
+def build_configuration_index(
+    data_access: ConfigurationDataAccess,
+) -> dict[str, object]:
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
         name = str(asset.get("name") or "").strip()
@@ -532,7 +550,7 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
-            # A tagged exclusion is reported, but it must not produce a change.
+            # exclusion is reported, but doesn't make a change.
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
