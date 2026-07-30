@@ -40,10 +40,12 @@ def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
     return cleaned or fallback
 
 
-def _normalize_optional_name_part(value: str | None) -> str | None:
-    """Normalize optional name part"""
-    normalized = normalize_name_part(value, fallback="")
-    return normalized or None
+# redundant
+
+# def _normalize_optional_name_part(value: str | None) -> str | None:
+#     """Normalize optional name part"""
+#     normalized = normalize_name_part(value, fallback="")
+#     return normalized or None
 
 
 def _display_name_part(value: str | None, fallback: str = "Unknown") -> str:

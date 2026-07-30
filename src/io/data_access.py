@@ -7,9 +7,6 @@ from typing import Any, Callable, Iterator, Protocol
 
 LOGGER = logging.getLogger(__name__)
 
-# This module gives the workflow one interface for offline JSON files and the
-# live Tenable.sc API.
-
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     data: dict[str, dict[str, Any]] = {}
@@ -22,18 +19,18 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
             with open(file_path, "r", encoding="utf-8") as handle:
                 obj = json.load(handle)
         except (OSError, json.JSONDecodeError) as exc:
-            LOGGER.warning("Skipping unreadable JSON file '%s': %s", file_path, exc)
+            LOGGER.warning("Skipping unreadable json file '%s': %s", file_path, exc)
             continue
 
         if not isinstance(obj, dict):
             LOGGER.warning(
-                "Skipping JSON file whose root is not an object: %s", file_path
+                "Skipping json file whose root is not an object: %s", file_path
             )
             continue
 
         object_id = obj.get("id")
         if object_id in (None, ""):
-            LOGGER.warning("Skipping JSON file without an 'id': %s", file_path)
+            LOGGER.warning("Skipping json file without an 'id': %s", file_path)
             continue
 
         object_id = str(object_id)
@@ -45,7 +42,7 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
             )
         data[object_id] = obj
 
-    LOGGER.info("Loaded %s JSON objects from %s", len(data), folder_path)
+    LOGGER.info("Loaded %s json objects from %s", len(data), folder_path)
     return data
 
 
@@ -57,12 +54,12 @@ class DataAccessConfig(Protocol):
 
     @property
     def scan_json_dir(self) -> str | None:
-        """Return the offline scan JSON directory"""
+        """Return the offline scan json directory"""
         ...
 
     @property
     def asset_json_dir(self) -> str | None:
-        """Return the offline asset JSON directory"""
+        """Return the offline asset json directory"""
         ...
 
     @property
@@ -92,7 +89,6 @@ class DataAccess:
         self.offline_assets = {}
 
         if config.mode == "live":
-            # Validate settings before importing or connecting to pyTenable.
             self._validate_live_config(config)
             try:
                 from tenable.sc import TenableSC
@@ -119,7 +115,7 @@ class DataAccess:
                 ssl_verify=ssl_verify,
             )
         else:
-            # Offline mode only reads previously collected JSON files.
+            # Offline mode only reads previously collected json files.
             self.offline_scans = load_json_folder(config.scan_json_dir)
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
@@ -141,7 +137,6 @@ class DataAccess:
             )
 
     def get_scans(self) -> list[dict[str, Any]]:
-        """Get list of scans"""
         if self.config.mode == "live":
             scans_payload = self._call_live(
                 self.sc.scans.list,
@@ -154,7 +149,6 @@ class DataAccess:
         return list(self.offline_scans.values())
 
     def get_scan_details(self, scan_id) -> dict[str, Any]:
-        """Get scan details"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.scans.details(scan_id),
@@ -167,7 +161,6 @@ class DataAccess:
         return details
 
     def get_asset(self, asset_id) -> dict[str, Any]:
-        """Get asset"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.asset_lists.details(asset_id),
@@ -176,31 +169,25 @@ class DataAccess:
         return self.offline_assets.get(str(asset_id), {})
 
     def get_repositories(self) -> list[dict[str, Any]]:
-        """Get repositories"""
         return self._list_live_resource("repositories")
 
     def get_asset_lists(self) -> list[dict[str, Any]]:
-        """Get asset lists"""
         if self.config.mode != "live":
             return list(self.offline_assets.values())
         return self._list_live_resource("asset_lists")
 
     def get_policies(self) -> list[dict[str, Any]]:
-        """Get policies"""
         return self._list_live_resource("policies")
 
     def get_credentials(self) -> list[dict[str, Any]]:
-        """Get credentials"""
         return self._list_live_resource("credentials")
 
     def get_observed_hosts(self) -> list[dict[str, Any]]:
-        """Get observed hosts"""
         return self._list_live_resource("hosts")
 
     def create_static_asset(
         self, name: str, ips: list[str], description: str
     ) -> dict[str, Any]:
-        """Create static asset"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.asset_lists.create(
@@ -215,7 +202,6 @@ class DataAccess:
     def update_static_asset(
         self, asset_id: int, ips: list[str], description: str | None = None
     ) -> dict[str, Any]:
-        """Update static asset"""
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
         if description:
@@ -232,7 +218,6 @@ class DataAccess:
         asset_ids: list[int],
         policy_id: int,
     ) -> dict[str, Any]:
-        """Create scan"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.create(
@@ -251,7 +236,6 @@ class DataAccess:
         repository_id: int,
         policy_id: int,
     ) -> dict[str, Any]:
-        """Update scan configuration"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.edit(
@@ -352,7 +336,6 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
-    """Iterate through resource records"""
     if isinstance(payload, list):
         for item in payload:
             if isinstance(item, dict):
@@ -381,7 +364,7 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
 
 
 def _parse_bool(value: Any) -> bool:
-    """Parse a boolean value"""
+    """Parse a boolean value for ssl_verify"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
