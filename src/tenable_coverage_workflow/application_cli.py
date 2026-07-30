@@ -306,7 +306,7 @@ def _analyze_or_propose(args) -> int:
 
 def _apply_changes(args) -> int:
     if args.apply is not True:
-        _emit("Refusing mutation: apply-changes requires the explicit --apply flag.")
+        print("Refusing mutation: apply-changes requires the explicit --apply flag.")
         return EXIT_APPLY_REQUIRED
     plan_file = _setting(args, "plan_file")
     if not plan_file:
@@ -328,7 +328,7 @@ def _apply_changes(args) -> int:
     output = write_inventory_snapshot(result, result_file)
     markdown_output = write_apply_markdown(result, Path(result_file).with_suffix(".md"))
     failed = int(result["status_counts"].get("FAILED", 0))
-    _emit(
+    print(
         f"Apply results written to {output} and {markdown_output}; "
         f"{result['status_counts'].get('APPLIED', 0)} applied, "
         f"{result['status_counts'].get('UNCHANGED', 0)} unchanged, "
@@ -376,7 +376,7 @@ def _export_report(args) -> int:
         raise ValueError(f"No report artifacts found in {run_dir}")
     manifest = {"schema_version": 1, "source_run_dir": str(run_dir), "files": copied}
     write_inventory_snapshot(manifest, output_dir / "report_manifest.json")
-    _emit(f"Exported {len(copied)} report artifact(s) to {output_dir}")
+    print(f"Exported {len(copied)} report artifact(s) to {output_dir}")
     return EXIT_OK
 
 
