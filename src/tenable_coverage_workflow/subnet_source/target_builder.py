@@ -70,7 +70,7 @@ def build_coverage_targets(
 
 
 def _merged_tags(*values: list[str]) -> list[str]:
-    """Combine tag lists without duplicate values"""
+    """Combine tag lists without duplicates"""
     result: list[str] = []
     for tags in values:
         for tag in tags:

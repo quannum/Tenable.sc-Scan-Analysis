@@ -130,7 +130,6 @@ class ChangeDataAccess(Protocol):
 
 
 def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
-    """Load approved plan"""
     path = Path(path_value)
     raw_bytes = path.read_bytes()
     fingerprint = hashlib.sha256(raw_bytes).hexdigest()
@@ -236,7 +235,7 @@ class ChangeApplier:
     def preflight(self, plan: ApprovedPlan) -> None:
         """Check requirements before applying changes"""
         errors = []
-        # Check every named policy before creating or updating anything.
+        # check every named policy before creating or updating anything
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
                 continue
@@ -262,7 +261,7 @@ class ChangeApplier:
             self.agent_asset = self._confirm_agent_asset()
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
-                # Keep manual-review rows visible without applying them.
+                # keep manual review before applying or updating antyhign
                 operations.append(
                     ApplyOperation(
                         site_code=change.site_code,
@@ -321,7 +320,6 @@ class ChangeApplier:
         change: ApprovedChange,
         asset_description: str,
     ) -> ApplyOperation:
-        """Apply change"""
         asset, asset_status = self._confirm_asset(change, asset_description)
         asset_id = _resource_id(asset, "asset group", change.asset_name)
         scan, scan_status = self._confirm_scan(change, asset_id)
@@ -348,7 +346,7 @@ class ChangeApplier:
         change: ApprovedChange,
         asset_description: str,
     ) -> tuple[dict[str, Any], str]:
-        """Confirm a recent, non-agent target asset is available"""
+        """confirm recent non-agent target asset is available"""
         if self.agent_asset is None:
             raise RuntimeError("Nessus Agent detection asset was not initialized")
 
@@ -400,7 +398,7 @@ class ChangeApplier:
         return merged, "UPDATED"
 
     def _confirm_agent_asset(self) -> dict[str, Any]:
-        """Confirm the shared dynamic asset tracks hosts with Nessus Agents"""
+        """confirm shared dynamic asset detects hosts with Nessus Agents"""
         rules = _agent_detection_rules()
         existing = self.assets.get(AGENT_DETECTED_ASSET_NAME)
         if existing is None:
@@ -439,7 +437,7 @@ class ChangeApplier:
         scopes: set[str],
         target_name: str,
     ) -> tuple[dict[str, Any], str]:
-        """Confirm the dynamic CIDR and recency source asset is available"""
+        """confirm dynamic CIDR and source asset is available"""
         rules = _recent_scope_rules(scopes)
         description = _candidate_description(target_name)
         existing = self.assets.get(candidate_name)
@@ -497,7 +495,7 @@ class ChangeApplier:
             and current_policy_id == policy_id
         ):
             return details, "UNCHANGED"
-        # Add this asset without dropping assets already assigned to the scan.
+        # add this asset without dropping assets already assigned to the scan
         updated_ids = sorted(current_asset_ids | {asset_id})
         updated = self.data_access.update_scan_configuration(
             scan_id,
@@ -555,7 +553,7 @@ class ChangeApplier:
     def _unique_name_index(
         records: list[dict[str, Any]], resource_type: str
     ) -> dict[str, dict[str, Any]]:
-        """Index resources by name and reject duplicate names"""
+        """Index resources by name and get rid of duplicate names"""
         result = {}
         for record in records:
             name = _text(record.get("name"))
@@ -571,7 +569,6 @@ class ChangeApplier:
 
 
 def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
-    """Extract asset scopes"""
     values = []
     type_fields = asset.get("typeFields", {})
     if isinstance(type_fields, dict):
@@ -589,7 +586,7 @@ def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
 
 
 def _build_asset_scopes(changes: list[ApprovedChange]) -> dict[str, set[str]]:
-    """Group the approved CIDRs that form each proposed target"""
+    """Group the CIDRs that form each proposed target"""
     scopes: dict[str, set[str]] = {}
     for change in changes:
         scopes.setdefault(change.asset_name, set()).add(change.cidr)
@@ -711,7 +708,6 @@ def _combined_asset_status(*statuses: str) -> str:
 
 
 def get_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
-    """Extract scan asset ids"""
     values = scan.get("assets", scan.get("assetLists", []))
     if not isinstance(values, list):
         return set()

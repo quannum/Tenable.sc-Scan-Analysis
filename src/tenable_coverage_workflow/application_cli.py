@@ -56,7 +56,6 @@ class TenableAccessConfig:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build parser"""
     parser = argparse.ArgumentParser(prog="tenable-sc-scan-analysis")
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--config-file")
@@ -147,7 +146,6 @@ def _add_grouping_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def main(argv=None) -> int:
-    """Run the command-line workflow"""
     load_dotenv()
     args = build_parser().parse_args(argv)
     try:
@@ -164,13 +162,13 @@ def main(argv=None) -> int:
         if args.command == "export-report":
             return _export_report(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-        _emit(f"ERROR: {exc}")
+        print(f"ERROR: {exc}")
         return EXIT_OPERATION
     return EXIT_CONFIG
 
 
 def _source_config(args):
-    """Build the authoritative source settings from command options"""
+    """Build the authoritative source settings from command args"""
     return build_authoritative_source_config(
         scalar_getter=lambda name, environment_name, default=None: _setting(
             args, name, environment_name, default
@@ -193,7 +191,7 @@ def _validate_definitions(args) -> int:
     output_file = _setting(args, "output_file")
     if output_file:
         write_inventory_snapshot(payload, output_file)
-    _emit(
+    print(
         f"Validated {len(result.site_definitions)} site(s), "
         f"{len(result.coverage_targets)} target(s), "
         f"{len(result.validation_issues)} issue(s)."
@@ -203,7 +201,7 @@ def _validate_definitions(args) -> int:
 
 
 def _tenable_config(args) -> TenableAccessConfig:
-    """Build Tenable.sc connection settings from command options"""
+    """Build Tenable.sc connection settings from cli arguments"""
     mode = str(_setting(args, "mode", default="offline")).strip().lower()
     if mode not in {"offline", "live"}:
         raise ValueError("mode must be 'offline' or 'live'.")
@@ -249,7 +247,7 @@ def _collect_tenable(args) -> int:
         )
     output = write_inventory_snapshot(snapshot, output_file)
     reports = write_inventory_reports(snapshot, output)
-    _emit(
+    print(
         f"Tenable.sc inventory written to {output}; readable CSV reports written to "
         f"{reports['scans'].parent}"
     )
@@ -302,7 +300,7 @@ def _analyze_or_propose(args) -> int:
         ),
     )
     summary = run_detect_and_plan(config)
-    _emit(f"Run {summary['run_id']} completed: {summary['output_directory']}")
+    print(f"Run {summary['run_id']} completed: {summary['output_directory']}")
     return EXIT_OK
 
 
@@ -383,7 +381,6 @@ def _export_report(args) -> int:
 
 
 def _load_cli_config(path_value: str | None) -> dict[str, Any]:
-    """Load cli config"""
     if not path_value:
         return {}
     return load_config_section(
@@ -401,13 +398,12 @@ def _setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> Any:
-    """Get one resolved command setting"""
+    """Get one command arg"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.get(name, default, environment_name)
 
 
 def _as_bool(value: Any) -> bool:
-    """Convert to bool"""
     return parse_bool(value, "boolean")
 
 
@@ -417,13 +413,9 @@ def _csv_setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> list[str] | None:
-    """Get one comma-separated command setting"""
+    """Get one command arg from csv"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.csv(name, default, environment_name)
-
-
-def _emit(message: str) -> None:
-    print(message)
 
 
 if __name__ == "__main__":

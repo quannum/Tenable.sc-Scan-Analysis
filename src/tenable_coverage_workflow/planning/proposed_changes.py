@@ -5,7 +5,6 @@ from .naming_rules import find_vlan_grouping_tag
 
 
 def adapt_coverage_result(row: Any) -> CoverageValidationResult:
-    """Adapt coverage result"""
     if isinstance(row, CoverageValidationResult):
         return row
 
@@ -100,7 +99,6 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
-    """Determine proposed action"""
     if result.required_asset_present == "No" or result.required_scan_present == "No":
         return _create_or_update_action(result.target_type)
 
@@ -127,7 +125,6 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
 
 
 def _create_or_update_action(target_type: str) -> str:
-    """Create or update action"""
     if target_type == "PUBLIC":
         return "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN"
     if target_type == "PRIVATE_SUPERNET":
@@ -138,7 +135,6 @@ def _create_or_update_action(target_type: str) -> str:
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
-    """Build issue"""
     if proposed_action == "REVIEW_WRONG_SCAN":
         covering_scans = ", ".join(sorted(result.covering_scans)) or "none"
         return (
@@ -161,7 +157,6 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
 
 
 def _build_getter(row: Any):
-    """Build value getter for a record"""
     if isinstance(row, dict):
         return lambda name, default=None: row.get(name, default)
     return lambda name, default=None: getattr(row, name, default)

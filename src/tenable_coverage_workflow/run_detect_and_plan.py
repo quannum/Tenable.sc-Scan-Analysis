@@ -94,7 +94,6 @@ class CoverageSourceConfig:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    """Build argument parser"""
     parser = argparse.ArgumentParser(
         description=(
             "Load subnet_as_code scope definitions, validate Tenable.sc "
@@ -164,7 +163,6 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    """Run the command-line workflow"""
     load_dotenv()
     parser = build_argument_parser()
     args = parser.parse_args(argv)
@@ -189,7 +187,6 @@ class ServiceContextFilter(logging.Filter):
         self.extra_context = extra_context or {}
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Filter the requested value"""
         for key, value in self.extra_context.items():
             if not hasattr(record, key):
                 setattr(record, key, value)
@@ -228,7 +225,6 @@ def configure_logging(
     log_file: Path | None = None,
     extra_context: dict[str, object] | None = None,
 ) -> None:
-    """Configure logging"""
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     stream_handler = logging.StreamHandler()
     if str(log_format).lower() == "json":
@@ -251,7 +247,6 @@ def configure_logging(
 
 
 def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
-    """Build detect and plan config"""
     resolver = SettingsResolver(args)
 
     def scalar_getter(
@@ -332,7 +327,6 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
 
 
 def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceConfig:
-    """Build coverage source config"""
     return CoverageSourceConfig(
         mode=config.mode,
         scan_json_dir=config.scan_json_dir,
@@ -353,7 +347,6 @@ def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceC
 
 
 def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
-    """Run detect and plan"""
     if not config.dry_run:
         raise ValueError("detect-and-plan runs do not support dry_run=false")
 
@@ -378,8 +371,8 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         mode=config.mode,
     )
 
-    # Build expected targets first, then compare them with the Tenable
-    # configuration collected below.
+    # build expected targets first, then compare them with the Tenable scans
+    # 
     source_type, connector_result = load_authoritative_source(
         config.source_config,
         audit_logger=audit_logger,
@@ -485,7 +478,6 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
 
 
 def load_actual_scope_data(config: CoverageSourceConfig):
-    """Load actual scope data"""
     data_access = DataAccess(config)
     scope_ws, normalized_ws = build_scope_tables()
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
@@ -502,7 +494,6 @@ def load_actual_scope_data(config: CoverageSourceConfig):
 
 
 def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
-    """Build configuration index"""
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
         name = str(asset.get("name") or "").strip()
@@ -533,7 +524,6 @@ def validate_coverage_targets(
     configuration_index=None,
     audit_logger=None,
 ) -> list[CoverageValidationResult]:
-    """Validate coverage targets"""
     coverage_results: list[CoverageValidationResult] = []
     exclusion_impact_by_scan: dict[str, int] = defaultdict(int)
     configuration_index = configuration_index or {}
@@ -543,7 +533,7 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
-            # A tagged exclusion is reported, but it must not produce a change.
+            # tagged exclusion is reported
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
@@ -573,8 +563,8 @@ def validate_coverage_targets(
         status = derive_workflow_status(
             base_result.status, base_result.exclusion_ip_total
         )
-        # Exact names distinguish missing resources from scans that merely cover
-        # the same addresses.
+        # exact names confirm missing targets from scans that cover
+        # the same addresses
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"
@@ -677,7 +667,6 @@ def validate_coverage_targets(
 def _build_tag_excluded_result(
     target: CoverageTarget, exclusion_tag: str
 ) -> CoverageValidationResult:
-    """Build tag excluded result"""
     expected_start, expected_end = scope_to_interval(parse_scope_item(target.cidr))
     return CoverageValidationResult(
         status="EXCLUDED",
@@ -708,7 +697,7 @@ def _build_tag_excluded_result(
 
 
 def _resource_name(value) -> str | None:
-    """Read a resource name from a Tenable.sc value"""
+    """Read a policy name from a Tenable.sc"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         return name or None
@@ -716,7 +705,7 @@ def _resource_name(value) -> str | None:
 
 
 def _resource_label(value, fallback_id=None) -> str | None:
-    """Read a readable resource label from a Tenable.sc value"""
+    """Read a repo / policy label from a Tenable.sc"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         if name:
@@ -728,15 +717,13 @@ def _resource_label(value, fallback_id=None) -> str | None:
 
 
 def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
-    """Derive workflow status"""
     if status == "PARTIAL" and exclusion_ip_total > 0:
         return "EXCLUDED"
     return status
 
 
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
-    """Print the summary for a completed run"""
-    _emit_lines(
+    _print_lines(
         [
             f"Run ID: {run_id}",
             f"Authoritative source: {summary['authoritative_source_type']}",
@@ -756,8 +743,7 @@ def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
     )
 
 
-def _emit_lines(lines: list[str]) -> None:
-    """Print several command-line messages"""
+def _print_lines(lines: list[str]) -> None:
     for line in lines:
         print(line)
 

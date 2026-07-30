@@ -15,7 +15,6 @@ class AuditLogger:
         self.path = self.run_dir / "audit.jsonl"
 
     def emit(self, event_type: str, **fields: Any) -> None:
-        """Write one audit event"""
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "run_id": self.run_id,
@@ -34,7 +33,6 @@ class AuditLogger:
 
 
 def atomic_write_text(path: str | Path, content: str) -> Path:
-    """Write text"""
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +59,6 @@ def atomic_write_text(path: str | Path, content: str) -> Path:
 
 
 def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
-    """Write json"""
     return atomic_write_text(
         path,
         json.dumps(
@@ -75,7 +72,6 @@ def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
 
 
 def _serialize_value(value: Any) -> Any:
-    """Serialize value"""
     if is_dataclass(value):
         return {
             key: _serialize_value(item)

@@ -30,7 +30,6 @@ def load_config_section(
     section_error: str,
     unsupported_error: str,
 ) -> dict[str, Any]:
-    """Load config section"""
     if not config_file_path.is_file():
         raise ValueError(f"Config file does not exist: {config_file_path}")
 
@@ -91,7 +90,6 @@ class SettingsResolver:
         default: Any = None,
         environment_name: str | None = None,
     ) -> Any:
-        """Get the requested value"""
         cli_value = getattr(self.args, name, None)
         if cli_value is not None:
             return cli_value

@@ -4,7 +4,7 @@ from ..models import CoverageTarget, SourceLoadResult, ValidationIssue
 
 
 def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
-    """Add duplicate and overlap findings across valid targets."""
+    """Add duplicate and overlap ranges"""
     targets = result.coverage_targets
     for target in targets:
         network = ipaddress.ip_network(target.cidr, strict=False)

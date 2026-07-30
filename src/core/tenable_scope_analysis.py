@@ -27,11 +27,9 @@ class InMemoryTable:
         self._rows: list[list[Any]] = [list(headers)]
 
     def append(self, row: Iterable[Any]) -> None:
-        """Add a row to the in-memory table"""
         self._rows.append(list(row))
 
     def iter_rows(self, min_row: int = 1, values_only: bool = False):
-        """Iterate through rows"""
         if not values_only:
             raise ValueError("InMemoryTable only supports values_only=True iteration")
         for row in self._rows[min_row - 1 :]:
@@ -39,9 +37,8 @@ class InMemoryTable:
 
 
 def build_scope_tables() -> tuple[None, InMemoryTable]:
-    """Build scope tables"""
-    # Legacy raw-scope collection is disabled for review. Nothing reads this
-    # table after scope collection, so only the normalized table is needed.
+    # legacy scope worksheet no longer used
+    # 
     # scope_ws = InMemoryTable(
     #     [
     #         "Scan Name",
@@ -101,7 +98,6 @@ class CoverageResult:
 
 
 def extract_scan_name(scan) -> str:
-    """Get scan name"""
     if not isinstance(scan, dict):
         return ""
 
@@ -189,7 +185,6 @@ def filter_scans(scans, config):
 def normalize_scope(
     normalized_ws, scan_name, asset_name, inclusion_type, defined_string
 ):
-    """Normalize scope"""
     for scope_item in split_scope_items(defined_string):
         normalized_ws.append([scan_name, asset_name, inclusion_type, scope_item])
 
@@ -197,7 +192,7 @@ def normalize_scope(
 def walk_combination(
     node, scan_name, scope_ws, normalized_ws, data_access, in_complement=False
 ):
-    """Walk through combination asset groupss to retrieve nested asset groups"""
+    """Walk through combination asset groupss to get nested groups"""
     if not isinstance(node, dict):
         return
 
@@ -258,7 +253,6 @@ def walk_combination(
 
 
 def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
-    """Build scope sheets"""
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
@@ -344,7 +338,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
 
 def build_coverage_data(normalized_ws):
-    """Build coverage data"""
     actual_scopes = []
     excluded_scopes = []
     actual_by_scan = defaultdict(list)
@@ -386,7 +379,6 @@ def build_coverage_data(normalized_ws):
 
 
 def determine_required_scan_coverage(required_scan, covering_scans):
-    """Determine required scan coverage"""
     normalized_required_scan = str(required_scan or "").strip()
     if not normalized_required_scan:
         return "", ""
@@ -398,7 +390,6 @@ def determine_required_scan_coverage(required_scan, covering_scans):
 
 
 def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
-    """Build exclusion reason"""
     exclusion_lines = []
     for excluded_scan_name in sorted(relevant_exclusions):
         for entry in relevant_exclusions[excluded_scan_name]:
@@ -413,7 +404,6 @@ def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
 def determine_coverage_status(
     covered_count, expected_size, exclusion_ip_total, relevant_exclusions
 ):
-    """Determine coverage status"""
     if covered_count == expected_size:
         return STATUS_OK, "Yes", "Fully contained by scan scope"
 
@@ -431,7 +421,6 @@ def determine_coverage_status(
 
 
 def collect_covering_scans(actual_scopes, expected):
-    """Collect covering scans"""
     full_cover_scans = set()
     partial_scans = set()
 
@@ -452,7 +441,6 @@ def calculate_scan_intervals(
     actual_by_scan,
     excluded_by_scan,
 ):
-    """Calculate scan intervals"""
     included = []
     excluded = []
     relevant_exclusions = []
@@ -513,7 +501,6 @@ def calculate_coverage_result(
     excluded_by_scan,
     exclusion_impact_by_scan,
 ):
-    """Calculate coverage result"""
     expected_size = scope_size(expected)
     expected_start, expected_end = scope_to_interval(expected)
     covering_scans = collect_covering_scans(actual_scopes, expected)

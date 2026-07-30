@@ -46,7 +46,6 @@ def load_authoritative_source(
 
 
 def _build_get_sites_kwargs(config: AuthoritativeSourceConfig) -> dict[str, Any]:
-    """Build get sites kwargs"""
     values = {
         "referenceId": config.reference_id,
         "sites": config.sites,
@@ -63,7 +62,6 @@ def _build_get_sites_kwargs(config: AuthoritativeSourceConfig) -> dict[str, Any]
 
 
 def _has_value(value: Any) -> bool:
-    """Check for value"""
     if value is None:
         return False
     if isinstance(value, str):

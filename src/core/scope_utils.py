@@ -36,7 +36,7 @@ def parse_scope_item(scope):
         return _parsed_cache[scope]
 
     try:
-        # Keep the original meaning of each input while making it comparable later.
+        # parse cidr, range, or single ip address
         if "/" in scope:
             network = ipaddress.ip_network(scope, strict=False)
             ensure_ipv4(network, scope)
@@ -141,7 +141,7 @@ def subtract_intervals(included, excluded):
     for included_start, included_end in included:
         remaining = [(included_start, included_end)]
 
-        # One excluded range can split an included range into two smaller ranges.
+        # an excluded range can split an included range into two smaller ranges
         for excluded_start, excluded_end in excluded:
             next_remaining = []
 

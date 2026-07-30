@@ -33,17 +33,16 @@ _ROLE_ALIAS_MAP = {
 
 
 def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
-    """Normalize name part"""
     text = str(value or "").strip()
     cleaned = _NON_WORD_PATTERN.sub("_", text)
     cleaned = _UNDERSCORE_PATTERN.sub("_", cleaned).strip("_")
     return cleaned or fallback
 
+# old function for normalizing names
 
-def _normalize_optional_name_part(value: str | None) -> str | None:
-    """Normalize optional name part"""
-    normalized = normalize_name_part(value, fallback="")
-    return normalized or None
+# def _normalize_optional_name_part(value: str | None) -> str | None:
+#     normalized = normalize_name_part(value, fallback="")
+#     return normalized or None
 
 
 def _display_name_part(value: str | None, fallback: str = "Unknown") -> str:
@@ -67,7 +66,6 @@ def _scan_site_name(target: CoverageTarget) -> str:
 
 
 def classify_vlan_role(vlan_name: str | None) -> str:
-    """Classify vlan role"""
     normalized = normalize_name_part(vlan_name, fallback="Standard").lower()
     raw = str(vlan_name or "").strip().lower()
 
@@ -107,7 +105,6 @@ def classify_vlan_role(vlan_name: str | None) -> str:
 
 
 def _normalize_role_from_value(value: str | None) -> str:
-    """Normalize role from value"""
     normalized = normalize_name_part(value, fallback="STANDARD").upper()
     return _ROLE_ALIAS_MAP.get(normalized.lower(), normalized)
 
@@ -156,11 +153,10 @@ def find_vlan_grouping_tag(
     return None
 
 
-def _extract_vlan_grouping_tag(
+def _get_vlan_grouping_tag(
     target: CoverageTarget,
     grouping_config: GroupingConfig,
 ) -> str | None:
-    """Get vlan tag"""
     return find_vlan_grouping_tag(target.target_type, target.tags, grouping_config)
 
 
@@ -211,9 +207,8 @@ def resolve_target_role(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
-    """Resolve target role"""
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         return _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
     return classify_vlan_role(target.vlan_name)
@@ -223,7 +218,6 @@ def build_required_asset_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
-    """Build required asset name"""
     site_code = _site_code_prefix(target.site_code)
     if target.target_type == "PUBLIC":
         return f"{_NAME_PREFIX} {site_code} Public"
@@ -231,7 +225,7 @@ def build_required_asset_name(
         return f"{_NAME_PREFIX} {site_code} Private Discovery"
 
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         # Asset groups stay separate by tag even when their scans share a role.
         group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
@@ -246,7 +240,6 @@ def build_required_scan_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
-    """Build required scan name"""
     site_identifier = _scan_site_name(target)
     if target.target_type == "PUBLIC":
         return f"{_NAME_PREFIX} Assessment {site_identifier} Public"
@@ -254,7 +247,7 @@ def build_required_scan_name(
         return f"{_NAME_PREFIX} Discovery {site_identifier} Private"
 
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
         return (
@@ -270,7 +263,6 @@ def build_required_policy_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
-    """Build required policy name"""
     if target.target_type == "PUBLIC":
         return "Public Facing Assessment"
     if target.target_type == "PRIVATE_SUPERNET":

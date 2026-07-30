@@ -309,7 +309,7 @@ def _parse_network(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> str | None:
-    """Build a canonical IPv4 CIDR from network and cidr fields"""
+    """Build a IPv4 CIDR from network and cidr fields"""
     value = _as_mapping(value)
     if isinstance(value, str):
         return _parse_scope_text(value, source_file, site_code, field_name, issues)
@@ -343,7 +343,7 @@ def _parse_scope_text(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> str | None:
-    """Parse a direct CIDR, range, or IP address into canonical scope text"""
+    """Parse a direct CIDR, range, or IP address into scope text"""
     try:
         parsed_type, parsed_value = parse_scope_item(value)
     except ValueError as exc:
@@ -371,7 +371,7 @@ def _parse_scope_text(
 
 
 def _synthetic_subnet(cidr: str, display_name: str | None) -> VlanRange:
-    """Create a subnet record for direct range formats without nested VLAN data"""
+    """Create a subnet record for direct range formats without nested VLAN info"""
     return VlanRange(
         vlan_name=display_name or "network-range",
         display_name=display_name,
@@ -397,7 +397,7 @@ def _parse_vlan_number(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> int | None:
-    """Read an optional numeric VLAN identifier"""
+    """Read an numeric VLAN identifier"""
     if value in (None, ""):
         return None
     try:
@@ -414,7 +414,7 @@ def _parse_ip_addresses(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[IpAddress]:
-    """Parse IP address records attached to one VLAN"""
+    """Parse IP address records in one VLAN"""
     if value is None:
         return []
     records: list[IpAddress] = []
@@ -500,7 +500,7 @@ def _validate_subnet_mask(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> None:
-    """Report a subnet mask that disagrees with the supplied CIDR"""
+    """Report a subnet mask that doesn't match with their parent range"""
     subnet_mask = _optional_text(value)
     if subnet_mask and subnet_mask != str(ipaddress.ip_network(cidr).netmask):
         _issue(
@@ -600,7 +600,6 @@ def _required_text_any(
 
 
 def _first_value(value: dict[str, Any], *keys: str) -> Any:
-    """Return the first present and non-empty value from a dict"""
     for key in keys:
         if key in value and value[key] not in (None, ""):
             return value[key]
@@ -608,13 +607,11 @@ def _first_value(value: dict[str, Any], *keys: str) -> Any:
 
 
 def _optional_text(value: Any) -> str | None:
-    """Convert an optional scalar source value to text"""
     text = "" if value is None else str(value).strip()
     return text or None
 
 
 def _site_records(value: list[Any]) -> list[dict[str, Any]] | None:
-    """Convert a list of site-like records into dicts"""
     records = [_as_mapping(item) for item in value]
     if all(isinstance(item, dict) for item in records):
         return records
@@ -649,7 +646,7 @@ def _issue(
     field_name: str,
     message: str,
 ) -> None:
-    """Add one source validation issue"""
+    """Add a source validation issue"""
     issues.append(
         ValidationIssue(
             source_file=source_file,

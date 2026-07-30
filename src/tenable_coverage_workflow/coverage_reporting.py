@@ -15,8 +15,8 @@ from ..core.scope_utils import (
 from .audit.audit_logger import atomic_write_json, atomic_write_text
 from .models import CoverageTarget, CoverageValidationResult, ValidationIssue
 
-# Reports are derived from coverage results. They do not make or apply Tenable
-# changes.
+# eports for coverage results
+# no changes are made here
 
 DETAIL_COLUMNS = [
     "status",
@@ -60,7 +60,6 @@ def write_coverage_reports(
     actual_scopes,
     validation_issues: list[ValidationIssue],
 ) -> dict[str, Any]:
-    """Write coverage reports"""
     output_dir = Path(run_dir)
     details = [asdict(result) for result in coverage_results]
     # Extra targets are configured scan addresses outside authoritative scope.
@@ -115,7 +114,6 @@ def write_coverage_reports(
 
 
 def build_proposed_exclusions(extras: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build proposed exclusions"""
     proposals = []
     for finding in extras:
         for cidr in finding["extra_cidrs"]:
@@ -134,7 +132,6 @@ def build_proposed_exclusions(extras: list[dict[str, Any]]) -> list[dict[str, An
 def build_coverage_summary(
     results: list[CoverageValidationResult], extras: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Build coverage summary"""
     totals = _aggregate(results)
     dimensions = {
         "region": _group_summary(results, lambda item: item.region),
@@ -231,7 +228,7 @@ def _aggregate(results: list[CoverageValidationResult]) -> dict[str, Any]:
 
 
 def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
-    """Detect extra scan targets"""
+    """Detect extra scan targets that are not in network definitions source"""
     expected_intervals = [
         scope_to_interval(parse_scope_item(target.cidr)) for target in targets
     ]
@@ -275,7 +272,6 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
 
 
 def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
-    """Write details to csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=DETAIL_COLUMNS, extrasaction="ignore")
     writer.writeheader()
@@ -289,7 +285,6 @@ def _write_details_csv(path: Path, details: list[dict[str, Any]]) -> Path:
 
 
 def _write_dict_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Path:
-    """Write dict to csv"""
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
@@ -303,7 +298,6 @@ def write_final_audit_report(
     validation_issues: list[ValidationIssue],
     coverage_results: list[CoverageValidationResult],
 ) -> Path:
-    """Write final audit report"""
     severity_counts = Counter(issue.severity for issue in validation_issues)
     lines = [
         "# Tenable.sc Scan Analysis - Final Audit Report",
@@ -371,7 +365,6 @@ def write_final_audit_report(
 
 
 def _write_summary_markdown(path: Path, summary: dict[str, Any]) -> Path:
-    """Write summary markdown"""
     totals = summary["totals"]
     lines = [
         "# Coverage Summary",

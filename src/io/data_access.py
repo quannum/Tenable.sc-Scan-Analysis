@@ -125,7 +125,6 @@ class DataAccess:
 
     @staticmethod
     def _validate_live_config(config: DataAccessConfig) -> None:
-        """Validate live config"""
         missing = []
         if not config.sc_url:
             missing.append("TCW_SC_URL/SC_URL")
@@ -141,7 +140,6 @@ class DataAccess:
             )
 
     def get_scans(self) -> list[dict[str, Any]]:
-        """Get list of scans"""
         if self.config.mode == "live":
             scans_payload = self._call_live(
                 self.sc.scans.list,
@@ -154,7 +152,6 @@ class DataAccess:
         return list(self.offline_scans.values())
 
     def get_scan_details(self, scan_id) -> dict[str, Any]:
-        """Get scan details"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.scans.details(scan_id),
@@ -167,7 +164,6 @@ class DataAccess:
         return details
 
     def get_asset(self, asset_id) -> dict[str, Any]:
-        """Get asset"""
         if self.config.mode == "live":
             return self._call_live(
                 lambda: self.sc.asset_lists.details(asset_id),
@@ -176,31 +172,25 @@ class DataAccess:
         return self.offline_assets.get(str(asset_id), {})
 
     def get_repositories(self) -> list[dict[str, Any]]:
-        """Get repositories"""
         return self._list_live_resource("repositories")
 
     def get_asset_lists(self) -> list[dict[str, Any]]:
-        """Get asset lists"""
         if self.config.mode != "live":
             return list(self.offline_assets.values())
         return self._list_live_resource("asset_lists")
 
     def get_policies(self) -> list[dict[str, Any]]:
-        """Get policies"""
         return self._list_live_resource("policies")
 
     def get_credentials(self) -> list[dict[str, Any]]:
-        """Get credentials"""
         return self._list_live_resource("credentials")
 
     def get_observed_hosts(self) -> list[dict[str, Any]]:
-        """Get observed hosts"""
         return self._list_live_resource("hosts")
 
     def create_static_asset(
         self, name: str, ips: list[str], description: str
     ) -> dict[str, Any]:
-        """Create static asset"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.asset_lists.create(
@@ -215,7 +205,6 @@ class DataAccess:
     def update_static_asset(
         self, asset_id: int, ips: list[str], description: str | None = None
     ) -> dict[str, Any]:
-        """Update static asset"""
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
         if description:
@@ -304,7 +293,6 @@ class DataAccess:
         asset_ids: list[int],
         policy_id: int,
     ) -> dict[str, Any]:
-        """Create scan"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.create(
@@ -323,7 +311,6 @@ class DataAccess:
         repository_id: int,
         policy_id: int,
     ) -> dict[str, Any]:
-        """Update scan configuration"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.scans.edit(
@@ -435,7 +422,6 @@ def _difference_definition(
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
-    """Iterate through resource records"""
     if isinstance(payload, list):
         for item in payload:
             if isinstance(item, dict):
@@ -464,7 +450,6 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
 
 
 def _parse_bool(value: Any) -> bool:
-    """Parse a boolean value"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):

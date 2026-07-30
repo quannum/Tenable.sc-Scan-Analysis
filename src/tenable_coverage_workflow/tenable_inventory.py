@@ -21,7 +21,7 @@ SENSITIVE_KEY_PARTS = (
 
 
 def collect_tenable_inventory(data_access: DataAccess) -> dict[str, Any]:
-    """Collect Tenable.sc configuration snapshot."""
+    """Collect Tenable.sc configuration snapshot"""
     inventory: dict[str, Any] = {
         "schema_version": 1,
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -59,7 +59,6 @@ def _expand_details(
     records: list[dict[str, Any]],
     details_getter: Callable[[Any], dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Expand details"""
     expanded = []
     for record in records:
         record_id = record.get("id")
@@ -78,7 +77,7 @@ def _expand_details(
 
 
 def redact_sensitive(value: Any) -> Any:
-    """Redact sensitive"""
+    """Redact sensitive stuff"""
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
@@ -94,7 +93,6 @@ def redact_sensitive(value: Any) -> Any:
 
 
 def write_inventory_snapshot(snapshot: dict[str, Any], output_file: str | Path) -> Path:
-    """Write inventory snapshot"""
     path = Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
@@ -120,7 +118,6 @@ def write_inventory_snapshot(snapshot: dict[str, Any], output_file: str | Path) 
 def write_inventory_reports(
     snapshot: dict[str, Any], output_file: str | Path
 ) -> dict[str, Path]:
-    """Write readable inventory CSV reports"""
     snapshot_path = Path(output_file)
     report_dir = snapshot_path.with_name(f"{snapshot_path.stem}_reports")
     resources = snapshot.get("resources", {})
@@ -177,7 +174,6 @@ def write_inventory_reports(
 
 
 def _write_resource_csv(path: Path, records: Any) -> Path:
-    """Write a general resource CSV"""
     return _write_csv(
         path,
         ("ID", "Name", "Description", "Additional Details"),
@@ -194,7 +190,6 @@ def _write_resource_csv(path: Path, records: Any) -> Path:
 
 
 def _write_asset_group_csv(path: Path, records: Any) -> Path:
-    """Write an asset group CSV"""
     return _write_csv(
         path,
         (
@@ -231,7 +226,6 @@ def _write_asset_group_csv(path: Path, records: Any) -> Path:
 
 
 def _write_csv(path: Path, fieldnames: tuple[str, ...], rows: Any) -> Path:
-    """Write one CSV report"""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
@@ -241,7 +235,6 @@ def _write_csv(path: Path, fieldnames: tuple[str, ...], rows: Any) -> Path:
 
 
 def _summary_rows(snapshot: dict[str, Any], resources: dict[str, Any]):
-    """Build collection summary rows"""
     counts = snapshot.get("resource_counts", {})
     errors = snapshot.get("collection_errors", {})
     for name in (
@@ -262,7 +255,6 @@ def _scan_rows(
     policies: dict[str, str],
     asset_groups: dict[str, str],
 ):
-    """Build readable scan rows"""
     for record in _records(records):
         repository_id, repository_name = _resource_reference(
             _record_field(record, "repository", "repo", "repositoryID"), repositories
@@ -309,7 +301,7 @@ def _scan_rows(
 
 
 def _resource_name_index(records: Any) -> dict[str, str]:
-    """Index resource names by ID"""
+    """Get repo / policy / asset by ID"""
     return {
         str(resource_id): str(name)
         for record in _records(records)
@@ -321,7 +313,6 @@ def _resource_name_index(records: Any) -> dict[str, str]:
 def _asset_references(
     record: dict[str, Any], names: dict[str, str]
 ) -> tuple[list[str], list[str]]:
-    """Resolve scan asset group references"""
     value = _record_field(record, "assets", "assetLists")
     values = (
         value if isinstance(value, list) else ([] if value in (None, "") else [value])
@@ -338,7 +329,6 @@ def _asset_references(
 
 
 def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
-    """Resolve one resource reference"""
     if isinstance(value, dict):
         resource_id = _record_field(value, "id", "repositoryID", "policyID")
         name = _record_field(value, "name")
@@ -372,13 +362,11 @@ def _record_field(record: dict[str, Any], *names: str) -> Any:
 
 
 def _additional_details(record: dict[str, Any], excluded: set[str]) -> str:
-    """Format fields not shown in their own column"""
     details = {key: value for key, value in record.items() if key not in excluded}
     return _format_value(details) if details else ""
 
 
 def _format_value(value: Any) -> str:
-    """Format a value for CSV output"""
     if value in (None, ""):
         return ""
     if isinstance(value, (dict, list)):

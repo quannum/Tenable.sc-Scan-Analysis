@@ -93,7 +93,6 @@ def build_detect_config(
     config: ScheduledServiceConfig,
     run_id: str,
 ) -> DetectAndPlanConfig:
-    """Build detect config"""
     return DetectAndPlanConfig(
         source_config=config.source_config,
         output_dir=config.output_dir,
