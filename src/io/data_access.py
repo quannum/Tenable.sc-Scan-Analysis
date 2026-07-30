@@ -7,9 +7,6 @@ from typing import Any, Callable, Iterator, Protocol
 
 LOGGER = logging.getLogger(__name__)
 
-# This module gives the workflow one interface for offline JSON files and the
-# live Tenable.sc API.
-
 
 def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
     data: dict[str, dict[str, Any]] = {}
@@ -92,7 +89,7 @@ class DataAccess:
         self.offline_assets = {}
 
         if config.mode == "live":
-            # Validate settings before importing or connecting to pyTenable.
+            # validate settings before importing or connecting to Tenable
             self._validate_live_config(config)
             try:
                 from tenable.sc import TenableSC
