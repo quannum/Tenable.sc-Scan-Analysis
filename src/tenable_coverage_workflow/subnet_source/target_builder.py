@@ -25,9 +25,7 @@ def build_coverage_targets(
                     tags=subnet_tags,
                 )
             )
-            _append_excluded_ip_targets(
-                targets, site_definition, subnet, subnet_tags
-            )
+            _append_excluded_ip_targets(targets, site_definition, subnet, subnet_tags)
 
     for private_range in site_definition.private_ranges:
         targets.append(
@@ -62,9 +60,7 @@ def build_coverage_targets(
                     tags=vlan_tags,
                 )
             )
-            _append_excluded_ip_targets(
-                targets, site_definition, vlan, vlan_tags
-            )
+            _append_excluded_ip_targets(targets, site_definition, vlan, vlan_tags)
 
     return targets
 
@@ -86,7 +82,7 @@ def _append_excluded_ip_targets(
     subnet: VlanRange,
     subnet_tags: list[str],
 ) -> None:
-    """Add report-only targets for individual IPs tagged exclude"""
+    """Add IPs with exclude tag"""
     for ip_address in subnet.ip_addresses:
         if not find_exclusion_tag(ip_address.tags):
             continue

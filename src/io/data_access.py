@@ -117,13 +117,12 @@ class DataAccess:
                 ssl_verify=ssl_verify,
             )
         else:
-            # Offline mode only reads previously collected json files.
+            # offline mode gets scan and asset json folders
             self.offline_scans = load_json_folder(config.scan_json_dir)
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
     @staticmethod
     def _validate_live_config(config: DataAccessConfig) -> None:
-        """Validate live config"""
         missing = []
         if not config.sc_url:
             missing.append("TCW_SC_URL/SC_URL")
@@ -281,7 +280,7 @@ class DataAccess:
                 if not self._is_retryable_exception(exc) or attempt >= attempts:
                     raise
 
-                # Retry connection-style failures with a longer wait each time.
+                # Retry connection-style failures with a longer wait each time
                 backoff = getattr(
                     self,
                     "live_retry_backoff_seconds",
@@ -347,8 +346,8 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
     if not isinstance(payload, dict):
         return
 
-    # Detail-style endpoints can return one resource directly instead of a
-    # collection wrapper.  Treat that response as the one record it contains.
+    # if response has no asset / scan / policy wrapper,
+    # treat it as the record itself
     if "id" in payload or "uuid" in payload:
         yield payload
         return

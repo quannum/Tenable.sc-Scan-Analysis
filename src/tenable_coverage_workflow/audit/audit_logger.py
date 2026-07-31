@@ -26,7 +26,7 @@ class AuditLogger:
         self._append_jsonl(payload)
 
     def _append_jsonl(self, payload: dict[str, Any]) -> None:
-        """Add one JSON line to the audit log"""
+        """Add one json line to the audit log"""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True))
@@ -34,7 +34,6 @@ class AuditLogger:
 
 
 def atomic_write_text(path: str | Path, content: str) -> Path:
-    """Write text"""
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +60,6 @@ def atomic_write_text(path: str | Path, content: str) -> Path:
 
 
 def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
-    """Write json"""
     return atomic_write_text(
         path,
         json.dumps(
@@ -75,7 +73,6 @@ def atomic_write_json(path: str | Path, payload: dict[str, Any]) -> Path:
 
 
 def _serialize_value(value: Any) -> Any:
-    """Serialize value"""
     if is_dataclass(value):
         return {
             key: _serialize_value(item)

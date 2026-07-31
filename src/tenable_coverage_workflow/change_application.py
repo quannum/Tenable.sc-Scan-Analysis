@@ -19,7 +19,7 @@ SUPPORTED_ACTIONS = {
     "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
     "UPDATE_SCAN_POLICY_AND_TARGET",
 }
-MANAGED_DESCRIPTION = "Managed by Tenable.sc Scan Analysis"
+MANAGED_DESCRIPTION = "Created with Tenable.sc Scan Analysis"
 
 
 @dataclass(frozen=True)
@@ -92,7 +92,6 @@ class ChangeDataAccess(Protocol):
 
 
 def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
-    """Load approved plan"""
     path = Path(path_value)
     raw_bytes = path.read_bytes()
     fingerprint = hashlib.sha256(raw_bytes).hexdigest()
@@ -196,7 +195,7 @@ class ChangeApplier:
     def preflight(self, plan: ApprovedPlan) -> None:
         """Check requirements before applying changes"""
         errors = []
-        # Check every named policy before creating or updating anything.
+        # Check every named policy before creating or updating anything
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
                 continue
@@ -208,14 +207,13 @@ class ChangeApplier:
             raise ValueError("Apply preflight failed: " + "; ".join(errors))
 
     def apply(self, plan: ApprovedPlan) -> dict[str, Any]:
-        """Apply the requested value"""
         self.preflight(plan)
         started_at = datetime.now(timezone.utc)
         operations = []
         asset_descriptions = _build_asset_descriptions(plan.approved_changes)
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
-                # Keep manual-review rows visible without applying them.
+                # Keep manual review rows visible without applying them
                 operations.append(
                     ApplyOperation(
                         site_code=change.site_code,
@@ -274,10 +272,9 @@ class ChangeApplier:
         change: ApprovedChange,
         asset_description: str,
     ) -> ApplyOperation:
-        """Apply change"""
-        asset, asset_status = self._ensure_asset(change, asset_description)
+        asset, asset_status = self._confirm_asset(change, asset_description)
         asset_id = _resource_id(asset, "asset group", change.asset_name)
-        scan, scan_status = self._ensure_scan(change, asset_id)
+        scan, scan_status = self._confirm_scan(change, asset_id)
         scan_id = _resource_id(scan, "scan", change.scan_name)
         status = (
             "UNCHANGED"
@@ -296,15 +293,15 @@ class ChangeApplier:
             message="Post-change verification passed.",
         )
 
-    def _ensure_asset(
+    def _confirm_asset(
         self,
         change: ApprovedChange,
         asset_description: str,
     ) -> tuple[dict[str, Any], str]:
-        """Ensure asset created or updated"""
+        """Confirm asset created or updated"""
         existing = self.assets.get(change.asset_name)
         if existing is None:
-            # A new asset starts with the approved CIDR and managed description.
+            # new asset starts with the approved CIDR and managed description
             created = self.data_access.create_static_asset(
                 change.asset_name,
                 [change.cidr],
@@ -317,8 +314,8 @@ class ChangeApplier:
 
         asset_id = _resource_id(existing, "asset group", change.asset_name)
         details = self.data_access.get_asset(asset_id) or existing
-        current_scopes = extract_asset_scopes(details)
-        # Preserve existing description text while adding managed scope lines.
+        current_scopes = get_asset_scopes(details)
+        # keep existing description text while adding managed scope lines
         description = _merge_asset_description(
             _text(details.get("description")),
             asset_description,
@@ -346,12 +343,12 @@ class ChangeApplier:
         self.assets[change.asset_name] = merged
         return merged, "UPDATED"
 
-    def _ensure_scan(
+    def _confirm_scan(
         self, change: ApprovedChange, asset_id: int
     ) -> tuple[dict[str, Any], str]:
-        """Ensure scan created or updated"""
+        """Confirm scan created or updated"""
         existing = self.scans.get(change.scan_name)
-        # Policy names are resolved here so each Tenable instance uses its own ID.
+        # Policy names are resolved here so each Tenable instance uses its own ID
         policy_id = _resource_id(
             self.policies[change.policy_name], "policy", change.policy_name
         )
@@ -369,16 +366,16 @@ class ChangeApplier:
 
         scan_id = _resource_id(existing, "scan", change.scan_name)
         details = self.data_access.get_scan_details(scan_id) or existing
-        current_asset_ids = extract_scan_asset_ids(details)
-        current_repository_id = extract_nested_id(details, "repository", "repositoryID")
-        current_policy_id = extract_nested_id(details, "policy", "policyID")
+        current_asset_ids = get_scan_asset_ids(details)
+        current_repository_id = get_nested_id(details, "repository", "repositoryID")
+        current_policy_id = get_nested_id(details, "policy", "policyID")
         if (
             asset_id in current_asset_ids
             and current_repository_id == self.repository_id
             and current_policy_id == policy_id
         ):
             return details, "UNCHANGED"
-        # Add this asset without dropping assets already assigned to the scan.
+        # add this asset without dropping assets already assigned to the scan
         updated_ids = sorted(current_asset_ids | {asset_id})
         updated = self.data_access.update_scan_configuration(
             scan_id,
@@ -394,7 +391,7 @@ class ChangeApplier:
     def _verify_asset(self, asset_id: int, expected_cidr: str) -> None:
         """Check that an asset group contains the expected CIDR"""
         details = self.data_access.get_asset(asset_id)
-        if expected_cidr not in extract_asset_scopes(details):
+        if expected_cidr not in get_asset_scopes(details):
             raise RuntimeError(
                 f"Asset {asset_id} verification failed: {expected_cidr} not present"
             )
@@ -407,20 +404,18 @@ class ChangeApplier:
     ) -> None:
         """Check that a scan has the expected settings"""
         details = self.data_access.get_scan_details(scan_id)
-        if expected_asset_id not in extract_scan_asset_ids(details):
+        if expected_asset_id not in get_scan_asset_ids(details):
             raise RuntimeError(
                 f"Scan {scan_id} verification failed: asset {expected_asset_id} "
                 "not attached"
             )
-        if extract_nested_id(details, "repository", "repositoryID") != (
-            self.repository_id
-        ):
+        if get_nested_id(details, "repository", "repositoryID") != (self.repository_id):
             raise RuntimeError(
                 f"Scan {scan_id} verification failed: repository mismatch"
             )
         if (
             expected_policy_id is not None
-            and extract_nested_id(details, "policy", "policyID") != expected_policy_id
+            and get_nested_id(details, "policy", "policyID") != expected_policy_id
         ):
             raise RuntimeError(f"Scan {scan_id} verification failed: policy mismatch")
 
@@ -443,8 +438,7 @@ class ChangeApplier:
         return result
 
 
-def extract_asset_scopes(asset: dict[str, Any]) -> set[str]:
-    """Extract asset scopes"""
+def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
     values = []
     type_fields = asset.get("typeFields", {})
     if isinstance(type_fields, dict):
@@ -461,8 +455,7 @@ def extract_asset_scopes(asset: dict[str, Any]) -> set[str]:
     return {scope for scope in scopes if scope}
 
 
-def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
-    """Extract scan asset ids"""
+def get_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
     values = scan.get("assets", scan.get("assetLists", []))
     if not isinstance(values, list):
         return set()
@@ -478,10 +471,9 @@ def extract_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
     return result
 
 
-def extract_nested_id(
+def get_nested_id(
     record: dict[str, Any], nested_key: str, scalar_key: str
 ) -> int | None:
-    """Extract nested id"""
     value = record.get(nested_key)
     raw_id = value.get("id") if isinstance(value, dict) else record.get(scalar_key)
     if raw_id in (None, ""):
@@ -511,12 +503,11 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
 
 
 def _text(value: Any) -> str:
-    """Convert a value to trimmed text"""
     return "" if value is None else str(value).strip()
 
 
 def _build_asset_descriptions(changes: list[ApprovedChange]) -> dict[str, str]:
-    """Build managed descriptions for proposed asset groups"""
+    """Build descriptions for proposed asset groups"""
     scope_lines: dict[str, set[str]] = {}
     for change in changes:
         line = _asset_description_line(change)
@@ -531,7 +522,7 @@ def _build_asset_descriptions(changes: list[ApprovedChange]) -> dict[str, str]:
 
 
 def _asset_description_line(change: ApprovedChange) -> str | None:
-    """Build one managed scope line for an approved change"""
+    """Build one scope line for an approved change"""
     if change.vlan_name:
         grouping_label = change.grouping_tag or f"VLAN {change.vlan_tag or 'N/A'}"
         return f"{change.vlan_name} {change.cidr} {grouping_label}"
@@ -556,7 +547,6 @@ def _merge_asset_description(existing: str, planned: str) -> str:
 
 
 def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:
-    """Write apply markdown"""
     lines = [
         "# Tenable.sc Apply Audit",
         "",

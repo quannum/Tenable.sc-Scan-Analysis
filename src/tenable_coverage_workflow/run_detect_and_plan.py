@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, TypedDict, Protocol, cast
 
 from dotenv import load_dotenv
 
@@ -44,22 +44,22 @@ from .subnet_source.source_config import (
 LOGGER = logging.getLogger(__name__)
 
 # This module coordinates the dry-run workflow from source definitions through
-# coverage checks, proposed changes, and report files.
+# coverage checks, proposed changes, and report files
 
 
 class ConfigurationDataAccess(Protocol):
-    """The read-only data access surface needed to index configuration."""
+    """The read-only data access surface needed to index configuration"""
 
     def get_asset_lists(self) -> list[dict[str, Any]]:
-        """List asset groups."""
+        """List asset groups"""
         ...
 
     def get_scans(self) -> list[dict[str, Any]]:
-        """List scans."""
+        """List scans"""
         ...
 
     def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
-        """Read one scan's configuration."""
+        """Read one scan's configuration"""
         ...
 
 
@@ -267,13 +267,11 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
-        """Read one scalar setting"""
         return resolver.get(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        """Read one comma-separated setting"""
         return resolver.csv(name, default, environment_name)
 
     if args.dry_run is False:
@@ -496,7 +494,7 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     data_access = DataAccess(config)
     scope_ws, normalized_ws = build_scope_tables()
     build_scope_sheets(scope_ws, normalized_ws, data_access, config)
-    # Coverage uses normalized scope rows, not the original Tenable text.
+    # coverage uses normalized scope rows, not the original Tenable text
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws
     )
@@ -508,9 +506,14 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     )
 
 
+class ConfigurationIndex(TypedDict):
+    assets_by_name: dict[str, list[dict[str, Any]]]
+    scans_by_name: dict[str, list[dict[str, Any]]]
+
+
 def build_configuration_index(
     data_access: ConfigurationDataAccess,
-) -> dict[str, object]:
+) -> ConfigurationIndex:
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
         name = str(asset.get("name") or "").strip()
@@ -580,8 +583,8 @@ def validate_coverage_targets(
         status = derive_workflow_status(
             base_result.status, base_result.exclusion_ip_total
         )
-        # Exact names distinguish missing resources from scans that merely cover
-        # the same addresses.
+        # exact names distinguish missing resources from scans that cover
+        # the same addresses
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"

@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..models import SourceLoadResult, ValidationIssue
-from .site_parser import extract_site_objects, parse_site_object
+from .site_parser import get_site_objects, parse_site_object
 from .target_builder import build_coverage_targets
 from .validation import add_relationship_issues
 
@@ -9,9 +9,8 @@ from .validation import add_relationship_issues
 def load_json_payload(
     payload: Any, source_file: str = "json-payload", audit_logger=None
 ) -> SourceLoadResult:
-    """Load json payload"""
     result = SourceLoadResult(files_processed=1)
-    sites = extract_site_objects(payload)
+    sites = get_site_objects(payload)
     if sites is None:
         result.files_failed = 1
         result.validation_issues.append(

@@ -209,7 +209,7 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(data_access.scans[9]["assets"], [{"id": 8}, {"id": 99}])
             self.assertEqual(
                 data_access.assets[8]["description"],
-                "Managed by Tenable.sc Scan Analysis\n\n"
+                "Created with Tenable.sc Scan Analysis\n\n"
                 "vl16-it-services-static 10.1.16.0/24 vlan-server",
             )
 
@@ -247,7 +247,7 @@ class ChangeApplicationTests(unittest.TestCase):
             asset = next(iter(data_access.assets.values()))
             self.assertEqual(
                 asset["description"],
-                "Managed by Tenable.sc Scan Analysis\n\n"
+                "Created with Tenable.sc Scan Analysis\n\n"
                 "vl16-it-services-static 10.1.16.0/24 vlan-workstation\n"
                 "vl17-it-services-sandbox 10.1.17.0/24 vlan-workstation",
             )
@@ -306,11 +306,12 @@ class ChangeApplicationTests(unittest.TestCase):
             }
             self.assertEqual(
                 descriptions["NYC01 Public"],
-                "Managed by Tenable.sc Scan Analysis\n\n" "Public Range 203.0.113.0/24",
+                "Created with Tenable.sc Scan Analysis\n\n"
+                "Public Range 203.0.113.0/24",
             )
             self.assertEqual(
                 descriptions["NYC01 Private Discovery"],
-                "Managed by Tenable.sc Scan Analysis\n\n"
+                "Created with Tenable.sc Scan Analysis\n\n"
                 "Private Supernet 10.1.0.0/16",
             )
 

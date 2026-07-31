@@ -124,6 +124,7 @@ class DataAccessTests(unittest.TestCase):
             [{"id": 1, "name": "assets"}, {"id": 2, "name": "policy"}],
         )
 
+    # responses with no asset / scan / policy wrapper
     def test_resource_payload_normalization_handles_a_single_resource(self):
         self.assertEqual(
             normalize_resource_list({"id": 1, "name": "one"}),

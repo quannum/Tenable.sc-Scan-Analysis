@@ -73,9 +73,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                     "site_definition": [
                         _site(
                             "API01",
-                            private_ranges=[
-                                _network_range("10.9.0.0", "/24", [])
-                            ],
+                            private_ranges=[_network_range("10.9.0.0", "/24", [])],
                             site_name="Module Site",
                         )
                     ]
@@ -122,9 +120,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                     "site_definition": [
                         _site(
                             "ALL01",
-                            private_ranges=[
-                                _network_range("10.42.0.0", "/24", [])
-                            ],
+                            private_ranges=[_network_range("10.42.0.0", "/24", [])],
                             site_name="All Sites Example",
                         )
                     ]

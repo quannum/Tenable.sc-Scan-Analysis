@@ -56,7 +56,6 @@ class TenableAccessConfig:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build parser"""
     parser = argparse.ArgumentParser(prog="tenable-sc-scan-analysis")
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--config-file")
@@ -147,7 +146,6 @@ def _add_grouping_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def main(argv=None) -> int:
-    """Run the command-line workflow"""
     load_dotenv()
     args = build_parser().parse_args(argv)
     try:
@@ -164,7 +162,7 @@ def main(argv=None) -> int:
         if args.command == "export-report":
             return _export_report(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-        _emit(f"ERROR: {exc}")
+        print(f"ERROR: {exc}")
         return EXIT_OPERATION
     return EXIT_CONFIG
 
@@ -193,7 +191,7 @@ def _validate_definitions(args) -> int:
     output_file = _setting(args, "output_file")
     if output_file:
         write_inventory_snapshot(payload, output_file)
-    _emit(
+    print(
         f"Validated {len(result.site_definitions)} site(s), "
         f"{len(result.coverage_targets)} target(s), "
         f"{len(result.validation_issues)} issue(s)."
@@ -249,7 +247,7 @@ def _collect_tenable(args) -> int:
         )
     output = write_inventory_snapshot(snapshot, output_file)
     reports = write_inventory_reports(snapshot, output)
-    _emit(
+    print(
         f"Tenable.sc inventory written to {output}; readable CSV reports written to "
         f"{reports['scans'].parent}"
     )
@@ -262,7 +260,6 @@ def _collect_tenable(args) -> int:
 
 
 def _analyze_or_propose(args) -> int:
-    """Run the analysis or proposal command"""
     source = _source_config(args)
     tenable = _tenable_config(args)
     filter_disabled_mode = str(_setting(args, "filter_disabled_mode", default="ALL"))
@@ -302,13 +299,13 @@ def _analyze_or_propose(args) -> int:
         ),
     )
     summary = run_detect_and_plan(config)
-    _emit(f"Run {summary['run_id']} completed: {summary['output_directory']}")
+    print(f"Run {summary['run_id']} completed: {summary['output_directory']}")
     return EXIT_OK
 
 
 def _apply_changes(args) -> int:
     if args.apply is not True:
-        _emit("Refusing mutation: apply-changes requires the explicit --apply flag.")
+        print("Refusing mutation: apply-changes requires the explicit --apply flag.")
         return EXIT_APPLY_REQUIRED
     plan_file = _setting(args, "plan_file")
     if not plan_file:
@@ -330,7 +327,7 @@ def _apply_changes(args) -> int:
     output = write_inventory_snapshot(result, result_file)
     markdown_output = write_apply_markdown(result, Path(result_file).with_suffix(".md"))
     failed = int(result["status_counts"].get("FAILED", 0))
-    _emit(
+    print(
         f"Apply results written to {output} and {markdown_output}; "
         f"{result['status_counts'].get('APPLIED', 0)} applied, "
         f"{result['status_counts'].get('UNCHANGED', 0)} unchanged, "
@@ -378,12 +375,11 @@ def _export_report(args) -> int:
         raise ValueError(f"No report artifacts found in {run_dir}")
     manifest = {"schema_version": 1, "source_run_dir": str(run_dir), "files": copied}
     write_inventory_snapshot(manifest, output_dir / "report_manifest.json")
-    _emit(f"Exported {len(copied)} report artifact(s) to {output_dir}")
+    print(f"Exported {len(copied)} report artifact(s) to {output_dir}")
     return EXIT_OK
 
 
 def _load_cli_config(path_value: str | None) -> dict[str, Any]:
-    """Load cli config"""
     if not path_value:
         return {}
     return load_config_section(
@@ -407,7 +403,6 @@ def _setting(
 
 
 def _as_bool(value: Any) -> bool:
-    """Convert to bool"""
     return parse_bool(value, "boolean")
 
 
@@ -420,10 +415,6 @@ def _csv_setting(
     """Get one comma-separated command setting"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.csv(name, default, environment_name)
-
-
-def _emit(message: str) -> None:
-    print(message)
 
 
 if __name__ == "__main__":

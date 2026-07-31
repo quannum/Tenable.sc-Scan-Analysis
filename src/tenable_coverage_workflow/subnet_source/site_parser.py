@@ -12,11 +12,12 @@ from ..models import (
     VlanRange,
 )
 
-# subnet-as-code returns one stable payload shape. Keep the source boundary
-# strict so schema changes are found during validation instead of guessed at.
+# getting site_definitions expect same format for all sites
+# subnet-as-code network definitions should all be same format
+# or this will be upset and throw up errors
 
 
-def extract_site_objects(payload: Any) -> list[dict[str, Any]] | None:
+def get_site_objects(payload: Any) -> list[dict[str, Any]] | None:
     """Return the site_definition records from a subnet-as-code payload"""
     payload = _as_mapping(payload)
     if isinstance(payload, list):
@@ -45,7 +46,7 @@ def extract_site_objects(payload: Any) -> list[dict[str, Any]] | None:
 def parse_site_object(
     raw: dict[str, Any], source_file: str
 ) -> tuple[SiteNetworkDefinition | None, list[ValidationIssue]]:
-    """Parse one subnet-as-code site_definition record"""
+    """Parse one subnet-as-code site_definition"""
     raw = _as_mapping(raw)
     issues: list[ValidationIssue] = []
     if not isinstance(raw, dict):
@@ -111,9 +112,7 @@ def _parse_public_ranges(
         raw_range = _as_mapping(raw_range)
         field_name = f"public_ranges[{index}]"
         if not isinstance(raw_range, dict):
-            cidr = _parse_network(
-                raw_range, source_file, site_code, field_name, issues
-            )
+            cidr = _parse_network(raw_range, source_file, site_code, field_name, issues)
             if cidr:
                 ranges.append(
                     PublicNetworkRange(
@@ -175,9 +174,7 @@ def _parse_private_ranges(
         raw_range = _as_mapping(raw_range)
         field_name = f"private_ranges[{index}]"
         if not isinstance(raw_range, dict):
-            cidr = _parse_network(
-                raw_range, source_file, site_code, field_name, issues
-            )
+            cidr = _parse_network(raw_range, source_file, site_code, field_name, issues)
             if cidr:
                 ranges.append(PrivateNetworkRange(cidr=cidr))
             continue
@@ -309,7 +306,7 @@ def _parse_network(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> str | None:
-    """Build a canonical IPv4 CIDR from network and cidr fields"""
+    """Build a IPv4 cidr from network and cidr fields"""
     value = _as_mapping(value)
     if isinstance(value, str):
         return _parse_scope_text(value, source_file, site_code, field_name, issues)
@@ -317,18 +314,14 @@ def _parse_network(
         _issue(issues, source_file, site_code, field_name, "must be an object.")
         return None
     if "network" not in value and "cidr" in value:
-        cidr = _required_text(
-            value, "cidr", source_file, site_code, issues, field_name
-        )
+        cidr = _required_text(value, "cidr", source_file, site_code, issues, field_name)
         if not cidr:
             return None
         return _parse_scope_text(cidr, source_file, site_code, field_name, issues)
     network = _required_text(
         value, "network", source_file, site_code, issues, field_name
     )
-    prefix = _required_text(
-        value, "cidr", source_file, site_code, issues, field_name
-    )
+    prefix = _required_text(value, "cidr", source_file, site_code, issues, field_name)
     if not network or not prefix:
         return None
     return _parse_scope_text(
@@ -343,7 +336,7 @@ def _parse_scope_text(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> str | None:
-    """Parse a direct CIDR, range, or IP address into canonical scope text"""
+    """Parse a direct CIDR, range, or IP address into scope text"""
     try:
         parsed_type, parsed_value = parse_scope_item(value)
     except ValueError as exc:
@@ -475,7 +468,7 @@ def _contained_subnets(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[VlanRange]:
-    """Keep only VLANs contained by their public or private supernet"""
+    """check VLANs are contained by their public or private supernet"""
     parent = parse_scope_item(parent_cidr)
     contained: list[VlanRange] = []
     for subnet in subnets:
@@ -500,7 +493,7 @@ def _validate_subnet_mask(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> None:
-    """Report a subnet mask that disagrees with the supplied CIDR"""
+    """Report a subnet mask that doesn't match with the supplied CIDR"""
     subnet_mask = _optional_text(value)
     if subnet_mask and subnet_mask != str(ipaddress.ip_network(cidr).netmask):
         _issue(
@@ -519,7 +512,7 @@ def _parse_dhcp_options(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> dict[str, object]:
-    """Copy the optional dhcp-options mapping from a private range"""
+    """Copy the optional dhcp-options from a private range"""
     if value is None:
         return {}
     if isinstance(value, dict):
@@ -608,7 +601,7 @@ def _first_value(value: dict[str, Any], *keys: str) -> Any:
 
 
 def _optional_text(value: Any) -> str | None:
-    """Convert an optional scalar source value to text"""
+    """Convert an optional source value to text"""
     text = "" if value is None else str(value).strip()
     return text or None
 
@@ -635,9 +628,7 @@ def _as_mapping(value: Any) -> Any:
         return dict_method()
     if hasattr(value, "__dict__"):
         return {
-            key: item
-            for key, item in vars(value).items()
-            if not key.startswith("_")
+            key: item for key, item in vars(value).items() if not key.startswith("_")
         }
     return value
 

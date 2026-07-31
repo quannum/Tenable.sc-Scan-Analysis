@@ -101,7 +101,6 @@ class CoverageResult:
 
 
 def extract_scan_name(scan) -> str:
-    """Get scan name"""
     if not isinstance(scan, dict):
         return ""
 
@@ -115,7 +114,7 @@ def extract_scan_name(scan) -> str:
 
 
 def filter_scans(scans, config):
-    """Filter scans by name and enabled status
+    """Filter scans by name and enabled/disabled status
 
     Log the number of scans before and after filtering
     """
@@ -258,7 +257,6 @@ def walk_combination(
 
 
 def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
-    """Build scope sheets"""
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
@@ -344,7 +342,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
 
 def build_coverage_data(normalized_ws):
-    """Build coverage data"""
     actual_scopes = []
     excluded_scopes = []
     actual_by_scan = defaultdict(list)
@@ -386,7 +383,6 @@ def build_coverage_data(normalized_ws):
 
 
 def determine_required_scan_coverage(required_scan, covering_scans):
-    """Determine required scan coverage"""
     normalized_required_scan = str(required_scan or "").strip()
     if not normalized_required_scan:
         return "", ""
@@ -398,7 +394,6 @@ def determine_required_scan_coverage(required_scan, covering_scans):
 
 
 def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
-    """Build exclusion reason"""
     exclusion_lines = []
     for excluded_scan_name in sorted(relevant_exclusions):
         for entry in relevant_exclusions[excluded_scan_name]:
@@ -413,7 +408,6 @@ def build_exclusion_reason(exclusion_ip_total, relevant_exclusions):
 def determine_coverage_status(
     covered_count, expected_size, exclusion_ip_total, relevant_exclusions
 ):
-    """Determine coverage status"""
     if covered_count == expected_size:
         return STATUS_OK, "Yes", "Fully contained by scan scope"
 
@@ -431,7 +425,6 @@ def determine_coverage_status(
 
 
 def collect_covering_scans(actual_scopes, expected):
-    """Collect covering scans"""
     full_cover_scans = set()
     partial_scans = set()
 
@@ -452,7 +445,6 @@ def calculate_scan_intervals(
     actual_by_scan,
     excluded_by_scan,
 ):
-    """Calculate scan intervals"""
     included = []
     excluded = []
     relevant_exclusions = []
@@ -513,7 +505,6 @@ def calculate_coverage_result(
     excluded_by_scan,
     exclusion_impact_by_scan,
 ):
-    """Calculate coverage result"""
     expected_size = scope_size(expected)
     expected_start, expected_end = scope_to_interval(expected)
     covering_scans = collect_covering_scans(actual_scopes, expected)
@@ -523,7 +514,7 @@ def calculate_coverage_result(
     total_included_ips = 0
     exclusion_ip_total = 0
 
-    # Each covering scan can add scope or remove scope through an exclusion.
+    # each covering scan can add scope or remove scope through an exclusion
     for scan_name in covering_scans:
         included_ips, net_intervals, scan_exclusions, scan_excluded_ips = (
             calculate_scan_intervals(
@@ -545,7 +536,7 @@ def calculate_coverage_result(
         if scan_exclusions:
             relevant_exclusions[scan_name].extend(scan_exclusions)
 
-    # Several scans can cover the same addresses, so count the merged result.
+    # if multiple scans cover the same address range, merge the overlap
     cover_intervals = merge_intervals(cover_intervals)
     covered_count = sum(end - start + 1 for start, end in cover_intervals)
     covered_count = min(covered_count, expected_size)
