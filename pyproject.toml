@@ -50,6 +50,6 @@ python_version = "3.10"
 files = ["src", "tests"]
 typeCheckingMode = "standard"
 
-# Temporary: third-party packages are not available in this environment.
+# ignore missing dependencies for now
 reportMissingImports = "none"
 reportMissingModuleSource = "none"

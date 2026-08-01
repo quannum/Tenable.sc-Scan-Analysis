@@ -9,7 +9,7 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         return row
 
     getter = _build_getter(row)
-    covering_scans = getter("covering_scans", [])
+    covering_scans = getter("covering_scans", []) or []
     if isinstance(covering_scans, set):
         covering_scans = sorted(covering_scans)
     elif isinstance(covering_scans, tuple):
