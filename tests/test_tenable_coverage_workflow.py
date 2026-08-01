@@ -73,7 +73,7 @@ class PlanningTests(unittest.TestCase):
     def test_public_scan_name_uses_only_the_site_code(self):
         target = CoverageTarget(
             target_type="PUBLIC",
-            cidr="203.0.113.0/24",
+            cidr="139.138.231.0/24",
             site_code="nyc",
             site_name="New York Office",
             location="New York, NY",
@@ -450,7 +450,7 @@ class PlanningTests(unittest.TestCase):
             CoverageValidationResult(
                 status="GAP",
                 target_type="PUBLIC",
-                cidr="203.0.113.0/26",
+                cidr="139.138.231.0/26",
                 site_code="NYC01",
                 site_name="New York Office",
                 region="US East",
@@ -502,35 +502,67 @@ class DetectAndPlanCliTests(unittest.TestCase):
         class Module:
             @staticmethod
             def get_sites(**kwargs):
-                return {
-                    "site_definition": [
-                        {
-                            "site_code": "NYC01",
-                            "site_name": "New York Office",
-                            "region": "US East",
-                            "public_ranges": ["203.0.113.0/26"],
-                            "private_ranges": [
-                                {
-                                    "cidr": "10.1.0.0/16",
-                                    "name": "NYC private",
-                                    "vlans": [
-                                        {
-                                            "name": "End User",
-                                            "vlan_id": 130,
-                                            "cidr": "10.1.32.0/22",
-                                        }
-                                    ],
-                                }
-                            ],
-                        },
-                        {
-                            "site_code": "BAD01",
-                            "site_name": "Broken Site",
-                            "region": "US East",
-                            "public_ranges": ["not-a-network"],
-                        },
-                    ]
-                }
+                return [
+                    {
+                        "site_code": "NYC01",
+                        "site_name": "New York Office",
+                        "public_ranges": [
+                            {
+                                "supernet": {"network": "139.138.231.0", "cidr": "/26"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl300-internet",
+                                        "display_name": "Internet",
+                                        "vlan": 300,
+                                        "network": "139.138.231.0",
+                                        "cidr": "/26",
+                                        "subnet_mask": "255.255.255.192",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                        "private_ranges": [
+                            {
+                                "supernet": {"network": "10.1.0.0", "cidr": "/16"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl130-end-user",
+                                        "display_name": "End User",
+                                        "vlan": 130,
+                                        "network": "10.1.32.0",
+                                        "cidr": "/22",
+                                        "subnet_mask": "255.255.252.0",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "site_code": "BAD01",
+                        "site_name": "Broken Site",
+                        "public_ranges": [
+                            {
+                                "supernet": {"network": "not-a-network", "cidr": "/24"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl1-invalid",
+                                        "display_name": "Invalid",
+                                        "vlan": 1,
+                                        "network": "192.0.2.0",
+                                        "cidr": "/24",
+                                        "subnet_mask": "255.255.255.0",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                ]
 
         return Module
 
@@ -737,7 +769,8 @@ class DetectAndPlanCliTests(unittest.TestCase):
             end_user_vlan_row = next(
                 row
                 for row in rows
-                if row["Site Code"] == "NYC01" and row["VLAN Name"] == "End User"
+                if row["Site Code"] == "NYC01"
+                and row["VLAN Name"] == "vl130-end-user"
             )
             self.assertEqual(end_user_vlan_row["Current Status"], "OK")
             self.assertEqual(
@@ -752,7 +785,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
 
             markdown = md_path.read_text(encoding="utf-8")
             self.assertIn("## NYC01 - New York Office", markdown)
-            self.assertIn("### PUBLIC: `203.0.113.0/26`", markdown)
+            self.assertIn("### PUBLIC: `139.138.231.0/26`", markdown)
             self.assertIn("Source Reference", markdown)
 
             coverage_summary = json.loads(

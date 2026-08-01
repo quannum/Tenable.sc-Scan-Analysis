@@ -10,7 +10,6 @@ def build_coverage_targets(
 
     for public_range in site_definition.public_ranges:
         for subnet in public_range.subnets:
-            subnet_tags = _merged_tags(public_range.tags, subnet.tags)
             targets.append(
                 CoverageTarget(
                     target_type="PUBLIC",
@@ -22,10 +21,10 @@ def build_coverage_targets(
                     description=subnet.display_name,
                     source_file=site_definition.source_file,
                     timezone=site_definition.timezone,
-                    tags=subnet_tags,
+                    tags=list(subnet.tags),
                 )
             )
-            _append_excluded_ip_targets(targets, site_definition, subnet, subnet_tags)
+            _append_excluded_ip_targets(targets, site_definition, subnet)
 
     for private_range in site_definition.private_ranges:
         targets.append(
@@ -43,7 +42,6 @@ def build_coverage_targets(
             )
         )
         for vlan in private_range.vlans:
-            vlan_tags = _merged_tags(private_range.tags, vlan.tags)
             targets.append(
                 CoverageTarget(
                     target_type="VLAN",
@@ -57,30 +55,18 @@ def build_coverage_targets(
                     vlan_tag=vlan.vlan,
                     source_file=site_definition.source_file,
                     timezone=site_definition.timezone,
-                    tags=vlan_tags,
+                    tags=list(vlan.tags),
                 )
             )
-            _append_excluded_ip_targets(targets, site_definition, vlan, vlan_tags)
+            _append_excluded_ip_targets(targets, site_definition, vlan)
 
     return targets
-
-
-def _merged_tags(*values: list[str]) -> list[str]:
-    """Combine tag lists without duplicate values"""
-    result: list[str] = []
-    for tags in values:
-        for tag in tags:
-            normalized = str(tag).strip()
-            if normalized and normalized not in result:
-                result.append(normalized)
-    return result
 
 
 def _append_excluded_ip_targets(
     targets: list[CoverageTarget],
     site_definition: SiteNetworkDefinition,
     subnet: VlanRange,
-    subnet_tags: list[str],
 ) -> None:
     """Add IPs with exclude tag"""
     for ip_address in subnet.ip_addresses:
@@ -99,6 +85,6 @@ def _append_excluded_ip_targets(
                 vlan_tag=subnet.vlan,
                 source_file=site_definition.source_file,
                 timezone=site_definition.timezone,
-                tags=_merged_tags(subnet_tags, ip_address.tags),
+                tags=list(ip_address.tags),
             )
         )

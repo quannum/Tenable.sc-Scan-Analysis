@@ -190,29 +190,46 @@ class ScheduledServiceTests(unittest.TestCase):
         class Module:
             @staticmethod
             def get_sites(**kwargs):
-                return {
-                    "site_definition": [
-                        {
-                            "site_code": "NYC01",
-                            "site_name": "New York Office",
-                            "region": "US East",
-                            "public_ranges": ["203.0.113.0/26"],
-                            "private_ranges": [
-                                {
-                                    "cidr": "10.1.0.0/16",
-                                    "name": "NYC private",
-                                    "vlans": [
-                                        {
-                                            "name": "End User",
-                                            "vlan_id": 130,
-                                            "cidr": "10.1.32.0/22",
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ]
-                }
+                return [
+                    {
+                        "site_code": "NYC01",
+                        "site_name": "New York Office",
+                        "public_ranges": [
+                            {
+                                "supernet": {"network": "203.0.113.0", "cidr": "/26"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl300-internet",
+                                        "display_name": "Internet",
+                                        "vlan": 300,
+                                        "network": "203.0.113.0",
+                                        "cidr": "/26",
+                                        "subnet_mask": "255.255.255.192",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                        "private_ranges": [
+                            {
+                                "supernet": {"network": "10.1.0.0", "cidr": "/16"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl130-end-user",
+                                        "display_name": "End User",
+                                        "vlan": 130,
+                                        "network": "10.1.32.0",
+                                        "cidr": "/22",
+                                        "subnet_mask": "255.255.252.0",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
 
         return Module
 

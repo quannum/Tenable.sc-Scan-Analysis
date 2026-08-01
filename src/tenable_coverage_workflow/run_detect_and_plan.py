@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypedDict, Protocol, cast
+from typing import Any, Protocol, TypedDict, cast
 
 from dotenv import load_dotenv
 
@@ -43,12 +43,8 @@ from .subnet_source.source_config import (
 
 LOGGER = logging.getLogger(__name__)
 
-# This module coordinates the dry-run workflow from source definitions through
-# coverage checks, proposed changes, and report files
-
 
 class ConfigurationDataAccess(Protocol):
-    """The read-only data access surface needed to index configuration"""
 
     def get_asset_lists(self) -> list[dict[str, Any]]:
         """List asset groups"""
@@ -59,7 +55,7 @@ class ConfigurationDataAccess(Protocol):
         ...
 
     def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
-        """Read one scan's configuration"""
+        """Read one scan configuration"""
         ...
 
 

@@ -17,8 +17,8 @@ def load_json_payload(
             ValidationIssue(
                 source_file=source_file,
                 message=(
-                    "Authoritative data must be an object containing a "
-                    "'site_definition' object or list."
+                    "Authoritative data must be a list of site objects returned "
+                    "by rsg_subnet_as_code.get_sites"
                 ),
             )
         )
