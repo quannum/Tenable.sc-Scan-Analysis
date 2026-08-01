@@ -290,7 +290,7 @@ def _parse_network(
             source_file,
             site_code,
             field_name,
-            "uses IPv6 which is unsupported",
+            "IPv6 is not supported",
         )
         return None
     return str(parsed)
@@ -353,7 +353,7 @@ def _parse_ip_addresses(
                 source_file,
                 site_code,
                 item_field,
-                "uses IPv6, which is unsupported.",
+                "IPv6 is not supported",
             )
             continue
         records.append(
