@@ -306,13 +306,11 @@ class ChangeApplicationTests(unittest.TestCase):
             }
             self.assertEqual(
                 descriptions["NYC01 Public"],
-                "Created with Tenable.sc Scan Analysis\n\n"
-                "Public Range 203.0.113.0/24",
+                "Created with Tenable.sc Scan Analysis\n\nPublic Range 203.0.113.0/24",
             )
             self.assertEqual(
                 descriptions["NYC01 Private Discovery"],
-                "Created with Tenable.sc Scan Analysis\n\n"
-                "Private Supernet 10.1.0.0/16",
+                "Created with Tenable.sc Scan Analysis\n\nPrivate Supernet 10.1.0.0/16",
             )
 
     def test_separate_vlan_assets_attach_to_the_same_workstation_scan(self):

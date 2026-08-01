@@ -252,13 +252,10 @@ def build_required_scan_name(
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
-        return (
-            f"{_NAME_PREFIX} Assessment {site_identifier} "
-            f"{_role_name_segment(role)}"
-        )
+        return f"{_NAME_PREFIX} Assessment {site_identifier} {_role_name_segment(role)}"
 
     role = resolve_target_role(target, grouping_config)
-    return f"{_NAME_PREFIX} Assessment {site_identifier} " f"{_role_name_segment(role)}"
+    return f"{_NAME_PREFIX} Assessment {site_identifier} {_role_name_segment(role)}"
 
 
 def build_required_policy_name(

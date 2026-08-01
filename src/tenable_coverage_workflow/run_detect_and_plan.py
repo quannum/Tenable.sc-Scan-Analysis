@@ -45,7 +45,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ConfigurationDataAccess(Protocol):
-
     def get_asset_lists(self) -> list[dict[str, Any]]:
         """List asset groups"""
         ...

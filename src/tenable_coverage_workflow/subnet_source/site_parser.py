@@ -274,9 +274,7 @@ def _parse_network(
     if not network or not prefix:
         return None
     try:
-        parsed = ipaddress.ip_network(
-            f"{network}/{prefix.lstrip('/')}", strict=False
-        )
+        parsed = ipaddress.ip_network(f"{network}/{prefix.lstrip('/')}", strict=False)
     except ValueError as exc:
         _issue(
             issues,
@@ -431,7 +429,7 @@ def _parse_dhcp_options(
         return {}
     if isinstance(value, dict):
         return {str(key): raw_value for key, raw_value in value.items()}
-    _issue(issues, source_file, site_code, field_name, "must be an object.")
+    _issue(issues, source_file, site_code, field_name, "must be an object")
     return {}
 
 
@@ -446,7 +444,7 @@ def _parse_tags(
     if value is None:
         return []
     if not isinstance(value, list):
-        _issue(issues, source_file, site_code, field_name, "must be a list.")
+        _issue(issues, source_file, site_code, field_name, "must be a list")
         return []
     return [str(tag).strip() for tag in value if str(tag).strip()]
 
@@ -461,7 +459,7 @@ def _required_list(
     """Return a source list or record a validation issue"""
     if isinstance(value, list):
         return value
-    _issue(issues, source_file, site_code, field_name, "must be a list.")
+    _issue(issues, source_file, site_code, field_name, "must be a list")
     return []
 
 
@@ -478,7 +476,7 @@ def _required_text(
     if text:
         return text
     field_name = f"{parent_field}.{key}" if parent_field else key
-    _issue(issues, source_file, site_code, field_name, "is required.")
+    _issue(issues, source_file, site_code, field_name, "is required")
     return None
 
 

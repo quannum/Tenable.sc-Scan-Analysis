@@ -155,38 +155,38 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
     def test_stable_payload_flattens_public_private_and_vlan_scope(self):
         payload = [
             _site(
-                    "NYC01",
-                    public_ranges=[
-                        _network_range(
-                            "139.138.231.0",
-                            "/27",
-                            [
-                                _subnet(
-                                    "vl300-internet",
-                                    300,
-                                    "139.138.231.0",
-                                    "/27",
-                                    ["internet"],
-                                )
-                            ],
-                        )
-                    ],
-                    private_ranges=[
-                        _network_range(
-                            "10.1.0.0",
-                            "/16",
-                            [
-                                _subnet(
-                                    "vl16-servers",
-                                    120,
-                                    "10.1.16.0",
-                                    "/24",
-                                    ["vlan-server"],
-                                )
-                            ],
-                        )
-                    ],
-                    timezone="America/New_York",
+                "NYC01",
+                public_ranges=[
+                    _network_range(
+                        "139.138.231.0",
+                        "/27",
+                        [
+                            _subnet(
+                                "vl300-internet",
+                                300,
+                                "139.138.231.0",
+                                "/27",
+                                ["internet"],
+                            )
+                        ],
+                    )
+                ],
+                private_ranges=[
+                    _network_range(
+                        "10.1.0.0",
+                        "/16",
+                        [
+                            _subnet(
+                                "vl16-servers",
+                                120,
+                                "10.1.16.0",
+                                "/24",
+                                ["vlan-server"],
+                            )
+                        ],
+                    )
+                ],
+                timezone="America/New_York",
             )
         ]
 
@@ -207,65 +207,65 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         result = load_json_payload(
             [
                 _site(
-                        "EXC01",
-                        public_ranges=[
-                            _network_range(
-                                "139.138.227.128",
-                                "/26",
-                                [
-                                    _subnet(
-                                        "vl300-internet",
-                                        300,
-                                        "139.138.227.128",
-                                        "/26",
-                                        ["exclude"],
-                                        ip_addresses=[
-                                            {
-                                                "ip": "139.138.227.130",
-                                                "name": "Excluded public host",
-                                                "tags": ["exclude"],
-                                            }
-                                        ],
-                                    )
-                                ],
-                            )
-                        ],
-                        private_ranges=[
-                            _network_range(
-                                "10.10.0.0",
-                                "/16",
-                                [
-                                    _subnet(
-                                        "vl56-workstation",
-                                        56,
-                                        "10.10.56.0",
-                                        "/24",
-                                        ["vlan-workstation"],
-                                    )
-                                ],
-                                tags=["EXCLUDE"],
-                            ),
-                            _network_range(
-                                "10.10.101.0",
-                                "/24",
-                                [
-                                    _subnet(
-                                        "vl101-mocap",
-                                        101,
-                                        "10.10.101.0",
-                                        "/24",
-                                        ["exclude"],
-                                        ip_addresses=[
-                                            {
-                                                "ip": "10.10.101.25",
-                                                "name": "Excluded host",
-                                                "tags": ["exclude"],
-                                            }
-                                        ],
-                                    )
-                                ],
-                            ),
-                        ],
+                    "EXC01",
+                    public_ranges=[
+                        _network_range(
+                            "139.138.227.128",
+                            "/26",
+                            [
+                                _subnet(
+                                    "vl300-internet",
+                                    300,
+                                    "139.138.227.128",
+                                    "/26",
+                                    ["exclude"],
+                                    ip_addresses=[
+                                        {
+                                            "ip": "139.138.227.130",
+                                            "name": "Excluded public host",
+                                            "tags": ["exclude"],
+                                        }
+                                    ],
+                                )
+                            ],
+                        )
+                    ],
+                    private_ranges=[
+                        _network_range(
+                            "10.10.0.0",
+                            "/16",
+                            [
+                                _subnet(
+                                    "vl56-workstation",
+                                    56,
+                                    "10.10.56.0",
+                                    "/24",
+                                    ["vlan-workstation"],
+                                )
+                            ],
+                            tags=["EXCLUDE"],
+                        ),
+                        _network_range(
+                            "10.10.101.0",
+                            "/24",
+                            [
+                                _subnet(
+                                    "vl101-mocap",
+                                    101,
+                                    "10.10.101.0",
+                                    "/24",
+                                    ["exclude"],
+                                    ip_addresses=[
+                                        {
+                                            "ip": "10.10.101.25",
+                                            "name": "Excluded host",
+                                            "tags": ["exclude"],
+                                        }
+                                    ],
+                                )
+                            ],
+                        ),
+                    ],
                 )
             ]
         )
@@ -297,70 +297,70 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
     def test_subnet_as_code_site_definition_json_is_normalized(self):
         payload = [
             {
-                    "site_code": "ABCNYC",
-                    "site_name": "Company New York",
-                    "site_type": "Studio",
-                    "email_domain": "@Company.com",
-                    "everyone_at": "EveryoneCompanysNYC@Company.com",
-                    "vcenter_endpoint": "companyadcvcn4.company.example.corp",
-                    "content_library": "abcADC-ContentLibrary",
-                    "timezone": "EST",
-                    "utc_offset": -5,
-                    "grid_code": "nyc",
-                    "public_ranges": [
-                        {
-                            "supernet": {
+                "site_code": "ABCNYC",
+                "site_name": "Company New York",
+                "site_type": "Studio",
+                "email_domain": "@Company.com",
+                "everyone_at": "EveryoneCompanysNYC@Company.com",
+                "vcenter_endpoint": "companyadcvcn4.company.example.corp",
+                "content_library": "abcADC-ContentLibrary",
+                "timezone": "EST",
+                "utc_offset": -5,
+                "grid_code": "nyc",
+                "public_ranges": [
+                    {
+                        "supernet": {
+                            "network": "139.138.231.0",
+                            "cidr": "/27",
+                        },
+                        "subnets": [
+                            {
+                                "vlan_name": "vl300-InternetDIA",
+                                "display_name": "Direct Internet Access",
+                                "vlan": 300,
                                 "network": "139.138.231.0",
+                                "subnet_mask": "255.255.255.224",
                                 "cidr": "/27",
-                            },
-                            "subnets": [
-                                {
-                                    "vlan_name": "vl300-InternetDIA",
-                                    "display_name": "Direct Internet Access",
-                                    "vlan": 300,
-                                    "network": "139.138.231.0",
-                                    "subnet_mask": "255.255.255.224",
-                                    "cidr": "/27",
-                                    "gateway": "139.138.231.1",
-                                    "routing": "edge",
-                                    "tags": ["internet"],
-                                }
-                            ],
-                        }
-                    ],
-                    "private_ranges": [
-                        {
-                            "supernet": {
-                                "network": "10.1.0.0",
-                                "cidr": "/16",
-                            },
-                            "dhcp-options": {
-                                "domain-name": "Company.example.corp",
-                            },
-                            "subnets": [
-                                {
-                                    "vlan_name": "vl16-it-services-static",
-                                    "display_name": "It Services Static",
-                                    "vlan": 16,
-                                    "network": "10.1.16.0",
-                                    "subnet_mask": "255.255.255.0",
-                                    "cidr": "/24",
-                                    "gateway": "10.1.16.1",
-                                    "routing": "core",
-                                    "dhcp-start": "10.1.16.130",
-                                    "dhcp-end": "10.1.16.150",
-                                    "tags": ["dhcp-dmc", "vlan-server"],
-                                    "ip_addresses": [
-                                        {
-                                            "ip": "10.1.16.200",
-                                            "name": "example-host",
-                                            "tags": ["production"],
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
+                                "gateway": "139.138.231.1",
+                                "routing": "edge",
+                                "tags": ["internet"],
+                            }
+                        ],
+                    }
+                ],
+                "private_ranges": [
+                    {
+                        "supernet": {
+                            "network": "10.1.0.0",
+                            "cidr": "/16",
+                        },
+                        "dhcp-options": {
+                            "domain-name": "Company.example.corp",
+                        },
+                        "subnets": [
+                            {
+                                "vlan_name": "vl16-it-services-static",
+                                "display_name": "It Services Static",
+                                "vlan": 16,
+                                "network": "10.1.16.0",
+                                "subnet_mask": "255.255.255.0",
+                                "cidr": "/24",
+                                "gateway": "10.1.16.1",
+                                "routing": "core",
+                                "dhcp-start": "10.1.16.130",
+                                "dhcp-end": "10.1.16.150",
+                                "tags": ["dhcp-dmc", "vlan-server"],
+                                "ip_addresses": [
+                                    {
+                                        "ip": "10.1.16.200",
+                                        "name": "example-host",
+                                        "tags": ["production"],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
             }
         ]
 
@@ -412,21 +412,21 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         result = load_json_payload(
             [
                 _site(
-                        "BOS01",
-                        private_ranges=[
-                            _network_range(
-                                "10.24.0.0",
-                                "/16",
-                                [
-                                    _subnet(
-                                        "vl100-outside",
-                                        100,
-                                        "10.20.100.0",
-                                        "/24",
-                                    )
-                                ],
-                            )
-                        ],
+                    "BOS01",
+                    private_ranges=[
+                        _network_range(
+                            "10.24.0.0",
+                            "/16",
+                            [
+                                _subnet(
+                                    "vl100-outside",
+                                    100,
+                                    "10.20.100.0",
+                                    "/24",
+                                )
+                            ],
+                        )
+                    ],
                 )
             ]
         )
@@ -445,44 +445,44 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         result = load_json_payload(
             [
                 _site(
-                        "ONE",
-                        public_ranges=[
-                            _network_range(
-                                "192.0.2.0",
-                                "/25",
-                                [
-                                    _subnet(
-                                        "vl100-one",
-                                        100,
-                                        "192.0.2.0",
-                                        "/25",
-                                    )
-                                ],
-                            )
-                        ],
-                    ),
+                    "ONE",
+                    public_ranges=[
+                        _network_range(
+                            "139.138.246.0",
+                            "/25",
+                            [
+                                _subnet(
+                                    "vl100-one",
+                                    100,
+                                    "139.138.246.0",
+                                    "/25",
+                                )
+                            ],
+                        )
+                    ],
+                ),
                 _site(
-                        "TWO",
-                        public_ranges=[
-                            _network_range(
-                                "192.0.2.0",
-                                "/25",
-                                [
-                                    _subnet(
-                                        "vl200-two",
-                                        200,
-                                        "192.0.2.0",
-                                        "/25",
-                                    ),
-                                    _subnet(
-                                        "vl201-overlap",
-                                        201,
-                                        "192.0.2.64",
-                                        "/26",
-                                    ),
-                                ],
-                            )
-                        ],
+                    "TWO",
+                    public_ranges=[
+                        _network_range(
+                            "139.138.246.0",
+                            "/25",
+                            [
+                                _subnet(
+                                    "vl200-two",
+                                    200,
+                                    "139.138.246.0",
+                                    "/25",
+                                ),
+                                _subnet(
+                                    "vl201-overlap",
+                                    201,
+                                    "139.138.246.64",
+                                    "/26",
+                                ),
+                            ],
+                        )
+                    ],
                 ),
             ]
         )
@@ -495,21 +495,21 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         result = load_json_payload(
             [
                 _site(
-                        "V6",
-                        public_ranges=[
-                            _network_range(
-                                "2001:db8::",
-                                "/64",
-                                [
-                                    _subnet(
-                                        "vl6-internet",
-                                        6,
-                                        "2001:db8::",
-                                        "/64",
-                                    )
-                                ],
-                            )
-                        ],
+                    "V6",
+                    public_ranges=[
+                        _network_range(
+                            "2001:db8::",
+                            "/64",
+                            [
+                                _subnet(
+                                    "vl6-internet",
+                                    6,
+                                    "2001:db8::",
+                                    "/64",
+                                )
+                            ],
+                        )
+                    ],
                 )
             ]
         )

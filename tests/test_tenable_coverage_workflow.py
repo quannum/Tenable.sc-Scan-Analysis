@@ -769,8 +769,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             end_user_vlan_row = next(
                 row
                 for row in rows
-                if row["Site Code"] == "NYC01"
-                and row["VLAN Name"] == "vl130-end-user"
+                if row["Site Code"] == "NYC01" and row["VLAN Name"] == "vl130-end-user"
             )
             self.assertEqual(end_user_vlan_row["Current Status"], "OK")
             self.assertEqual(
