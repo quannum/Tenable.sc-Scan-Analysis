@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import os
 import tempfile
@@ -18,18 +19,36 @@ from tests.test_change_application import FakeDataAccess, approved_row, write_pl
 
 class ApplicationCliTests(unittest.TestCase):
     def _subnet_module(self, site_code: str, scope: str):
+        network, prefix = scope.split("/", maxsplit=1)
+        parent_network = ipaddress.ip_network(scope)
+        subnet = next(parent_network.subnets(new_prefix=parent_network.prefixlen + 1))
+
         class Module:
             @staticmethod
             def get_sites(**kwargs):
-                return {
-                    "site_definition": [
-                        {
-                            "site_code": site_code,
-                            "site_name": site_code,
-                            "private_ranges": [scope],
-                        }
-                    ]
-                }
+                return [
+                    {
+                        "site_code": site_code,
+                        "site_name": site_code,
+                        "private_ranges": [
+                            {
+                                "supernet": {"network": network, "cidr": f"/{prefix}"},
+                                "subnets": [
+                                    {
+                                        "vlan_name": "vl1-test",
+                                        "display_name": "Test",
+                                        "vlan": 1,
+                                        "network": str(subnet.network_address),
+                                        "cidr": f"/{subnet.prefixlen}",
+                                        "subnet_mask": str(subnet.netmask),
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
 
         return Module
 

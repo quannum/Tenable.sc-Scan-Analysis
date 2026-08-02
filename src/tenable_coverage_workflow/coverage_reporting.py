@@ -141,7 +141,7 @@ def build_coverage_summary(
         "site": _group_summary(results, lambda item: item.site_code),
         "vlan": _group_summary(
             results,
-            lambda item: (f"{item.site_code}/{item.vlan_name or item.target_type}"),
+            lambda item: f"{item.site_code}/{item.vlan_name or item.target_type}",
         ),
         "scan_type": _group_summary(results, lambda item: item.required_scan_name),
         "repository": _group_summary(results, lambda item: item.configured_repository),

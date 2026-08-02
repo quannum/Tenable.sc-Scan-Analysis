@@ -1,10 +1,11 @@
 """Tenable.sc coverage detection, planning, audit, and change application."""
 
+from typing import TYPE_CHECKING, Any
+
 from .models import (
     CoverageTarget,
     CoverageValidationResult,
     IpAddress,
-    NetworkRange,
     PrivateNetworkRange,
     ProposedChange,
     PublicNetworkRange,
@@ -15,12 +16,14 @@ from .models import (
 )
 from .service_config import ScheduledServiceConfig
 
+if TYPE_CHECKING:
+    from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
+
 __all__ = [
     "CoverageTarget",
     "CoverageValidationResult",
     "DetectAndPlanConfig",
     "IpAddress",
-    "NetworkRange",
     "PrivateNetworkRange",
     "ProposedChange",
     "PublicNetworkRange",
@@ -33,7 +36,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Load a lazily imported attribute"""
     if name in {"DetectAndPlanConfig", "run_detect_and_plan"}:
         from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan

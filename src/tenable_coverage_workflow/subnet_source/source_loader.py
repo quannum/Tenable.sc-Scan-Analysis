@@ -31,11 +31,9 @@ def load_authoritative_source(
     try:
         get_sites = module.get_sites
     except AttributeError:
-        raise RuntimeError(
-            "rsg_subnet_as_code module does not have method 'get_sites'."
-        )
+        raise RuntimeError("rsg_subnet_as_code module does not have method 'get_sites'")
     if not callable(get_sites):
-        raise RuntimeError("rsg_subnet_as_code.get_sites must be callable.")
+        raise RuntimeError("rsg_subnet_as_code.get_sites must be callable")
 
     payload = get_sites(**_build_get_sites_kwargs(config))
     return "rsg_subnet_as_code", load_json_payload(

@@ -30,23 +30,6 @@ class VlanRange:
 
 
 @dataclass(frozen=True)
-class NetworkRange:
-    """Compatibility range model for callers that used the former shared type."""
-
-    cidr: str
-    tags: list[str] = field(default_factory=list)
-    subnets: list[VlanRange] = field(default_factory=list)
-    vlans: list[VlanRange] = field(default_factory=list)
-    dhcp_options: dict[str, object] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.subnets and not self.vlans:
-            object.__setattr__(self, "vlans", list(self.subnets))
-        elif self.vlans and not self.subnets:
-            object.__setattr__(self, "subnets", list(self.vlans))
-
-
-@dataclass(frozen=True)
 class PublicNetworkRange:
     cidr: str
     tags: list[str] = field(default_factory=list)
