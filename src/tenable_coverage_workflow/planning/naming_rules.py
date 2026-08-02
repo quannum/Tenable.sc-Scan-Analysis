@@ -40,17 +40,8 @@ def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
     return cleaned or fallback
 
 
-# redundant
-
-# def _normalize_optional_name_part(value: str | None) -> str | None:
-#     """Normalize optional name part"""
-#     normalized = normalize_name_part(value, fallback="")
-#     return normalized or None
-
 # clean up and standardize display names, site codes, and vlan roles/tags
 # used in scan / asset / policy name builders below
-
-
 def _display_name_part(value: str | None, fallback: str = "Unknown") -> str:
     text = str(value or "").strip()
     cleaned = _NON_WORD_PATTERN.sub(" ", text)
@@ -174,7 +165,8 @@ def _classify_vlan_role_from_grouping_tag(
         if str(key).strip() and str(value).strip()
     }
     if normalized_tag in tag_map:
-        # A configured mapping always wins over the built-in tag behavior.
+        # if using config file, tag map in config wins over
+        # default vlan tags
         return tag_map[normalized_tag]
 
     prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
@@ -184,6 +176,8 @@ def _classify_vlan_role_from_grouping_tag(
         if matched_prefix
         else normalized_tag
     )
+    # this might need to be modified
+    # confirm with it if this is how vlans should be grouped
     if suffix in {"server", "servers", "storage", "other", "environment"}:
         return "SERVER"
     if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
@@ -229,7 +223,7 @@ def build_required_asset_name(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        # Asset groups stay separate by tag even when their scans share a role.
+        # Asset groups stay separate by tag even when their scans share a role
         group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
         return f"{_NAME_PREFIX} {site_code} VLAN {group_name}"
 

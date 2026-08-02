@@ -516,7 +516,10 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
 
         self.assertEqual(result.coverage_targets, [])
         self.assertTrue(
-            any("IPv6 is not supported" in issue.message for issue in result.validation_issues)
+            any(
+                "IPv6 is not supported" in issue.message
+                for issue in result.validation_issues
+            )
         )
 
 
