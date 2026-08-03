@@ -387,9 +387,11 @@ def _record_field(record: dict[str, Any], *names: str) -> Any:
 def _asset_references(
     record: dict[str, Any], names: dict[str, str]
 ) -> tuple[list[str], list[str]]:
-    """Use _resource_reference() on each asset group that is target of a scan
+    """Use _record_field() to look for asset groups that are scan targets
+
+    Use _resource_reference() to resolve ID to a name
     
-    Returns 
+    Returns asset IDs and asset names that are targets of a scan
     """
     value = _record_field(record, "assets", "assetLists")
     values = (
