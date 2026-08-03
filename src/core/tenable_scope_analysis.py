@@ -31,7 +31,6 @@ class InMemoryTable:
         self._rows.append(list(row))
 
     def iter_rows(self, min_row: int = 1, values_only: bool = False):
-        """Iterate through rows"""
         if not values_only:
             raise ValueError("InMemoryTable only supports values_only=True iteration")
         for row in self._rows[min_row - 1 :]:
@@ -39,7 +38,6 @@ class InMemoryTable:
 
 
 def build_scope_tables() -> tuple[None, InMemoryTable]:
-    """Build scope tables"""
     # Legacy raw-scope collection is disabled for review. Nothing reads this
     # table after scope collection, so only the normalized table is needed.
     # scope_ws = InMemoryTable(
@@ -100,7 +98,7 @@ class CoverageResult:
     coverage_pct: float
 
 
-def extract_scan_name(scan) -> str:
+def get_scan_name(scan) -> str:
     if not isinstance(scan, dict):
         return ""
 
@@ -140,7 +138,7 @@ def filter_scans(scans, config):
     )
 
     for scan in scans:
-        name = extract_scan_name(scan)
+        name = get_scan_name(scan)
         compare_name = name if config.case_sensitive else name.lower()
 
         schedule = scan.get("schedule", {})
@@ -264,7 +262,7 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
     # nested combination assets. Normalize every source into the same rows.
     for scan in filtered_scans:
         scan_id = scan.get("id")
-        scan_name = extract_scan_name(scan)
+        scan_name = get_scan_name(scan)
         if scan_id in (None, ""):
             LOGGER.warning("Skipping malformed scan record: %s", scan)
             continue
@@ -275,7 +273,7 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 "Skipping scan '%s' because details were not found", scan_name
             )
             continue
-        detail_scan_name = extract_scan_name(details)
+        detail_scan_name = get_scan_name(details)
         if detail_scan_name:
             scan_name = detail_scan_name
         if not scan_name:

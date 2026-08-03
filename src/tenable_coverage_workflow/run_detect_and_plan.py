@@ -15,7 +15,7 @@ from ..core.tenable_scope_analysis import (
     build_scope_sheets,
     build_scope_tables,
     calculate_coverage_result,
-    extract_scan_name,
+    get_scan_name,
 )
 from ..io.data_access import DataAccess
 from ..io.parsing import parse_csv_list
@@ -522,7 +522,7 @@ def build_configuration_index(
             data_access.get_scan_details(scan_id) if scan_id not in (None, "") else scan
         )
         record = details if isinstance(details, dict) and details else scan
-        name = extract_scan_name(record) or extract_scan_name(scan)
+        name = get_scan_name(record) or get_scan_name(scan)
         if name:
             scans_by_name[name].append(record)
     return {

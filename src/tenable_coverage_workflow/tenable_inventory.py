@@ -107,7 +107,6 @@ def _expand_details(
     records: list[dict[str, Any]],
     details_getter: Callable[[Any], dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Expand details"""
     expanded = []
     for record in records:
         record_id = record.get("id")
@@ -126,7 +125,7 @@ def _expand_details(
 
 
 def redact_sensitive(value: Any) -> Any:
-    """Redact sensitive"""
+    """Redact sensitive stuff"""
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
@@ -142,7 +141,6 @@ def redact_sensitive(value: Any) -> Any:
 
 
 def write_inventory_snapshot(snapshot: dict[str, Any], output_file: str | Path) -> Path:
-    """Write inventory snapshot"""
     path = Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
@@ -168,7 +166,6 @@ def write_inventory_snapshot(snapshot: dict[str, Any], output_file: str | Path) 
 def write_inventory_reports(
     snapshot: dict[str, Any], output_file: str | Path
 ) -> dict[str, Path]:
-    """Write readable inventory CSV reports"""
     snapshot_path = Path(output_file)
     report_dir = snapshot_path.with_name(f"{snapshot_path.stem}_reports")
     resources = snapshot.get("resources", {})
@@ -225,7 +222,6 @@ def write_inventory_reports(
 
 
 def _write_resource_csv(path: Path, records: Any) -> Path:
-    """Write a general resource CSV"""
     return _write_csv(
         path,
         ("ID", "Name", "Description", "Additional Details"),
@@ -242,7 +238,6 @@ def _write_resource_csv(path: Path, records: Any) -> Path:
 
 
 def _write_asset_group_csv(path: Path, records: Any) -> Path:
-    """Write an asset group CSV"""
     return _write_csv(
         path,
         (
@@ -279,7 +274,6 @@ def _write_asset_group_csv(path: Path, records: Any) -> Path:
 
 
 def _write_csv(path: Path, fieldnames: tuple[str, ...], rows: Any) -> Path:
-    """Write one CSV report"""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
@@ -289,7 +283,6 @@ def _write_csv(path: Path, fieldnames: tuple[str, ...], rows: Any) -> Path:
 
 
 def _summary_rows(snapshot: dict[str, Any], resources: dict[str, Any]):
-    """Build collection summary rows"""
     counts = snapshot.get("resource_counts", {})
     errors = snapshot.get("collection_errors", {})
     for name in (
@@ -310,7 +303,6 @@ def _scan_rows(
     policies: dict[str, str],
     asset_groups: dict[str, str],
 ):
-    """Build readable scan rows"""
     for record in _records(records):
         repository_id, repository_name = _resource_reference(
             _record_field(record, "repository", "repo", "repositoryID"), repositories
@@ -357,7 +349,7 @@ def _scan_rows(
 
 
 def _resource_name_index(records: Any) -> dict[str, str]:
-    """Index resource names by ID"""
+    """Build repo / policy / asset group ID-to-name lookup"""
     return {
         str(resource_id): str(name)
         for record in _records(records)
@@ -366,10 +358,39 @@ def _resource_name_index(records: Any) -> dict[str, str]:
     }
 
 
+def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
+    """Reads a reference ID or object and returns ID and name
+    
+    If there's no name, it just uses the index from _resource_name_index()
+    """
+    if isinstance(value, dict):
+        resource_id = _record_field(value, "id", "repositoryID", "policyID")
+        name = _record_field(value, "name")
+    else:
+        resource_id = value
+        name = None
+    resource_id_text = "" if resource_id in (None, "") else str(resource_id)
+    name_text = "" if name in (None, "") else str(name)
+    return resource_id_text, name_text or names.get(resource_id_text, "")
+
+
+def _record_field(record: dict[str, Any], *names: str) -> Any:
+    """Get a record field including nested scan info"""
+    info = record.get("info")
+    for source in (record, info if isinstance(info, dict) else {}):
+        for name in names:
+            if name in source and source[name] not in (None, ""):
+                return source[name]
+    return None
+
+
 def _asset_references(
     record: dict[str, Any], names: dict[str, str]
 ) -> tuple[list[str], list[str]]:
-    """Resolve scan asset group references"""
+    """Use _resource_reference() on each asset group that is target of a scan
+    
+    Returns 
+    """
     value = _record_field(record, "assets", "assetLists")
     values = (
         value if isinstance(value, list) else ([] if value in (None, "") else [value])
@@ -385,19 +406,6 @@ def _asset_references(
     return ids, resolved_names
 
 
-def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
-    """Resolve one resource reference"""
-    if isinstance(value, dict):
-        resource_id = _record_field(value, "id", "repositoryID", "policyID")
-        name = _record_field(value, "name")
-    else:
-        resource_id = value
-        name = None
-    resource_id_text = "" if resource_id in (None, "") else str(resource_id)
-    name_text = "" if name in (None, "") else str(name)
-    return resource_id_text, name_text or names.get(resource_id_text, "")
-
-
 def _asset_targets(record: dict[str, Any]) -> str:
     """Get direct targets from a record"""
     targets = _record_field(record, "ipList", "ips")
@@ -407,16 +415,6 @@ def _asset_targets(record: dict[str, Any]) -> str:
     if isinstance(type_fields, dict):
         return _format_value(_record_field(type_fields, "ipList", "ips"))
     return ""
-
-
-def _record_field(record: dict[str, Any], *names: str) -> Any:
-    """Get a record field including nested scan info"""
-    info = record.get("info")
-    for source in (record, info if isinstance(info, dict) else {}):
-        for name in names:
-            if name in source and source[name] not in (None, ""):
-                return source[name]
-    return None
 
 
 def _additional_details(record: dict[str, Any], excluded: set[str]) -> str:

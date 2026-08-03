@@ -147,7 +147,7 @@ def find_vlan_grouping_tag(
     return None
 
 
-def _extract_vlan_grouping_tag(
+def _get_vlan_grouping_tag(
     target: CoverageTarget,
     grouping_config: GroupingConfig,
 ) -> str | None:
@@ -177,7 +177,7 @@ def _classify_vlan_role_from_grouping_tag(
         else normalized_tag
     )
     # this might need to be modified
-    # confirm with it if this is how vlans should be grouped
+    # confirm if this is how vlans should be grouped
     if suffix in {"server", "servers", "storage", "other", "environment"}:
         return "SERVER"
     if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
@@ -204,7 +204,7 @@ def resolve_target_role(
     grouping_config: GroupingConfig | None = None,
 ) -> str:
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         return _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
     return classify_vlan_role(target.vlan_name)
@@ -221,7 +221,7 @@ def build_required_asset_name(
         return f"{_NAME_PREFIX} {site_code} Private Discovery"
 
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         # Asset groups stay separate by tag even when their scans share a role
         group_name = _grouping_tag_name_segment(grouping_tag, grouping_config)
@@ -243,7 +243,7 @@ def build_required_scan_name(
         return f"{_NAME_PREFIX} Discovery {site_identifier} Private"
 
     grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _extract_vlan_grouping_tag(target, grouping_config)
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
         role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
         return f"{_NAME_PREFIX} Assessment {site_identifier} {_role_name_segment(role)}"
