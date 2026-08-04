@@ -507,8 +507,8 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
 
 def load_actual_scope_data(config: CoverageSourceConfig):
     data_access = DataAccess(config)
-    scope_ws, normalized_ws = build_scope_tables()
-    build_scope_sheets(scope_ws, normalized_ws, data_access, config)
+    normalized_ws = build_scope_tables()
+    build_scope_sheets(normalized_ws, data_access, config)
     # coverage uses normalized scope rows, not the original Tenable text
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws

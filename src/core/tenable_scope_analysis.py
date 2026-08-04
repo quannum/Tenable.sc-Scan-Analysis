@@ -37,23 +37,8 @@ class InMemoryTable:
             yield tuple(row)
 
 
-def build_scope_tables() -> tuple[None, InMemoryTable]:
-    # Legacy raw-scope collection is disabled for review. Nothing reads this
-    # table after scope collection, so only the normalized table is needed.
-    # scope_ws = InMemoryTable(
-    #     [
-    #         "Scan Name",
-    #         "Inclusion Type",
-    #         "Source Type",
-    #         "Source Name",
-    #         "Scope Definition",
-    #     ]
-    # )
-    scope_ws = None
-    normalized_ws = InMemoryTable(
-        ["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"]
-    )
-    return scope_ws, normalized_ws
+def build_scope_tables() -> InMemoryTable:
+    return InMemoryTable(["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"])
 
 
 @dataclass(frozen=True)
@@ -191,9 +176,7 @@ def normalize_scope(
         normalized_ws.append([scan_name, asset_name, inclusion_type, scope_item])
 
 
-def walk_combination(
-    node, scan_name, scope_ws, normalized_ws, data_access, in_complement=False
-):
+def walk_combination(node, scan_name, normalized_ws, data_access, in_complement=False):
     """Walk through combination asset groupss to retrieve nested asset groups"""
     if not isinstance(node, dict):
         return
@@ -221,9 +204,6 @@ def walk_combination(
         inclusion_type = EXCLUDE if in_complement else INCLUDE
 
         if defined:
-            # scope_ws.append(
-            #     [scan_name, inclusion_type, "Asset", asset_name, defined]
-            # )
             normalize_scope(
                 normalized_ws, scan_name, asset_name, inclusion_type, defined
             )
@@ -239,7 +219,6 @@ def walk_combination(
     walk_combination(
         node.get("operand1"),
         scan_name,
-        scope_ws,
         normalized_ws,
         data_access,
         in_complement,
@@ -247,14 +226,13 @@ def walk_combination(
     walk_combination(
         node.get("operand2"),
         scan_name,
-        scope_ws,
         normalized_ws,
         data_access,
         in_complement,
     )
 
 
-def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
+def build_scope_sheets(normalized_ws, data_access, config):
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
@@ -282,9 +260,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
         ip_list = details.get("ipList")
         if ip_list and ip_list != "*":
-            # scope_ws.append(
-            #     [scan_name, INCLUDE, "Scan", "Direct IP List", ip_list]
-            # )
             normalize_scope(normalized_ws, scan_name, "SCAN_IPLIST", INCLUDE, ip_list)
 
         for asset_ref in details.get("assets", []):
@@ -309,9 +284,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 asset_name = asset.get("name") or f"Asset {asset_id}"
 
                 if defined:
-                    # scope_ws.append(
-                    #     [scan_name, INCLUDE, "Asset", asset_name, defined]
-                    # )
                     normalize_scope(
                         normalized_ws, scan_name, asset_name, INCLUDE, defined
                     )
@@ -326,7 +298,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 walk_combination(
                     asset.get("typeFields", {}).get("combinations", {}),
                     scan_name,
-                    scope_ws,
                     normalized_ws,
                     data_access,
                 )

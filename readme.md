@@ -209,9 +209,9 @@ Example config files:
 ## Authoritative Source
 
 The authoritative source is `rsg_subnet_as_code.get_sites`, which returns complete
-site definitions from the source YAML as JSON.
+site definitions as JSON.
 
-The supported payload has one `site_definition` object or list. Each site uses
+The supported payload is a non-empty list of site objects. Each site uses
 `site_code`, `site_name`, optional site metadata, `public_ranges`, and
 `private_ranges`. A range contains a `supernet` with `network` and `cidr`, plus
 `subnets`. Each subnet uses `vlan_name`, `display_name`, `vlan`, `network`,
@@ -426,7 +426,8 @@ When `grouping_mode` is `vlan_tag`:
   scans use `ABC Corp Discovery <SITE-CODE> Private`
 - `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
 - `vlan-storage`, `vlan-other`, and `vlan-environment` keep separate tag-based asset groups but use the Server Assessment and Basic Assessment Policy unless a custom tag map overrides the tag
-- Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
+- built-in recognized roles and explicit `grouping_tag_map` entries use their configured scan and policy behavior
+- a VLAN tag without an assessment mapping remains in coverage and asset analysis, but produces `REVIEW_ASSESSMENT_MAPPING`; it does not receive an inferred scan or policy
 - source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
 

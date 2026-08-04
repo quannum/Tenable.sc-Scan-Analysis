@@ -6,7 +6,7 @@ an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| subnet_as_code API authoritative source | Implemented | `subnet_source/source_loader.py`; connector tests |
+| `rsg_subnet_as_code` API authoritative source | Implemented | `subnet_source/source_loader.py`; connector tests |
 | Common internal source model | Implemented | `models.py`; `docs/authoritative-schema.md` |
 | Site, region, timezone, tags, environment, business function, scan metadata | Implemented | source connectors and coverage detail reports |
 | CIDR and IP-range normalization with `ipaddress` | Implemented | subnet-as-code normalization and parser tests |

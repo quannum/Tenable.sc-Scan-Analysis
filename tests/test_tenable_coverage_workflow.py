@@ -1020,10 +1020,8 @@ class ScanNameCompatibilityTests(unittest.TestCase):
                     "assets": [],
                 }
 
-        # scope_ws is disabled because the raw scope table is not used anymore
-        scope_ws, normalized_ws = build_scope_tables()
+        normalized_ws = build_scope_tables()
         build_scope_sheets(
-            scope_ws,
             normalized_ws,
             FakeDataAccess(),
             self._config(),

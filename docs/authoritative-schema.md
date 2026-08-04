@@ -1,8 +1,8 @@
 # Authoritative Network Schema
 
 Production input is the subnet-as-code API JSON, obtained by calling the
-internal `subnet_as_code.get_sites` Python method with query parameters such as
-`names`, `sites`, `tags`, `referenceId`, `networkType`, and `routingType`.
+internal `rsg_subnet_as_code.get_sites` Python method with query parameters such
+as `name`, `sites`, `tags`, `referenceId`, `networkType`, and `routingType`.
 The workflow normalizes the returned Python/JSON payload into the internal site
 model before analysis.
 
@@ -119,9 +119,11 @@ Validation rules:
 - public/private label mismatches produce warnings;
 - IPv6 is rejected during definition validation.
 
-Naming defaults still derive expected asset, scan, and policy names from site,
-region, target type, VLAN name, and VLAN ID unless an upstream source provides
-explicit required names.
+Naming derives expected asset, scan, and policy names from site, region, target
+type, VLAN name, and VLAN ID. In VLAN-tag grouping mode, built-in recognized
+roles and explicit tag-map entries receive their configured assessment mapping.
+An unrecognized VLAN tag remains in coverage and asset analysis, but is marked
+`REVIEW_ASSESSMENT_MAPPING` and receives no inferred scan or policy.
 
 Tags:
 
