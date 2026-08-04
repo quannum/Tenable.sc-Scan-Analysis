@@ -360,7 +360,7 @@ def _resource_name_index(records: Any) -> dict[str, str]:
 
 def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
     """Reads a reference ID or object and returns ID and name
-    
+
     If there's no name, it just uses the index from _resource_name_index()
     """
     if isinstance(value, dict):
@@ -390,7 +390,7 @@ def _asset_references(
     """Use _record_field() to look for asset groups that are scan targets
 
     Use _resource_reference() to resolve ID to a name
-    
+
     Returns asset IDs and asset names that are targets of a scan
     """
     value = _record_field(record, "assets", "assetLists")
