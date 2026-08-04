@@ -152,6 +152,37 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
         empty_result = load_json_payload([])
         self.assertEqual(empty_result.files_failed, 1)
 
+    def test_unknown_vlan_name_is_retained_by_the_authoritative_parser(self):
+        result = load_json_payload(
+            [
+                _site(
+                    "NYC01",
+                    private_ranges=[
+                        _network_range(
+                            "10.10.0.0",
+                            "/16",
+                            [
+                                _subnet(
+                                    "vl150-security-cameras",
+                                    150,
+                                    "10.10.150.0",
+                                    "/24",
+                                    tags=["vlan-security-cameras"],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ]
+        )
+
+        vlan_target = next(
+            target for target in result.coverage_targets if target.target_type == "VLAN"
+        )
+        self.assertEqual(vlan_target.vlan_name, "vl150-security-cameras")
+        self.assertEqual(vlan_target.vlan_tag, 150)
+        self.assertEqual(vlan_target.tags, ["vlan-security-cameras"])
+
     def test_stable_payload_flattens_public_private_and_vlan_scope(self):
         payload = [
             _site(

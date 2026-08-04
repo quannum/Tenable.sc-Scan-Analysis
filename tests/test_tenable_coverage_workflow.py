@@ -70,6 +70,95 @@ class PlanningTests(unittest.TestCase):
             "Basic Assessment Policy",
         )
 
+    def test_unmapped_default_vlan_keeps_asset_but_requires_assessment_review(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.150.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Security Cameras",
+            vlan_name="Security Cameras",
+            vlan_tag=150,
+        )
+
+        named_target = apply_naming_rules(target)
+
+        self.assertEqual(
+            named_target.required_asset_name,
+            "ABC Corp NYC01 VLAN Security Cameras 150",
+        )
+        self.assertIsNone(named_target.required_scan_name)
+        self.assertIsNone(named_target.required_policy_name)
+        self.assertEqual(
+            named_target.scan_classification,
+            {
+                "vlan_role": "Security Cameras",
+                "assessment_mapping": "UNMAPPED",
+                "review_required": True,
+            },
+        )
+
+    def test_unmapped_vlan_tag_keeps_source_role_and_asset_name(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.151.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Printers",
+            vlan_name="Printers",
+            vlan_tag=151,
+            tags=["vlan-printers"],
+        )
+
+        named_target = apply_naming_rules(target, GroupingConfig(mode="vlan_tag"))
+
+        self.assertEqual(
+            named_target.required_asset_name,
+            "ABC Corp NYC01 VLAN Printers",
+        )
+        self.assertIsNone(named_target.required_scan_name)
+        self.assertIsNone(named_target.required_policy_name)
+        self.assertEqual(named_target.scan_classification["vlan_role"], "Printers")
+        self.assertEqual(
+            named_target.scan_classification["assessment_mapping"], "UNMAPPED"
+        )
+
+    def test_explicit_tag_map_to_standard_preserves_standard_assessment(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.152.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Printers",
+            vlan_name="Printers",
+            vlan_tag=152,
+            tags=["vlan-printers"],
+        )
+
+        named_target = apply_naming_rules(
+            target,
+            GroupingConfig(
+                mode="vlan_tag",
+                tag_map={"vlan-printers": "STANDARD"},
+            ),
+        )
+
+        self.assertEqual(
+            named_target.required_scan_name,
+            "ABC Corp Assessment NYC01 Standard",
+        )
+        self.assertEqual(
+            named_target.required_policy_name,
+            "Basic Assessment Policy",
+        )
+        self.assertEqual(named_target.scan_classification, {})
+
     def test_public_scan_name_uses_only_the_site_code(self):
         target = CoverageTarget(
             target_type="PUBLIC",
@@ -119,6 +208,44 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(results[0].exclusion_tag, "Exclude")
         self.assertEqual(results[0].gap_count, 0)
         self.assertEqual(generate_proposed_changes(results, run_id="run-001"), [])
+
+    def test_unmapped_vlan_stays_in_coverage_and_asset_review(self):
+        target = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.1.153.0/24",
+            site_code="NYC01",
+            site_name="New York Office",
+            location="New York, NY",
+            region="US East",
+            description="Security Cameras",
+            vlan_name="Security Cameras",
+            vlan_tag=153,
+        )
+        named_target = apply_naming_rules(target)
+
+        results = validate_coverage_targets(
+            [named_target],
+            actual_scopes=[],
+            actual_by_scan=defaultdict(list),
+            excluded_by_scan=defaultdict(list),
+        )
+        changes = generate_proposed_changes(results, run_id="run-001")
+
+        self.assertEqual(results[0].status, "GAP")
+        self.assertEqual(results[0].required_asset_present, "No")
+        self.assertEqual(results[0].required_scan_present, "")
+        self.assertEqual(results[0].required_policy_configured, "")
+        self.assertEqual(
+            results[0].scan_classification["vlan_role"], "Security Cameras"
+        )
+        self.assertEqual(changes[0].proposed_action, "REVIEW_ASSESSMENT_MAPPING")
+        self.assertEqual(
+            changes[0].proposed_asset_name,
+            "ABC Corp NYC01 VLAN Security Cameras 153",
+        )
+        self.assertIsNone(changes[0].proposed_scan_name)
+        self.assertIsNone(changes[0].proposed_policy_name)
+        self.assertIn("No explicit assessment mapping", changes[0].issue)
 
     def test_vlan_tag_grouping_can_override_vlan_name_grouping(self):
         target = CoverageTarget(
@@ -536,7 +663,17 @@ class DetectAndPlanCliTests(unittest.TestCase):
                                         "subnet_mask": "255.255.252.0",
                                         "tags": [],
                                         "ip_addresses": None,
-                                    }
+                                    },
+                                    {
+                                        "vlan_name": "vl153-security-cameras",
+                                        "display_name": "Security Cameras",
+                                        "vlan": 153,
+                                        "network": "10.1.153.0",
+                                        "cidr": "/24",
+                                        "subnet_mask": "255.255.255.0",
+                                        "tags": [],
+                                        "ip_addresses": None,
+                                    },
                                 ],
                             }
                         ],
@@ -731,6 +868,14 @@ class DetectAndPlanCliTests(unittest.TestCase):
             event_types = {event["event_type"] for event in audit_events}
             self.assertIn("run_started", event_types)
             self.assertIn("authoritative_site_loaded", event_types)
+            unmapped_events = [
+                event
+                for event in audit_events
+                if event["event_type"] == "assessment_mapping_missing"
+            ]
+            self.assertEqual(len(unmapped_events), 1)
+            self.assertEqual(unmapped_events[0]["site_code"], "NYC01")
+            self.assertEqual(unmapped_events[0]["cidr"], "10.1.153.0/24")
             self.assertIn("proposed_change_audit_written", event_types)
             self.assertIn("run_completed", event_types)
 
@@ -782,6 +927,24 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 "ABC Corp Assessment NYC01 Workstation",
             )
 
+            unmapped_vlan_row = next(
+                row
+                for row in rows
+                if row["Site Code"] == "NYC01"
+                and row["VLAN Name"] == "vl153-security-cameras"
+            )
+            self.assertEqual(
+                unmapped_vlan_row["Proposed Action"],
+                "REVIEW_ASSESSMENT_MAPPING",
+            )
+            self.assertEqual(
+                unmapped_vlan_row["Proposed Asset Name"],
+                "ABC Corp NYC01 VLAN vl153 security cameras 153",
+            )
+            self.assertEqual(unmapped_vlan_row["Proposed Scan Name"], "")
+            self.assertEqual(unmapped_vlan_row["Proposed Policy Name"], "")
+            self.assertIn("No explicit assessment mapping", unmapped_vlan_row["Issue"])
+
             markdown = md_path.read_text(encoding="utf-8")
             self.assertIn("## NYC01 - New York Office", markdown)
             self.assertIn("### PUBLIC: `139.138.231.0/26`", markdown)
@@ -790,6 +953,24 @@ class DetectAndPlanCliTests(unittest.TestCase):
             coverage_summary = json.loads(
                 (run_dir / "coverage_summary.json").read_text(encoding="utf-8")
             )
+            coverage_results = json.loads(
+                (run_dir / "coverage_results.json").read_text(encoding="utf-8")
+            )["results"]
+            unmapped_coverage_result = next(
+                result
+                for result in coverage_results
+                if result["cidr"] == "10.1.153.0/24"
+            )
+            self.assertEqual(
+                unmapped_coverage_result["scan_classification"],
+                {
+                    "vlan_role": "vl153 security cameras",
+                    "assessment_mapping": "UNMAPPED",
+                    "review_required": True,
+                },
+            )
+            self.assertIsNone(unmapped_coverage_result["required_scan_name"])
+            self.assertIsNone(unmapped_coverage_result["required_policy_name"])
             self.assertIn("region", coverage_summary["dimensions"])
             self.assertIn(
                 "ABC Corp NYC01 Private Discovery",

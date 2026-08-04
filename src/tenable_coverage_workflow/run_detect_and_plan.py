@@ -26,6 +26,7 @@ from .exclusion_tags import find_exclusion_tag
 from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
+from .planning.naming_rules import ASSESSMENT_MAPPING_UNMAPPED
 from .settings import (
     SettingsResolver,
     parse_bool,
@@ -389,6 +390,25 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         connector_result.coverage_targets,
         config.grouping_config,
     )
+    for target in named_targets:
+        if (
+            target.scan_classification.get("assessment_mapping")
+            == ASSESSMENT_MAPPING_UNMAPPED
+        ):
+            vlan_role = str(target.scan_classification.get("vlan_role") or "VLAN")
+            LOGGER.warning(
+                "assessment_mapping_missing site=%s vlan_role=%r cidr=%s",
+                target.site_code,
+                vlan_role,
+                target.cidr,
+            )
+            audit_logger.emit(
+                "assessment_mapping_missing",
+                site_code=target.site_code,
+                vlan_role=vlan_role,
+                cidr=target.cidr,
+                source_file=target.source_file,
+            )
 
     actual_scopes, actual_by_scan, excluded_by_scan, configuration_index = (
         load_actual_scope_data(build_coverage_source_config(config))
@@ -580,10 +600,16 @@ def validate_coverage_targets(
         )
         # exact names distinguish missing resources from scans that cover
         # the same addresses
+        assessment_mapping_unmapped = (
+            target.scan_classification.get("assessment_mapping")
+            == ASSESSMENT_MAPPING_UNMAPPED
+        )
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"
-        required_scan_present = "Yes" if matching_scans else "No"
+        required_scan_present = (
+            "" if assessment_mapping_unmapped else "Yes" if matching_scans else "No"
+        )
         required_scan = matching_scans[0] if len(matching_scans) == 1 else {}
         configured_repository = _resource_label(
             required_scan.get("repository"), required_scan.get("repositoryID")
@@ -591,7 +617,7 @@ def validate_coverage_targets(
         configured_policy = _resource_label(
             required_scan.get("policy"), required_scan.get("policyID")
         )
-        if not matching_scans:
+        if assessment_mapping_unmapped or not matching_scans:
             required_policy_configured = ""
         elif len(matching_scans) > 1:
             required_policy_configured = "No"

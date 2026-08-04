@@ -11,6 +11,7 @@ _NON_WORD_PATTERN = re.compile(r"[^A-Za-z0-9]+")
 _UNDERSCORE_PATTERN = re.compile(r"_+")
 _SPACE_PATTERN = re.compile(r"\s+")
 _NAME_PREFIX = "ABC Corp"
+ASSESSMENT_MAPPING_UNMAPPED = "UNMAPPED"
 _ROLE_ALIAS_MAP = {
     "server": "SERVER",
     "servers": "SERVER",
@@ -154,10 +155,11 @@ def _get_vlan_grouping_tag(
     return find_vlan_grouping_tag(target.target_type, target.tags, grouping_config)
 
 
-def _classify_vlan_role_from_grouping_tag(
+def _grouping_tag_role_and_mapping(
     grouping_tag: str,
     grouping_config: GroupingConfig,
-) -> str:
+) -> tuple[str, bool]:
+    """Return the source role and whether it has an explicit assessment mapping."""
     normalized_tag = str(grouping_tag).strip().lower()
     tag_map = {
         str(key).strip().lower(): _normalize_role_from_value(str(value).strip())
@@ -167,7 +169,7 @@ def _classify_vlan_role_from_grouping_tag(
     if normalized_tag in tag_map:
         # if using config file, tag map in config wins over
         # default vlan tags
-        return tag_map[normalized_tag]
+        return tag_map[normalized_tag], True
 
     prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
     matched_prefix = prefix if prefix and normalized_tag.startswith(prefix) else ""
@@ -179,12 +181,22 @@ def _classify_vlan_role_from_grouping_tag(
     # this might need to be modified
     # confirm if this is how vlans should be grouped
     if suffix in {"server", "servers", "storage", "other", "environment"}:
-        return "SERVER"
+        return "SERVER", True
     if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
-        return "END_USER"
+        return "END_USER", True
     if not suffix:
-        return "STANDARD"
-    return _normalize_role_from_value(suffix)
+        return "STANDARD", False
+
+    role = _normalize_role_from_value(suffix)
+    normalized_suffix = normalize_name_part(suffix, fallback="").lower()
+    return role, normalized_suffix in _ROLE_ALIAS_MAP
+
+
+def _classify_vlan_role_from_grouping_tag(
+    grouping_tag: str,
+    grouping_config: GroupingConfig,
+) -> str:
+    return _grouping_tag_role_and_mapping(grouping_tag, grouping_config)[0]
 
 
 def _grouping_tag_name_segment(
@@ -208,6 +220,33 @@ def resolve_target_role(
     if grouping_tag:
         return _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
     return classify_vlan_role(target.vlan_name)
+
+
+def has_explicit_assessment_mapping(
+    target: CoverageTarget,
+    grouping_config: GroupingConfig | None = None,
+) -> bool:
+    """Return whether a VLAN role has a defined scan and policy mapping."""
+    if target.target_type != "VLAN":
+        return True
+
+    grouping_config = grouping_config or GroupingConfig()
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
+    if grouping_tag:
+        return _grouping_tag_role_and_mapping(grouping_tag, grouping_config)[1]
+    return classify_vlan_role(target.vlan_name) != "STANDARD"
+
+
+def vlan_role_name(
+    target: CoverageTarget,
+    grouping_config: GroupingConfig | None = None,
+) -> str:
+    """Return the readable role supplied by the VLAN name or grouping tag."""
+    grouping_config = grouping_config or GroupingConfig()
+    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
+    if grouping_tag:
+        return _grouping_tag_name_segment(grouping_tag, grouping_config)
+    return _display_name_part(target.vlan_name, fallback="VLAN")
 
 
 def build_required_asset_name(
@@ -272,6 +311,25 @@ def apply_naming_rules(
     grouping_config = grouping_config or GroupingConfig()
     if find_exclusion_tag(target.tags):
         return target
+
+    if not has_explicit_assessment_mapping(target, grouping_config):
+        classification = dict(target.scan_classification)
+        classification.update(
+            {
+                "vlan_role": vlan_role_name(target, grouping_config),
+                "assessment_mapping": ASSESSMENT_MAPPING_UNMAPPED,
+                "review_required": True,
+            }
+        )
+        return replace(
+            target,
+            required_asset_name=(
+                target.required_asset_name
+                or build_required_asset_name(target, grouping_config)
+            ),
+            scan_classification=classification,
+        )
+
     return replace(
         target,
         required_asset_name=(
