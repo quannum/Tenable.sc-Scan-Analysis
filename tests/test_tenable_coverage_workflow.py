@@ -146,7 +146,7 @@ class PlanningTests(unittest.TestCase):
             target,
             GroupingConfig(
                 mode="vlan_tag",
-                tag_map={"vlan-printers": "NETWORK"},
+                tag_map={" VLAN-Printers ": "network"},
             ),
         )
 

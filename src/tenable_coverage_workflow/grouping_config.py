@@ -15,12 +15,14 @@ def build_grouping_config(
         raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")
 
     prefix = str(prefix_value or "vlan-").strip() or "vlan-"
-    tag_map = {
-        str(key).strip(): str(value).strip().upper()
-        for key, value in parse_string_mapping(tag_map_value).items()
-        if str(key).strip() and str(value).strip()
-    }
-    invalid_buckets = sorted(set(tag_map.values()) - VLAN_ASSESSMENT_BUCKETS)
+    grouping_config = GroupingConfig(
+        mode=mode,
+        vlan_tag_prefix=prefix,
+        tag_map=parse_string_mapping(tag_map_value),
+    )
+    invalid_buckets = sorted(
+        set(grouping_config.tag_map.values()) - VLAN_ASSESSMENT_BUCKETS
+    )
     if mode == "vlan_tag" and invalid_buckets:
         allowed = ", ".join(sorted(VLAN_ASSESSMENT_BUCKETS))
         invalid = ", ".join(invalid_buckets)
@@ -29,8 +31,4 @@ def build_grouping_config(
             f"{allowed}. Invalid: {invalid}."
         )
 
-    return GroupingConfig(
-        mode=mode,
-        vlan_tag_prefix=prefix,
-        tag_map=tag_map,
-    )
+    return grouping_config

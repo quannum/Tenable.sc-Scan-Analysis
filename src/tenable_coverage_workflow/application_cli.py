@@ -1,7 +1,7 @@
 import argparse
 import json
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -14,14 +14,11 @@ from .change_application import (
     load_approved_plan,
     write_apply_markdown,
 )
-from .grouping_config import build_grouping_config
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
 from .settings import (
     SettingsResolver,
     load_config_section,
     parse_bool,
-    parse_nonnegative_float,
-    parse_positive_int,
 )
 from .subnet_source import load_authoritative_source
 from .subnet_source.source_config import (
@@ -33,26 +30,18 @@ from .tenable_inventory import (
     write_inventory_reports,
     write_inventory_snapshot,
 )
+from .workflow_settings import (
+    TenableAccessConfig,
+    build_grouping_config_from_settings,
+    build_scan_filter_config,
+    build_tenable_access_config,
+)
 
 EXIT_OK = 0
 EXIT_VALIDATION = 2
 EXIT_CONFIG = 3
 EXIT_OPERATION = 4
 EXIT_APPLY_REQUIRED = 5
-
-
-@dataclass(frozen=True)
-class TenableAccessConfig:
-    mode: str
-    scan_json_dir: str | None
-    asset_json_dir: str | None
-    sc_url: str | None
-    sc_access_key: str | None
-    sc_secret_key: str | None
-    sc_timeout_seconds: int
-    sc_retries: int
-    sc_backoff_seconds: float
-    sc_ssl_verify: bool
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -202,39 +191,10 @@ def _validate_definitions(args) -> int:
 
 def _tenable_config(args) -> TenableAccessConfig:
     """Build Tenable.sc connection settings from command options"""
-    mode = str(_setting(args, "mode", default="offline")).strip().lower()
-    if mode not in {"offline", "live"}:
-        raise ValueError("mode must be 'offline' or 'live'.")
-
-    scan_dir = _setting(args, "scan_json_dir")
-    asset_dir = _setting(args, "asset_json_dir")
-    if mode == "offline" and (not scan_dir or not asset_dir):
-        raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
-
-    sc_timeout_seconds = parse_positive_int(
-        _setting(args, "sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60),
-        "sc_timeout_seconds",
-    )
-    sc_retries = parse_positive_int(
-        _setting(args, "sc_retries", "SC_RETRIES", 3),
-        "sc_retries",
-    )
-    sc_backoff_seconds = parse_nonnegative_float(
-        _setting(args, "sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5),
-        "sc_backoff_seconds",
-    )
-
-    return TenableAccessConfig(
-        mode=mode,
-        scan_json_dir=scan_dir,
-        asset_json_dir=asset_dir,
-        sc_url=_setting(args, "sc_url", "SC_URL"),
-        sc_access_key=_setting(args, "sc_access_key", "SC_ACCESS_KEY"),
-        sc_secret_key=_setting(args, "sc_secret_key", "SC_SECRET_KEY"),
-        sc_timeout_seconds=sc_timeout_seconds,
-        sc_retries=sc_retries,
-        sc_backoff_seconds=sc_backoff_seconds,
-        sc_ssl_verify=_as_bool(_setting(args, "sc_ssl_verify", "SC_SSL_VERIFY", True)),
+    return build_tenable_access_config(
+        lambda name, environment_name, default=None: _setting(
+            args, name, environment_name, default
+        )
     )
 
 
@@ -262,11 +222,14 @@ def _collect_tenable(args) -> int:
 def _analyze_or_propose(args) -> int:
     source = _source_config(args)
     tenable = _tenable_config(args)
-    filter_disabled_mode = str(_setting(args, "filter_disabled_mode", default="ALL"))
-    if filter_disabled_mode not in {"ALL", "ENABLED_ONLY", "DISABLED_ONLY"}:
-        raise ValueError(
-            "filter_disabled_mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY."
-        )
+    scan_filter = build_scan_filter_config(
+        scalar_getter=lambda name, environment_name, default=None: _setting(
+            args, name, environment_name, default
+        ),
+        csv_getter=lambda name, environment_name, default=None: _csv_setting(
+            args, name, environment_name, default
+        ),
+    )
     config = DetectAndPlanConfig(
         source_config=source,
         output_dir=Path(_setting(args, "output_dir", default="output")),
@@ -278,24 +241,19 @@ def _analyze_or_propose(args) -> int:
         sc_access_key=tenable.sc_access_key,
         sc_secret_key=tenable.sc_secret_key,
         sc_url=tenable.sc_url,
-        include_keywords=_csv_setting(args, "include_keywords") or [],
-        exclude_keywords=_csv_setting(args, "exclude_keywords") or [],
-        match_all_include=_as_bool(_setting(args, "match_all_include", default=False)),
-        case_sensitive=_as_bool(_setting(args, "case_sensitive", default=False)),
-        filter_disabled_mode=filter_disabled_mode,
+        include_keywords=scan_filter.include_keywords,
+        exclude_keywords=scan_filter.exclude_keywords,
+        match_all_include=scan_filter.match_all_include,
+        case_sensitive=scan_filter.case_sensitive,
+        filter_disabled_mode=scan_filter.filter_disabled_mode,
         sc_timeout_seconds=tenable.sc_timeout_seconds,
         sc_retries=tenable.sc_retries,
         sc_backoff_seconds=tenable.sc_backoff_seconds,
         sc_ssl_verify=tenable.sc_ssl_verify,
-        grouping_config=build_grouping_config(
-            mode_value=_setting(args, "grouping_mode", "GROUPING_MODE", "default"),
-            prefix_value=_setting(
-                args,
-                "grouping_vlan_tag_prefix",
-                "GROUPING_VLAN_TAG_PREFIX",
-                "vlan-",
-            ),
-            tag_map_value=_setting(args, "grouping_tag_map", "GROUPING_TAG_MAP"),
+        grouping_config=build_grouping_config_from_settings(
+            lambda name, environment_name, default=None: _setting(
+                args, name, environment_name, default
+            )
         ),
     )
     summary = run_detect_and_plan(config)

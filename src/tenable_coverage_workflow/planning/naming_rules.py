@@ -154,16 +154,10 @@ def _assessment_bucket_for_grouping_tag(
 ) -> str | None:
     """Return the direct scan bucket assigned to a VLAN grouping tag."""
     normalized_tag = str(grouping_tag).strip().lower()
-    tag_map = {
-        str(key).strip().lower(): str(value).strip().upper()
-        for key, value in grouping_config.tag_map.items()
-        if str(key).strip() and str(value).strip()
-    }
-    if normalized_tag in tag_map:
+    configured_bucket = grouping_config.tag_map.get(normalized_tag)
+    if configured_bucket is not None:
         return (
-            tag_map[normalized_tag]
-            if tag_map[normalized_tag] in VLAN_ASSESSMENT_BUCKETS
-            else None
+            configured_bucket if configured_bucket in VLAN_ASSESSMENT_BUCKETS else None
         )
     return _DEFAULT_VLAN_TAG_BUCKETS.get(normalized_tag)
 

@@ -9,6 +9,17 @@ class GroupingConfig:
     vlan_tag_prefix: str = "vlan-"
     tag_map: dict[str, str] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tag_map",
+            {
+                str(key).strip().lower(): str(value).strip().upper()
+                for key, value in self.tag_map.items()
+                if str(key).strip() and str(value).strip()
+            },
+        )
+
 
 @dataclass(frozen=True)
 class IpAddress:
