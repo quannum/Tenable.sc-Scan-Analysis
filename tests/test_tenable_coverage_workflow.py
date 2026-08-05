@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from src.constants import INCLUDE
 from src.core.tenable_scope_analysis import build_scope_sheets, build_scope_tables
+from src.tenable_coverage_workflow.grouping_config import build_grouping_config
 from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
@@ -127,7 +128,7 @@ class PlanningTests(unittest.TestCase):
             named_target.scan_classification["assessment_mapping"], "UNMAPPED"
         )
 
-    def test_explicit_tag_map_to_standard_preserves_standard_assessment(self):
+    def test_explicit_tag_map_assigns_a_scan_bucket(self):
         target = CoverageTarget(
             target_type="VLAN",
             cidr="10.1.152.0/24",
@@ -145,17 +146,17 @@ class PlanningTests(unittest.TestCase):
             target,
             GroupingConfig(
                 mode="vlan_tag",
-                tag_map={"vlan-printers": "STANDARD"},
+                tag_map={"vlan-printers": "NETWORK"},
             ),
         )
 
         self.assertEqual(
             named_target.required_scan_name,
-            "ABC Corp Assessment NYC01 Standard",
+            "ABC Corp Assessment NYC01 Network",
         )
         self.assertEqual(
             named_target.required_policy_name,
-            "Basic Assessment Policy",
+            "Network Infrastructure Assessment",
         )
         self.assertEqual(named_target.scan_classification, {})
 
@@ -411,7 +412,7 @@ class PlanningTests(unittest.TestCase):
                     "Basic Assessment Policy",
                 )
 
-    def test_vlan_policy_assignment_keeps_network_and_av_specialized(self):
+    def test_vlan_tag_mode_routes_av_into_the_network_bucket(self):
         targets = {
             "environment": CoverageTarget(
                 target_type="VLAN",
@@ -462,10 +463,14 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             build_required_policy_name(targets["av"], config),
-            "AV / Media Device Assessment",
+            "Network Infrastructure Assessment",
+        )
+        self.assertEqual(
+            build_required_scan_name(targets["av"], config),
+            "ABC Corp Assessment NYC01 Network",
         )
 
-    def test_grouping_tag_map_can_override_role_classification(self):
+    def test_grouping_tag_map_can_override_the_scan_bucket(self):
         target = CoverageTarget(
             target_type="VLAN",
             cidr="10.1.64.0/24",
@@ -485,7 +490,7 @@ class PlanningTests(unittest.TestCase):
             GroupingConfig(
                 mode="vlan_tag",
                 vlan_tag_prefix="vlan-",
-                tag_map={"vlan-wireless": "END_USER"},
+                tag_map={"vlan-wireless": "NETWORK"},
             ),
         )
 
@@ -495,8 +500,16 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(
             named_target.required_scan_name,
-            "ABC Corp Assessment NYC01 Workstation",
+            "ABC Corp Assessment NYC01 Network",
         )
+
+    def test_grouping_config_rejects_role_aliases(self):
+        with self.assertRaisesRegex(ValueError, "scan buckets"):
+            build_grouping_config(
+                mode_value="vlan_tag",
+                prefix_value="vlan-",
+                tag_map_value={"vlan-workstation": "END_USER"},
+            )
 
     def test_scan_name_scope_falls_back_to_location_then_global(self):
         location_only_target = CoverageTarget(

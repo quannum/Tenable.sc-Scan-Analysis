@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+VLAN_ASSESSMENT_BUCKETS = frozenset({"WORKSTATION", "SERVER", "NETWORK"})
+
 
 @dataclass(frozen=True)
 class GroupingConfig:

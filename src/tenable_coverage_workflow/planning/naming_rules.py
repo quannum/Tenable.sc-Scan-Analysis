@@ -2,7 +2,7 @@ import re
 from dataclasses import replace
 
 from ..exclusion_tags import find_exclusion_tag
-from ..models import CoverageTarget, GroupingConfig
+from ..models import VLAN_ASSESSMENT_BUCKETS, CoverageTarget, GroupingConfig
 
 # naming rules to keep proposals, coverage checks, and apply operations using
 # the same names
@@ -12,25 +12,22 @@ _UNDERSCORE_PATTERN = re.compile(r"_+")
 _SPACE_PATTERN = re.compile(r"\s+")
 _NAME_PREFIX = "ABC Corp"
 ASSESSMENT_MAPPING_UNMAPPED = "UNMAPPED"
-_ROLE_ALIAS_MAP = {
-    "server": "SERVER",
-    "servers": "SERVER",
-    "mgmt": "NETWORK",
-    "management": "NETWORK",
-    "network": "NETWORK",
-    "workstation": "END_USER",
-    "workstations": "END_USER",
-    "enduser": "END_USER",
-    "end_user": "END_USER",
-    "end-user": "END_USER",
-    "user": "END_USER",
-    "users": "END_USER",
-    "wireless": "WIRELESS",
-    "wifi": "WIRELESS",
-    "wi_fi": "WIRELESS",
-    "wi-fi": "WIRELESS",
-    "av": "AV",
-    "media": "AV",
+_DEFAULT_VLAN_TAG_BUCKETS = {
+    "vlan-server": "SERVER",
+    "vlan-servers": "SERVER",
+    "vlan-storage": "SERVER",
+    "vlan-other": "SERVER",
+    "vlan-environment": "SERVER",
+    "vlan-workstation": "WORKSTATION",
+    "vlan-workstations": "WORKSTATION",
+    "vlan-wireless": "WORKSTATION",
+    "vlan-wifi": "WORKSTATION",
+    "vlan-wi-fi": "WORKSTATION",
+    "vlan-mgmt": "NETWORK",
+    "vlan-management": "NETWORK",
+    "vlan-network": "NETWORK",
+    "vlan-av": "NETWORK",
+    "vlan-media": "NETWORK",
 }
 
 
@@ -101,14 +98,10 @@ def classify_vlan_role(vlan_name: str | None) -> str:
     return "STANDARD"
 
 
-def _normalize_role_from_value(value: str | None) -> str:
-    normalized = normalize_name_part(value, fallback="STANDARD").upper()
-    return _ROLE_ALIAS_MAP.get(normalized.lower(), normalized)
-
-
 def _role_name_segment(role: str) -> str:
     known = {
         "SERVER": "Server",
+        "WORKSTATION": "Workstation",
         "END_USER": "Workstation",
         "NETWORK": "Network",
         "WIRELESS": "Wireless",
@@ -155,48 +148,24 @@ def _get_vlan_grouping_tag(
     return find_vlan_grouping_tag(target.target_type, target.tags, grouping_config)
 
 
-def _grouping_tag_role_and_mapping(
+def _assessment_bucket_for_grouping_tag(
     grouping_tag: str,
     grouping_config: GroupingConfig,
-) -> tuple[str, bool]:
-    """Return the source role and whether it has an explicit assessment mapping."""
+) -> str | None:
+    """Return the direct scan bucket assigned to a VLAN grouping tag."""
     normalized_tag = str(grouping_tag).strip().lower()
     tag_map = {
-        str(key).strip().lower(): _normalize_role_from_value(str(value).strip())
+        str(key).strip().lower(): str(value).strip().upper()
         for key, value in grouping_config.tag_map.items()
         if str(key).strip() and str(value).strip()
     }
     if normalized_tag in tag_map:
-        # if using config file, tag map in config wins over
-        # default vlan tags
-        return tag_map[normalized_tag], True
-
-    prefix = str(grouping_config.vlan_tag_prefix or "").strip().lower()
-    matched_prefix = prefix if prefix and normalized_tag.startswith(prefix) else ""
-    suffix = (
-        normalized_tag[len(matched_prefix) :].strip(" -_")
-        if matched_prefix
-        else normalized_tag
-    )
-    # this might need to be modified
-    # confirm if this is how vlans should be grouped
-    if suffix in {"server", "servers", "storage", "other", "environment"}:
-        return "SERVER", True
-    if suffix in {"workstation", "workstations", "wireless", "wifi", "wi-fi"}:
-        return "END_USER", True
-    if not suffix:
-        return "STANDARD", False
-
-    role = _normalize_role_from_value(suffix)
-    normalized_suffix = normalize_name_part(suffix, fallback="").lower()
-    return role, normalized_suffix in _ROLE_ALIAS_MAP
-
-
-def _classify_vlan_role_from_grouping_tag(
-    grouping_tag: str,
-    grouping_config: GroupingConfig,
-) -> str:
-    return _grouping_tag_role_and_mapping(grouping_tag, grouping_config)[0]
+        return (
+            tag_map[normalized_tag]
+            if tag_map[normalized_tag] in VLAN_ASSESSMENT_BUCKETS
+            else None
+        )
+    return _DEFAULT_VLAN_TAG_BUCKETS.get(normalized_tag)
 
 
 def _grouping_tag_name_segment(
@@ -218,7 +187,10 @@ def resolve_target_role(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        return _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
+        return (
+            _assessment_bucket_for_grouping_tag(grouping_tag, grouping_config)
+            or "STANDARD"
+        )
     return classify_vlan_role(target.vlan_name)
 
 
@@ -233,7 +205,10 @@ def has_explicit_assessment_mapping(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        return _grouping_tag_role_and_mapping(grouping_tag, grouping_config)[1]
+        return (
+            _assessment_bucket_for_grouping_tag(grouping_tag, grouping_config)
+            is not None
+        )
     return classify_vlan_role(target.vlan_name) != "STANDARD"
 
 
@@ -280,12 +255,6 @@ def build_required_scan_name(
         return f"{_NAME_PREFIX} Assessment {site_identifier} Public"
     if target.target_type == "PRIVATE_SUPERNET":
         return f"{_NAME_PREFIX} Discovery {site_identifier} Private"
-
-    grouping_config = grouping_config or GroupingConfig()
-    grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
-    if grouping_tag:
-        role = _classify_vlan_role_from_grouping_tag(grouping_tag, grouping_config)
-        return f"{_NAME_PREFIX} Assessment {site_identifier} {_role_name_segment(role)}"
 
     role = resolve_target_role(target, grouping_config)
     return f"{_NAME_PREFIX} Assessment {site_identifier} {_role_name_segment(role)}"
