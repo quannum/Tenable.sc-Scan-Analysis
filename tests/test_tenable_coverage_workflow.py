@@ -1072,6 +1072,10 @@ class ScanNameCompatibilityTests(unittest.TestCase):
                 return []
 
             @staticmethod
+            def get_asset(asset_id: Any) -> dict[str, Any]:
+                raise AssertionError(f"Unexpected asset lookup: {asset_id}")
+
+            @staticmethod
             def get_scans() -> list[dict[str, Any]]:
                 return [{"id": 7, "name": "fallback", "info": {"name": "Canonical"}}]
 
