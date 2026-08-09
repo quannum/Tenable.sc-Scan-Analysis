@@ -232,6 +232,40 @@ def walk_combination(node, scan_name, normalized_ws, data_access, in_complement=
     )
 
 
+def get_dynamic_asset_scopes(asset: dict[str, Any]) -> list[str]:
+    """Return CIDR clauses from a dynamic asset's saved rule definition.
+
+    These rows represent the authoritative IP side of the dynamic rule for
+    planning purposes.  They do not claim to enumerate the current hosts that
+    also satisfy a temporal rule such as ``lastseen < 30``.
+    """
+    type_fields = asset.get("typeFields")
+    rules = asset.get("rules")
+    if not isinstance(rules, dict) and isinstance(type_fields, dict):
+        rules = type_fields.get("rules", type_fields.get("dynamicRules"))
+    if not isinstance(rules, dict):
+        return []
+
+    scopes: set[str] = set()
+
+    def collect(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        children = node.get("children")
+        if isinstance(children, list):
+            for child in children:
+                collect(child)
+            return
+        filter_name = str(node.get("filtername", node.get("filterName", ""))).lower()
+        operator = str(node.get("operator") or "").lower()
+        value = node.get("value")
+        if filter_name == "ip" and operator == "eq" and value not in (None, ""):
+            scopes.add(str(value).strip())
+
+    collect(rules)
+    return sorted(scope for scope in scopes if scope)
+
+
 def build_scope_sheets(normalized_ws, data_access, config):
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
@@ -301,6 +335,20 @@ def build_scope_sheets(normalized_ws, data_access, config):
                     normalized_ws,
                     data_access,
                 )
+            elif asset_type == "dynamic":
+                scopes = get_dynamic_asset_scopes(asset)
+                asset_name = asset.get("name") or f"Asset {asset_id}"
+                if scopes:
+                    for scope in scopes:
+                        normalize_scope(
+                            normalized_ws, scan_name, asset_name, INCLUDE, scope
+                        )
+                else:
+                    LOGGER.warning(
+                        "Dynamic asset '%s' on scan '%s' has no supported IP rules",
+                        asset_name,
+                        scan_name,
+                    )
             else:
                 LOGGER.debug(
                     "Skipping unsupported asset type '%s' for asset '%s' on scan '%s'",

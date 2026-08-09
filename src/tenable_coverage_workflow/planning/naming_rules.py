@@ -181,10 +181,16 @@ def resolve_target_role(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        return (
-            _assessment_bucket_for_grouping_tag(grouping_tag, grouping_config)
-            or "STANDARD"
-        )
+        bucket = _assessment_bucket_for_grouping_tag(grouping_tag, grouping_config)
+        if bucket:
+            return bucket
+        # In VLAN-tag mode, a meaningful tag is itself an explicit grouping.
+        # Keep it out of the generic Standard bucket even when it has no
+        # configured assessment-bucket alias.
+        return normalize_name_part(
+            _grouping_tag_name_segment(grouping_tag, grouping_config),
+            fallback="VLAN",
+        ).upper()
     return classify_vlan_role(target.vlan_name)
 
 
@@ -199,10 +205,7 @@ def has_explicit_assessment_mapping(
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
-        return (
-            _assessment_bucket_for_grouping_tag(grouping_tag, grouping_config)
-            is not None
-        )
+        return True
     return classify_vlan_role(target.vlan_name) != "STANDARD"
 
 

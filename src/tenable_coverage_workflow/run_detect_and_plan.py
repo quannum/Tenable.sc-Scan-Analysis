@@ -55,6 +55,10 @@ class ConfigurationDataAccess(Protocol):
         """List scans"""
         ...
 
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
+        """Read one asset group."""
+        ...
+
     def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
         """Read one scan configuration"""
         ...
@@ -473,9 +477,14 @@ def build_configuration_index(
 ) -> ConfigurationIndex:
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
-        name = str(asset.get("name") or "").strip()
+        asset_id = asset.get("id")
+        details = (
+            data_access.get_asset(asset_id) if asset_id not in (None, "") else asset
+        )
+        record = details if isinstance(details, dict) and details else asset
+        name = str(record.get("name") or asset.get("name") or "").strip()
         if name:
-            assets_by_name[name].append(asset)
+            assets_by_name[name].append(record)
 
     scans_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for scan in data_access.get_scans():
@@ -549,6 +558,9 @@ def validate_coverage_targets(
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"
+        configured_asset_type = ""
+        if len(matching_assets) == 1:
+            configured_asset_type = str(matching_assets[0].get("type") or "").lower()
         required_scan_present = (
             "" if assessment_mapping_unmapped else "Yes" if matching_scans else "No"
         )
@@ -592,6 +604,7 @@ def validate_coverage_targets(
             exclusion_ip_total=base_result.exclusion_ip_total,
             coverage_pct=base_result.coverage_pct,
             required_asset_present=required_asset_present,
+            configured_asset_type=configured_asset_type,
             required_scan_present=required_scan_present,
             configured_repository=configured_repository,
             configured_policy=configured_policy,

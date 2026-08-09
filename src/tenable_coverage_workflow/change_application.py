@@ -19,7 +19,6 @@ SUPPORTED_ACTIONS = {
     "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
     "UPDATE_SCAN_POLICY_AND_TARGET",
 }
-MANAGED_DESCRIPTION = "Created with Tenable.sc Scan Analysis"
 
 
 @dataclass(frozen=True)
@@ -37,6 +36,7 @@ class ApprovedChange:
     vlan_name: str = ""
     vlan_tag: str = ""
     grouping_tag: str = ""
+    desired_asset_type: str = ""
 
 
 @dataclass(frozen=True)
@@ -61,6 +61,20 @@ class ApplyOperation:
     message: str
 
 
+@dataclass(frozen=True)
+class AssetDefinition:
+    name: str
+    asset_type: str
+    cidrs: tuple[str, ...]
+    description: str
+
+
+@dataclass(frozen=True)
+class ScanDefinition:
+    name: str
+    description: str | None
+
+
 class ChangeDataAccess(Protocol):
     config: Any
 
@@ -82,12 +96,33 @@ class ChangeDataAccess(Protocol):
         self, asset_id: int, ips: list[str], description: str | None = None
     ) -> dict[str, Any]: ...
 
+    def create_dynamic_asset(
+        self, name: str, rules: dict[str, Any], description: str
+    ) -> dict[str, Any]: ...
+
+    def update_dynamic_asset(
+        self,
+        asset_id: int,
+        rules: dict[str, Any],
+        description: str | None = None,
+    ) -> dict[str, Any]: ...
+
     def create_scan(
-        self, name: str, repository_id: int, asset_ids: list[int], policy_id: int
+        self,
+        name: str,
+        repository_id: int,
+        asset_ids: list[int],
+        policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]: ...
 
     def update_scan_configuration(
-        self, scan_id: int, asset_ids: list[int], repository_id: int, policy_id: int
+        self,
+        scan_id: int,
+        asset_ids: list[int],
+        repository_id: int,
+        policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -148,6 +183,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 vlan_name=_text(row.get("VLAN Name")),
                 vlan_tag=_text(row.get("VLAN Tag")),
                 grouping_tag=_text(row.get("VLAN Grouping Tag")),
+                desired_asset_type=_text(row.get("Desired Asset Type")).lower(),
             )
             try:
                 canonical_cidr = str(ipaddress.ip_network(change.cidr, strict=False))
@@ -156,6 +192,17 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                     f"Row {row_number} has invalid CIDR '{change.cidr}': {exc}"
                 ) from exc
             change = ApprovedChange(**{**asdict(change), "cidr": canonical_cidr})
+            expected_asset_type = _asset_type_for_target(change.target_type)
+            desired_asset_type = change.desired_asset_type or expected_asset_type
+            if desired_asset_type != expected_asset_type:
+                raise ValueError(
+                    f"Row {row_number} has Desired Asset Type "
+                    f"'{desired_asset_type}', but {change.target_type} requires "
+                    f"'{expected_asset_type}'."
+                )
+            change = ApprovedChange(
+                **{**asdict(change), "desired_asset_type": desired_asset_type}
+            )
             identity = (change.asset_name, change.scan_name, change.cidr)
             if identity in identities:
                 raise ValueError(
@@ -192,9 +239,13 @@ class ChangeApplier:
         self.scans = self._unique_name_index(data_access.get_scans(), "scan")
         self.policies = self._unique_name_index(data_access.get_policies(), "policy")
 
-    def preflight(self, plan: ApprovedPlan) -> None:
+    def preflight(
+        self,
+        plan: ApprovedPlan,
+        asset_definitions: dict[str, AssetDefinition] | None = None,
+    ) -> None:
         """Check requirements before applying changes"""
-        errors = []
+        errors: list[str] = []
         # Check every named policy before creating or updating anything
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
@@ -203,14 +254,30 @@ class ChangeApplier:
                 errors.append(
                     f"{change.site_code}: policy '{change.policy_name}' was not found"
                 )
+        asset_definitions = asset_definitions or _build_asset_definitions(
+            plan.approved_changes
+        )
+        for definition in asset_definitions.values():
+            existing = self.assets.get(definition.name)
+            if existing is None:
+                continue
+            asset_id = _resource_id(existing, "asset group", definition.name)
+            details = self.data_access.get_asset(asset_id) or existing
+            current_type = _asset_type(details)
+            if current_type and current_type != definition.asset_type:
+                errors.append(
+                    f"Asset '{definition.name}' is {current_type}, but the plan "
+                    f"requires {definition.asset_type}. Manual migration is required"
+                )
         if errors:
             raise ValueError("Apply preflight failed: " + "; ".join(errors))
 
     def apply(self, plan: ApprovedPlan) -> dict[str, Any]:
-        self.preflight(plan)
+        asset_definitions = _build_asset_definitions(plan.approved_changes)
+        scan_definitions = _build_scan_definitions(plan.approved_changes)
+        self.preflight(plan, asset_definitions)
         started_at = datetime.now(timezone.utc)
         operations = []
-        asset_descriptions = _build_asset_descriptions(plan.approved_changes)
         for change in plan.approved_changes:
             if change.proposed_action not in SUPPORTED_ACTIONS:
                 # Keep manual review rows visible without applying them
@@ -234,7 +301,8 @@ class ChangeApplier:
                 operations.append(
                     self._apply_change(
                         change,
-                        asset_descriptions.get(change.asset_name, MANAGED_DESCRIPTION),
+                        asset_definitions[change.asset_name],
+                        scan_definitions[change.scan_name],
                     )
                 )
             except Exception as exc:
@@ -270,11 +338,12 @@ class ChangeApplier:
     def _apply_change(
         self,
         change: ApprovedChange,
-        asset_description: str,
+        asset_definition: AssetDefinition,
+        scan_definition: ScanDefinition,
     ) -> ApplyOperation:
-        asset, asset_status = self._confirm_asset(change, asset_description)
+        asset, asset_status = self._confirm_asset(asset_definition)
         asset_id = _resource_id(asset, "asset group", change.asset_name)
-        scan, scan_status = self._confirm_scan(change, asset_id)
+        scan, scan_status = self._confirm_scan(change, asset_id, scan_definition)
         scan_id = _resource_id(scan, "scan", change.scan_name)
         status = (
             "UNCHANGED"
@@ -293,58 +362,73 @@ class ChangeApplier:
             message="Post-change verification passed.",
         )
 
-    def _confirm_asset(
-        self,
-        change: ApprovedChange,
-        asset_description: str,
-    ) -> tuple[dict[str, Any], str]:
-        """Confirm asset created or updated"""
-        existing = self.assets.get(change.asset_name)
+    def _confirm_asset(self, definition: AssetDefinition) -> tuple[dict[str, Any], str]:
+        """Create or reconcile one static or dynamic asset definition."""
+        existing = self.assets.get(definition.name)
         if existing is None:
-            # new asset starts with the approved CIDR and managed description
-            created = self.data_access.create_static_asset(
-                change.asset_name,
-                [change.cidr],
-                asset_description,
-            )
-            asset_id = _resource_id(created, "asset group", change.asset_name)
-            self.assets[change.asset_name] = created
-            self._verify_asset(asset_id, change.cidr)
+            if definition.asset_type == "static":
+                created = self.data_access.create_static_asset(
+                    definition.name,
+                    list(definition.cidrs),
+                    definition.description,
+                )
+            else:
+                created = self.data_access.create_dynamic_asset(
+                    definition.name,
+                    build_dynamic_asset_rules(definition.cidrs),
+                    definition.description,
+                )
+            asset_id = _resource_id(created, "asset group", definition.name)
+            self.assets[definition.name] = created
+            self._verify_asset(asset_id, definition)
             return created, "CREATED"
 
-        asset_id = _resource_id(existing, "asset group", change.asset_name)
+        asset_id = _resource_id(existing, "asset group", definition.name)
         details = self.data_access.get_asset(asset_id) or existing
-        current_scopes = get_asset_scopes(details)
-        # keep existing description text while adding managed scope lines
-        description = _merge_asset_description(
-            _text(details.get("description")),
-            asset_description,
-        )
-        if change.cidr in current_scopes:
-            if description != _text(details.get("description")):
-                updated = self.data_access.update_static_asset(
-                    asset_id,
-                    sorted(current_scopes),
-                    description,
-                )
-                self._verify_asset(asset_id, change.cidr)
-                merged = updated if isinstance(updated, dict) and updated else details
-                self.assets[change.asset_name] = merged
-                return merged, "UPDATED"
-            return details, "UNCHANGED"
-        updated_scopes = sorted(current_scopes | {change.cidr})
-        updated = self.data_access.update_static_asset(
-            asset_id,
-            updated_scopes,
-            description,
-        )
-        self._verify_asset(asset_id, change.cidr)
+        current_type = _asset_type(details)
+        if current_type and current_type != definition.asset_type:
+            raise RuntimeError(
+                f"Asset '{definition.name}' is {current_type}, but requires "
+                f"{definition.asset_type}. Manual migration is required."
+            )
+
+        if definition.asset_type == "static":
+            current_scopes = get_asset_scopes(details)
+            desired_scopes = tuple(sorted(current_scopes | set(definition.cidrs)))
+            if (
+                desired_scopes == tuple(sorted(current_scopes))
+                and _text(details.get("description")) == definition.description
+            ):
+                return details, "UNCHANGED"
+            updated = self.data_access.update_static_asset(
+                asset_id,
+                list(desired_scopes),
+                definition.description,
+            )
+        else:
+            desired_rules = build_dynamic_asset_rules(definition.cidrs)
+            if (
+                _rules_signature(get_dynamic_asset_rules(details))
+                == _rules_signature(desired_rules)
+                and _text(details.get("description")) == definition.description
+            ):
+                return details, "UNCHANGED"
+            updated = self.data_access.update_dynamic_asset(
+                asset_id,
+                desired_rules,
+                definition.description,
+            )
+
+        self._verify_asset(asset_id, definition)
         merged = updated if isinstance(updated, dict) and updated else details
-        self.assets[change.asset_name] = merged
+        self.assets[definition.name] = merged
         return merged, "UPDATED"
 
     def _confirm_scan(
-        self, change: ApprovedChange, asset_id: int
+        self,
+        change: ApprovedChange,
+        asset_id: int,
+        definition: ScanDefinition,
     ) -> tuple[dict[str, Any], str]:
         """Confirm scan created or updated"""
         existing = self.scans.get(change.scan_name)
@@ -358,10 +442,11 @@ class ChangeApplier:
                 self.repository_id,
                 [asset_id],
                 policy_id,
+                description=definition.description,
             )
             scan_id = _resource_id(created, "scan", change.scan_name)
             self.scans[change.scan_name] = created
-            self._verify_scan(scan_id, asset_id, policy_id)
+            self._verify_scan(scan_id, asset_id, policy_id, definition.description)
             return created, "CREATED"
 
         scan_id = _resource_id(existing, "scan", change.scan_name)
@@ -369,10 +454,15 @@ class ChangeApplier:
         current_asset_ids = get_scan_asset_ids(details)
         current_repository_id = get_nested_id(details, "repository", "repositoryID")
         current_policy_id = get_nested_id(details, "policy", "policyID")
+        description_matches = (
+            definition.description is None
+            or _text(details.get("description")) == definition.description
+        )
         if (
             asset_id in current_asset_ids
             and current_repository_id == self.repository_id
             and current_policy_id == policy_id
+            and description_matches
         ):
             return details, "UNCHANGED"
         # add this asset without dropping assets already assigned to the scan
@@ -382,18 +472,37 @@ class ChangeApplier:
             updated_ids,
             self.repository_id,
             policy_id,
+            description=definition.description,
         )
-        self._verify_scan(scan_id, asset_id, policy_id)
+        self._verify_scan(scan_id, asset_id, policy_id, definition.description)
         merged = updated if isinstance(updated, dict) and updated else details
         self.scans[change.scan_name] = merged
         return merged, "UPDATED"
 
-    def _verify_asset(self, asset_id: int, expected_cidr: str) -> None:
-        """Check that an asset group contains the expected CIDR"""
+    def _verify_asset(self, asset_id: int, definition: AssetDefinition) -> None:
+        """Check that an asset group matches its desired static or dynamic state."""
         details = self.data_access.get_asset(asset_id)
-        if expected_cidr not in get_asset_scopes(details):
+        if _asset_type(details) != definition.asset_type:
             raise RuntimeError(
-                f"Asset {asset_id} verification failed: {expected_cidr} not present"
+                f"Asset {asset_id} verification failed: expected "
+                f"{definition.asset_type} type"
+            )
+        if definition.asset_type == "static":
+            missing = set(definition.cidrs).difference(get_asset_scopes(details))
+            if missing:
+                raise RuntimeError(
+                    f"Asset {asset_id} verification failed: missing "
+                    f"{', '.join(sorted(missing))}"
+                )
+        elif _rules_signature(get_dynamic_asset_rules(details)) != _rules_signature(
+            build_dynamic_asset_rules(definition.cidrs)
+        ):
+            raise RuntimeError(
+                f"Asset {asset_id} verification failed: dynamic rules do not match"
+            )
+        if _text(details.get("description")) != definition.description:
+            raise RuntimeError(
+                f"Asset {asset_id} verification failed: description does not match"
             )
 
     def _verify_scan(
@@ -401,6 +510,7 @@ class ChangeApplier:
         scan_id: int,
         expected_asset_id: int,
         expected_policy_id: int | None = None,
+        expected_description: str | None = None,
     ) -> None:
         """Check that a scan has the expected settings"""
         details = self.data_access.get_scan_details(scan_id)
@@ -418,6 +528,13 @@ class ChangeApplier:
             and get_nested_id(details, "policy", "policyID") != expected_policy_id
         ):
             raise RuntimeError(f"Scan {scan_id} verification failed: policy mismatch")
+        if (
+            expected_description is not None
+            and _text(details.get("description")) != expected_description
+        ):
+            raise RuntimeError(
+                f"Scan {scan_id} verification failed: description mismatch"
+            )
 
     @staticmethod
     def _unique_name_index(
@@ -453,6 +570,207 @@ def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
             except ValueError:
                 scopes.add(str(item).strip())
     return {scope for scope in scopes if scope}
+
+
+def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
+    """Build the exported Tenable.sc rule shape for a VLAN asset group."""
+    return {
+        "operator": "all",
+        "children": [
+            {
+                "operator": "any",
+                "children": [
+                    {
+                        "filtername": "ip",
+                        "operator": "eq",
+                        "value": cidr,
+                        "type": "clause",
+                    }
+                    for cidr in cidrs
+                ],
+                "type": "group",
+            },
+            {
+                "filtername": "lastseen",
+                "operator": "lt",
+                "value": "30",
+                "type": "clause",
+            },
+        ],
+        "type": "group",
+    }
+
+
+def get_dynamic_asset_rules(asset: dict[str, Any]) -> dict[str, Any] | None:
+    """Read saved dynamic rules from the common Tenable.sc response locations."""
+    for record in (asset, asset.get("typeFields")):
+        if not isinstance(record, dict):
+            continue
+        for key in ("rules", "dynamicRules"):
+            rules = record.get(key)
+            if isinstance(rules, dict):
+                return rules
+    return None
+
+
+def _rules_signature(rules: dict[str, Any] | None) -> tuple[Any, ...] | None:
+    """Compare dynamic rules independent of API key casing and child order."""
+    if not isinstance(rules, dict):
+        return None
+    children = rules.get("children")
+    if isinstance(children, list):
+        return (
+            "group",
+            str(rules.get("operator") or "").lower(),
+            tuple(sorted((_rules_signature(child) for child in children), key=repr)),
+        )
+    return (
+        "clause",
+        str(rules.get("filtername", rules.get("filterName", ""))).lower(),
+        str(rules.get("operator") or "").lower(),
+        str(rules.get("value") or ""),
+    )
+
+
+def _asset_type(asset: dict[str, Any]) -> str:
+    value = _text(asset.get("type")).lower()
+    if value:
+        return value
+    type_fields = asset.get("typeFields")
+    if isinstance(type_fields, dict) and type_fields.get("definedIPs") is not None:
+        return "static"
+    return ""
+
+
+def _asset_type_for_target(target_type: str) -> str:
+    return "dynamic" if target_type == "VLAN" else "static"
+
+
+def _build_asset_definitions(
+    changes: list[ApprovedChange],
+) -> dict[str, AssetDefinition]:
+    grouped: dict[str, list[ApprovedChange]] = {}
+    for change in changes:
+        if change.proposed_action not in SUPPORTED_ACTIONS:
+            continue
+        grouped.setdefault(change.asset_name, []).append(change)
+
+    definitions: dict[str, AssetDefinition] = {}
+    for name, members in grouped.items():
+        asset_types = {change.desired_asset_type for change in members}
+        if len(asset_types) != 1:
+            raise ValueError(f"Asset '{name}' has conflicting desired asset types.")
+        definitions[name] = AssetDefinition(
+            name=name,
+            asset_type=next(iter(asset_types)),
+            cidrs=tuple(sorted({change.cidr for change in members})),
+            description=_build_asset_description(members),
+        )
+    return definitions
+
+
+def _build_asset_description(changes: list[ApprovedChange]) -> str:
+    first = changes[0]
+    if first.desired_asset_type == "dynamic":
+        role = _grouping_role_label(first.grouping_tag)
+        lines = [
+            f"Dynamic VLAN asset for {first.site_code} {role} networks.",
+            "",
+            "VLANs:",
+        ]
+        lines.extend(
+            _vlan_description_line(change) for change in _sorted_vlans(changes)
+        )
+        lines.extend(
+            (
+                "",
+                f"Source grouping tag: {first.grouping_tag or 'N/A'}",
+                "Membership criteria: IP address within the listed VLAN ranges "
+                "AND Last Seen < 30 days.",
+                "Source of truth: subnet-as-code.",
+            )
+        )
+        return "\n".join(lines)
+
+    scope_kind = "public range" if first.target_type == "PUBLIC" else "private supernet"
+    lines = [
+        f"Static authoritative {scope_kind} for {first.site_code}.",
+        "",
+        "Ranges:",
+    ]
+    lines.extend(
+        f"- {change.cidr}" for change in sorted(changes, key=lambda item: item.cidr)
+    )
+    lines.extend(("", "Source of truth: subnet-as-code."))
+    return "\n".join(lines)
+
+
+def _build_scan_definitions(changes: list[ApprovedChange]) -> dict[str, ScanDefinition]:
+    grouped: dict[str, list[ApprovedChange]] = {}
+    for change in changes:
+        if change.proposed_action in SUPPORTED_ACTIONS:
+            grouped.setdefault(change.scan_name, []).append(change)
+
+    definitions: dict[str, ScanDefinition] = {}
+    for name, members in grouped.items():
+        vlan_members = [
+            change for change in members if change.desired_asset_type == "dynamic"
+        ]
+        definitions[name] = ScanDefinition(
+            name=name,
+            description=(
+                _build_scan_description(vlan_members) if vlan_members else None
+            ),
+        )
+    return definitions
+
+
+def _build_scan_description(changes: list[ApprovedChange]) -> str:
+    first = changes[0]
+    role = _grouping_role_label(first.grouping_tag)
+    asset_names = sorted({change.asset_name for change in changes})
+    lines = [
+        f"Assessment scan for {first.site_code} {role} VLANs.",
+        "",
+        "Target assets:",
+        *(f"- {name}" for name in asset_names),
+        "",
+        "Included VLANs:",
+        *(_vlan_description_line(change) for change in _sorted_vlans(changes)),
+        "",
+        "Asset membership is dynamically limited to hosts seen within the last "
+        "30 days.",
+        "Source of truth: subnet-as-code.",
+    ]
+    return "\n".join(lines)
+
+
+def _sorted_vlans(changes: list[ApprovedChange]) -> list[ApprovedChange]:
+    def sort_key(change: ApprovedChange) -> tuple[int, int, str, str]:
+        try:
+            return (0, int(change.vlan_tag), change.cidr, change.vlan_name)
+        except ValueError:
+            return (1, 0, change.cidr, change.vlan_name)
+
+    return sorted(changes, key=sort_key)
+
+
+def _vlan_description_line(change: ApprovedChange) -> str:
+    parts = []
+    if change.vlan_tag:
+        parts.append(f"VLAN {change.vlan_tag}")
+    if change.vlan_name:
+        parts.append(change.vlan_name)
+    parts.append(change.cidr)
+    return "- " + " - ".join(parts)
+
+
+def _grouping_role_label(grouping_tag: str) -> str:
+    value = grouping_tag.strip()
+    if value.lower().startswith("vlan-"):
+        value = value[5:]
+    label = " ".join(part.capitalize() for part in value.replace("_", "-").split("-"))
+    return label or "VLAN"
 
 
 def get_scan_asset_ids(scan: dict[str, Any]) -> set[int]:
@@ -504,46 +822,6 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
 
 def _text(value: Any) -> str:
     return "" if value is None else str(value).strip()
-
-
-def _build_asset_descriptions(changes: list[ApprovedChange]) -> dict[str, str]:
-    """Build descriptions for proposed asset groups"""
-    scope_lines: dict[str, set[str]] = {}
-    for change in changes:
-        line = _asset_description_line(change)
-        if not line:
-            continue
-        scope_lines.setdefault(change.asset_name, set()).add(line)
-
-    return {
-        asset_name: MANAGED_DESCRIPTION + "\n\n" + "\n".join(sorted(lines))
-        for asset_name, lines in scope_lines.items()
-    }
-
-
-def _asset_description_line(change: ApprovedChange) -> str | None:
-    """Build one scope line for an approved change"""
-    if change.vlan_name:
-        grouping_label = change.grouping_tag or f"VLAN {change.vlan_tag or 'N/A'}"
-        return f"{change.vlan_name} {change.cidr} {grouping_label}"
-    if change.target_type == "PUBLIC":
-        return f"Public Range {change.cidr}"
-    if change.target_type == "PRIVATE_SUPERNET":
-        return f"Private Supernet {change.cidr}"
-    return None
-
-
-def _merge_asset_description(existing: str, planned: str) -> str:
-    """Add planned VLAN lines without removing existing description text"""
-    if not existing or existing == planned:
-        return planned
-    if planned == MANAGED_DESCRIPTION:
-        return existing
-
-    missing_lines = [line for line in planned.splitlines() if line not in existing]
-    if not missing_lines:
-        return existing
-    return existing.rstrip() + "\n" + "\n".join(missing_lines)
 
 
 def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:

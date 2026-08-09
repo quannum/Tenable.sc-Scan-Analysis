@@ -39,6 +39,7 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         exclusion_ip_total=int(getter("exclusion_ip_total", 0) or 0),
         coverage_pct=float(getter("coverage_pct", 0.0) or 0.0),
         required_asset_present=str(getter("required_asset_present", "")),
+        configured_asset_type=str(getter("configured_asset_type", "")),
         required_scan_present=str(getter("required_scan_present", "")),
         configured_repository=getter("configured_repository"),
         configured_policy=getter("configured_policy"),
@@ -92,6 +93,9 @@ def generate_proposed_changes(
                     result.tags,
                     grouping_config,
                 ),
+                desired_asset_type=(
+                    "dynamic" if result.target_type == "VLAN" else "static"
+                ),
             )
         )
 
@@ -99,6 +103,13 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
+    desired_asset_type = "dynamic" if result.target_type == "VLAN" else "static"
+    configured_asset_type = str(
+        getattr(result, "configured_asset_type", "") or ""
+    ).lower()
+    if configured_asset_type and configured_asset_type != desired_asset_type:
+        return "REVIEW_ASSET_TYPE_CONFLICT"
+
     if (
         result.scan_classification.get("assessment_mapping")
         == ASSESSMENT_MAPPING_UNMAPPED
@@ -119,6 +130,11 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
         return "REVIEW_WRONG_SCAN"
 
     if result.status == "OK":
+        # Asset rules and descriptions are authoritative state too.  Keep an
+        # approved, fully covered target on the reconciliation path; the apply
+        # step remains idempotent and will leave an unchanged asset/scan alone.
+        if result.target_type in {"PUBLIC", "PRIVATE_SUPERNET", "VLAN"}:
+            return _create_or_update_action(result.target_type)
         return "NO_ACTION"
     if result.status == "EXCLUDED":
         return "REVIEW_EXCLUSION"
@@ -141,6 +157,13 @@ def _create_or_update_action(target_type: str) -> str:
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
+    if proposed_action == "REVIEW_ASSET_TYPE_CONFLICT":
+        desired = "dynamic" if result.target_type == "VLAN" else "static"
+        configured = str(getattr(result, "configured_asset_type", "") or "")
+        return (
+            f"Asset '{result.required_asset_name}' is {configured}, but this "
+            f"target requires a {desired} asset. Manual migration is required."
+        )
     if proposed_action == "REVIEW_ASSESSMENT_MAPPING":
         vlan_role = result.scan_classification.get("vlan_role") or result.vlan_name
         return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'."
