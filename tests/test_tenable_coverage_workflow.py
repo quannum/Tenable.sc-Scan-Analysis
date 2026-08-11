@@ -42,6 +42,25 @@ from src.tenable_coverage_workflow.subnet_source import AuthoritativeSourceConfi
 
 
 class PlanningTests(unittest.TestCase):
+    def test_asset_type_conflict_is_a_manual_review_change(self):
+        changes = generate_proposed_changes(
+            [
+                {
+                    "status": "OK",
+                    "target_type": "VLAN",
+                    "cidr": "10.1.16.0/24",
+                    "site_code": "NYC01",
+                    "required_asset_name": "ABC Corp NYC01 VLAN Workstation",
+                    "configured_asset_type": "static",
+                }
+            ],
+            run_id="run-001",
+        )
+
+        self.assertEqual(changes[0].desired_asset_type, "dynamic")
+        self.assertEqual(changes[0].proposed_action, "REVIEW_ASSET_TYPE_CONFLICT")
+        self.assertIn("Manual migration is required", changes[0].issue)
+
     def test_naming_rules_assign_required_names(self):
         target = CoverageTarget(
             target_type="VLAN",
@@ -121,12 +140,12 @@ class PlanningTests(unittest.TestCase):
             named_target.required_asset_name,
             "ABC Corp NYC01 VLAN Printers",
         )
-        self.assertIsNone(named_target.required_scan_name)
-        self.assertIsNone(named_target.required_policy_name)
-        self.assertEqual(named_target.scan_classification["vlan_role"], "Printers")
         self.assertEqual(
-            named_target.scan_classification["assessment_mapping"], "UNMAPPED"
+            named_target.required_scan_name,
+            "ABC Corp Assessment NYC01 Printers",
         )
+        self.assertEqual(named_target.required_policy_name, "Basic Assessment Policy")
+        self.assertEqual(named_target.scan_classification, {})
 
     def test_explicit_tag_map_assigns_a_scan_bucket(self):
         target = CoverageTarget(
@@ -1051,6 +1070,10 @@ class ScanNameCompatibilityTests(unittest.TestCase):
             @staticmethod
             def get_asset_lists() -> list[dict[str, Any]]:
                 return []
+
+            @staticmethod
+            def get_asset(asset_id: Any) -> dict[str, Any]:
+                raise AssertionError(f"Unexpected asset lookup: {asset_id}")
 
             @staticmethod
             def get_scans() -> list[dict[str, Any]]:

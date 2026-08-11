@@ -35,7 +35,7 @@ def load_json_payload(
         targets = build_coverage_targets(definition)
         result.coverage_targets.extend(targets)
         if audit_logger:
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "authoritative_site_loaded",
                 source_file=item_source,
                 site_code=definition.site_code,

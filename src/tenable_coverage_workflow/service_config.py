@@ -118,7 +118,6 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def build_service_config(argv=None) -> ScheduledServiceConfig:
-    """Build service config"""
     load_dotenv()
     parser = build_argument_parser()
     args = parser.parse_args(argv)
@@ -236,7 +235,6 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
 
 
 def load_config_file(config_file_path: Path) -> dict[str, Any]:
-    """Load config file"""
     return load_config_section(
         config_file_path,
         section_name="tenable_coverage_workflow_service",
@@ -250,7 +248,6 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
 
 
 def normalize_job_name(value: str) -> str:
-    """Normalize job name"""
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", str(value).strip().lower())
     normalized = normalized.strip("-")
     return normalized or "tenable-coverage"

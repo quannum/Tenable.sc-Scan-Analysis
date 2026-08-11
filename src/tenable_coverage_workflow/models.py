@@ -139,6 +139,7 @@ class CoverageValidationResult:
     exclusion_ip_total: int = 0
     coverage_pct: float = 0.0
     required_asset_present: str = ""
+    configured_asset_type: str = ""
     required_scan_present: str = ""
     configured_repository: str | None = None
     configured_policy: str | None = None
@@ -172,3 +173,4 @@ class ProposedChange:
     decision_notes: str | None
     source_file: str | None
     grouping_tag: str | None = None
+    desired_asset_type: str = "static"

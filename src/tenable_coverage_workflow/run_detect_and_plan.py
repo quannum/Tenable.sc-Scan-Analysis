@@ -55,6 +55,10 @@ class ConfigurationDataAccess(Protocol):
         """List scans"""
         ...
 
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
+        """Read one asset group."""
+        ...
+
     def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
         """Read one scan configuration"""
         ...
@@ -308,7 +312,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
-    audit_logger.emit(
+    audit_logger.audit_log(
         "run_started",
         authoritative_source="subnet_as_code.get_sites",
         source_reference_id=config.source_config.reference_id,
@@ -344,7 +348,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
                 vlan_role,
                 target.cidr,
             )
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "assessment_mapping_missing",
                 site_code=target.site_code,
                 vlan_role=vlan_role,
@@ -369,9 +373,9 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         grouping_config=config.grouping_config,
     )
 
-    # Record every proposal before writing the review files.
+    # Record every proposal before writing the review files
     for change in proposed_changes:
-        audit_logger.emit(
+        audit_logger.audit_log(
             "proposed_change_created",
             site_code=change.site_code,
             target_type=change.target_type,
@@ -443,7 +447,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     )
     summary["final_audit_report"] = str(final_audit_path)
     atomic_write_json(run_dir / "run_summary.json", summary)
-    audit_logger.emit("run_completed", **summary)
+    audit_logger.audit_log("run_completed", **summary)
     return summary
 
 
@@ -473,9 +477,14 @@ def build_configuration_index(
 ) -> ConfigurationIndex:
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
-        name = str(asset.get("name") or "").strip()
+        asset_id = asset.get("id")
+        details = (
+            data_access.get_asset(asset_id) if asset_id not in (None, "") else asset
+        )
+        record = details if isinstance(details, dict) and details else asset
+        name = str(record.get("name") or asset.get("name") or "").strip()
         if name:
-            assets_by_name[name].append(asset)
+            assets_by_name[name].append(record)
 
     scans_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for scan in data_access.get_scans():
@@ -510,11 +519,11 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
-            # exclusion is reported, but doesn't make a change.
+            # exclusion is reported, but doesn't make a change
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
-                audit_logger.emit(
+                audit_logger.audit_log(
                     "coverage_tag_exclusion_detected",
                     site_code=coverage_result.site_code,
                     target_type=coverage_result.target_type,
@@ -549,6 +558,9 @@ def validate_coverage_targets(
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"
+        configured_asset_type = ""
+        if len(matching_assets) == 1:
+            configured_asset_type = str(matching_assets[0].get("type") or "").lower()
         required_scan_present = (
             "" if assessment_mapping_unmapped else "Yes" if matching_scans else "No"
         )
@@ -592,6 +604,7 @@ def validate_coverage_targets(
             exclusion_ip_total=base_result.exclusion_ip_total,
             coverage_pct=base_result.coverage_pct,
             required_asset_present=required_asset_present,
+            configured_asset_type=configured_asset_type,
             required_scan_present=required_scan_present,
             configured_repository=configured_repository,
             configured_policy=configured_policy,
@@ -605,7 +618,7 @@ def validate_coverage_targets(
         coverage_results.append(coverage_result)
 
         if audit_logger and coverage_result.status == "GAP":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_gap_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -614,7 +627,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "PARTIAL":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_partial_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -623,7 +636,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "EXCLUDED":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_exclusion_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -635,7 +648,7 @@ def validate_coverage_targets(
 
     if audit_logger:
         status_counts = Counter(result.status for result in coverage_results)
-        audit_logger.emit(
+        audit_logger.audit_log(
             "coverage_validation_completed",
             target_count=len(coverage_results),
             ok_count=status_counts.get("OK", 0),

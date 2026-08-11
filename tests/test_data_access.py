@@ -244,6 +244,35 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(updated["repo"], 7)
         self.assertEqual(updated["policy_id"], 30)
 
+    def test_live_dynamic_asset_methods_use_rule_payloads(self):
+        rules = {
+            "operator": "all",
+            "children": [
+                {
+                    "filtername": "lastseen",
+                    "operator": "lt",
+                    "value": "30",
+                    "type": "clause",
+                }
+            ],
+            "type": "group",
+        }
+        with patch.dict(
+            sys.modules,
+            fake_tenable_modules(),
+            clear=False,
+        ):
+            access = DataAccess(make_config())
+
+        created = access.create_dynamic_asset("Dynamic", rules, "managed")
+        updated = access.update_dynamic_asset(21, rules, "updated")
+
+        self.assertEqual(created["type"], "dynamic")
+        self.assertEqual(created["rules"], rules)
+        self.assertEqual(created["description"], "managed")
+        self.assertEqual(updated["rules"], rules)
+        self.assertEqual(updated["description"], "updated")
+
     def test_live_mode_retries_retryable_errors(self):
         with (
             patch.dict(

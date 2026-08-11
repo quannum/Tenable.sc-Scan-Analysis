@@ -212,20 +212,60 @@ class DataAccess:
             operation_name=f"asset_lists.edit({asset_id})",
         )
 
+    def create_dynamic_asset(
+        self,
+        name: str,
+        rules: dict[str, Any],
+        description: str,
+    ) -> dict[str, Any]:
+        """Create a dynamic asset list from its saved rule definition."""
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.asset_lists.create(
+                name,
+                "dynamic",
+                rules=rules,
+                description=description,
+            ),
+            operation_name=f"asset_lists.create({name})",
+        )
+
+    def update_dynamic_asset(
+        self,
+        asset_id: int,
+        rules: dict[str, Any],
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update the rules and optional description of a dynamic asset list."""
+        self._require_live_mutation()
+        kwargs: dict[str, Any] = {"rules": rules}
+        if description is not None:
+            kwargs["description"] = description
+        return self._call_live(
+            lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
+            operation_name=f"asset_lists.edit({asset_id})",
+        )
+
     def create_scan(
         self,
         name: str,
         repository_id: int,
         asset_ids: list[int],
         policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "asset_lists": asset_ids,
+            "policy_id": policy_id,
+        }
+        if description is not None:
+            kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.scans.create(
                 name,
                 repository_id,
-                asset_lists=asset_ids,
-                policy_id=policy_id,
+                **kwargs,
             ),
             operation_name=f"scans.create({name})",
         )
@@ -236,14 +276,20 @@ class DataAccess:
         asset_ids: list[int],
         repository_id: int,
         policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "asset_lists": asset_ids,
+            "repo": repository_id,
+            "policy_id": policy_id,
+        }
+        if description is not None:
+            kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.scans.edit(
                 scan_id,
-                asset_lists=asset_ids,
-                repo=repository_id,
-                policy_id=policy_id,
+                **kwargs,
             ),
             operation_name=f"scans.edit({scan_id})",
         )
