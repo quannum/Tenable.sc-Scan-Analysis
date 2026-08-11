@@ -304,7 +304,7 @@ class ApplicationCliTests(unittest.TestCase):
                         '  grouping_mode: "vlan_tag"',
                         '  grouping_vlan_tag_prefix: "vlan-"',
                         "  grouping_tag_map:",
-                        '    vlan-workstation: "END_USER"',
+                        '    vlan-workstation: "WORKSTATION"',
                         "  commands:",
                         "    analyze_coverage:",
                         f"      output_dir: '{(root / 'output').as_posix()}'",
@@ -331,7 +331,7 @@ class ApplicationCliTests(unittest.TestCase):
             self.assertEqual(config_arg.grouping_config.vlan_tag_prefix, "vlan-")
             self.assertEqual(
                 config_arg.grouping_config.tag_map,
-                {"vlan-workstation": "END_USER"},
+                {"vlan-workstation": "WORKSTATION"},
             )
 
     def test_analyze_coverage_config_can_set_scan_filtering(self):

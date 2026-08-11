@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..models import CoverageValidationResult, GroupingConfig, ProposedChange
-from .naming_rules import find_vlan_grouping_tag
+from .naming_rules import ASSESSMENT_MAPPING_UNMAPPED, find_vlan_grouping_tag
 
 
 def adapt_coverage_result(row: Any) -> CoverageValidationResult:
@@ -99,6 +99,12 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
+    if (
+        result.scan_classification.get("assessment_mapping")
+        == ASSESSMENT_MAPPING_UNMAPPED
+    ):
+        return "REVIEW_ASSESSMENT_MAPPING"
+
     if result.required_asset_present == "No" or result.required_scan_present == "No":
         return _create_or_update_action(result.target_type)
 
@@ -135,6 +141,10 @@ def _create_or_update_action(target_type: str) -> str:
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
+    if proposed_action == "REVIEW_ASSESSMENT_MAPPING":
+        vlan_role = result.scan_classification.get("vlan_role") or result.vlan_name
+        return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'."
+
     if proposed_action == "REVIEW_WRONG_SCAN":
         covering_scans = ", ".join(sorted(result.covering_scans)) or "none"
         return (
