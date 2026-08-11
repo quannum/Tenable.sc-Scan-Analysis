@@ -1,11 +1,24 @@
 from dataclasses import dataclass, field
 
+VLAN_ASSESSMENT_BUCKETS = frozenset({"WORKSTATION", "SERVER", "NETWORK"})
+
 
 @dataclass(frozen=True)
 class GroupingConfig:
     mode: str = "default"
     vlan_tag_prefix: str = "vlan-"
     tag_map: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tag_map",
+            {
+                str(key).strip().lower(): str(value).strip().upper()
+                for key, value in self.tag_map.items()
+                if str(key).strip() and str(value).strip()
+            },
+        )
 
 
 @dataclass(frozen=True)
@@ -30,23 +43,6 @@ class VlanRange:
 
 # used for old tests 
 # remind me to remove and use private/public range
-
-@dataclass(frozen=True)
-class NetworkRange:
-    """Compatibility network range class for old tests"""
-
-    cidr: str
-    tags: list[str] = field(default_factory=list)
-    subnets: list[VlanRange] = field(default_factory=list)
-    vlans: list[VlanRange] = field(default_factory=list)
-    dhcp_options: dict[str, object] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.subnets and not self.vlans:
-            object.__setattr__(self, "vlans", list(self.subnets))
-        elif self.vlans and not self.subnets:
-            object.__setattr__(self, "subnets", list(self.vlans))
-
 
 @dataclass(frozen=True)
 class PublicNetworkRange:
@@ -145,6 +141,7 @@ class CoverageValidationResult:
     exclusion_ip_total: int = 0
     coverage_pct: float = 0.0
     required_asset_present: str = ""
+    configured_asset_type: str = ""
     required_scan_present: str = ""
     configured_repository: str | None = None
     configured_policy: str | None = None
@@ -178,3 +175,4 @@ class ProposedChange:
     decision_notes: str | None
     source_file: str | None
     grouping_tag: str | None = None
+    desired_asset_type: str = "static"

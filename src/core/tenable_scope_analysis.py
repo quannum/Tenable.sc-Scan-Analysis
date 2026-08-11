@@ -36,23 +36,8 @@ class InMemoryTable:
             yield tuple(row)
 
 
-def build_scope_tables() -> tuple[None, InMemoryTable]:
-    # legacy scope worksheet no longer used
-    # 
-    # scope_ws = InMemoryTable(
-    #     [
-    #         "Scan Name",
-    #         "Inclusion Type",
-    #         "Source Type",
-    #         "Source Name",
-    #         "Scope Definition",
-    #     ]
-    # )
-    scope_ws = None
-    normalized_ws = InMemoryTable(
-        ["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"]
-    )
-    return scope_ws, normalized_ws
+def build_scope_tables() -> InMemoryTable:
+    return InMemoryTable(["Scan Name", "Asset Name", "Inclusion Type", "Scope Item"])
 
 
 @dataclass(frozen=True)
@@ -97,7 +82,7 @@ class CoverageResult:
     coverage_pct: float
 
 
-def extract_scan_name(scan) -> str:
+def get_scan_name(scan) -> str:
     if not isinstance(scan, dict):
         return ""
 
@@ -111,7 +96,7 @@ def extract_scan_name(scan) -> str:
 
 
 def filter_scans(scans, config):
-    """Filter scans by name and enabled status
+    """Filter scans by name and enabled/disabled status
 
     Log the number of scans before and after filtering
     """
@@ -137,7 +122,7 @@ def filter_scans(scans, config):
     )
 
     for scan in scans:
-        name = extract_scan_name(scan)
+        name = get_scan_name(scan)
         compare_name = name if config.case_sensitive else name.lower()
 
         schedule = scan.get("schedule", {})
@@ -189,10 +174,8 @@ def normalize_scope(
         normalized_ws.append([scan_name, asset_name, inclusion_type, scope_item])
 
 
-def walk_combination(
-    node, scan_name, scope_ws, normalized_ws, data_access, in_complement=False
-):
-    """Walk through combination asset groupss to get nested groups"""
+def walk_combination(node, scan_name, normalized_ws, data_access, in_complement=False):
+    """Walk through combination asset groupss to retrieve nested asset groups"""
     if not isinstance(node, dict):
         return
 
@@ -219,9 +202,6 @@ def walk_combination(
         inclusion_type = EXCLUDE if in_complement else INCLUDE
 
         if defined:
-            # scope_ws.append(
-            #     [scan_name, inclusion_type, "Asset", asset_name, defined]
-            # )
             normalize_scope(
                 normalized_ws, scan_name, asset_name, inclusion_type, defined
             )
@@ -237,7 +217,6 @@ def walk_combination(
     walk_combination(
         node.get("operand1"),
         scan_name,
-        scope_ws,
         normalized_ws,
         data_access,
         in_complement,
@@ -245,22 +224,50 @@ def walk_combination(
     walk_combination(
         node.get("operand2"),
         scan_name,
-        scope_ws,
         normalized_ws,
         data_access,
         in_complement,
     )
 
 
-def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
+def get_dynamic_asset_scopes(asset: dict[str, Any]) -> list[str]:
+    """Return CIDR clauses from a dynamic asset's rule definition"""
+    type_fields = asset.get("typeFields")
+    rules = asset.get("rules")
+    if not isinstance(rules, dict) and isinstance(type_fields, dict):
+        rules = type_fields.get("rules", type_fields.get("dynamicRules"))
+    if not isinstance(rules, dict):
+        return []
+
+    scopes: set[str] = set()
+
+    def collect(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        children = node.get("children")
+        if isinstance(children, list):
+            for child in children:
+                collect(child)
+            return
+        filter_name = str(node.get("filtername", node.get("filterName", ""))).lower()
+        operator = str(node.get("operator") or "").lower()
+        value = node.get("value")
+        if filter_name == "ip" and operator == "eq" and value not in (None, ""):
+            scopes.add(str(value).strip())
+
+    collect(rules)
+    return sorted(scope for scope in scopes if scope)
+
+
+def build_scope_sheets(normalized_ws, data_access, config):
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
-    # A scan can get targets directly, through static assets, or through
-    # nested combination assets. Normalize every source into the same rows.
+    # scan targets can be direct IP addresses, static, or combination assets
+    # normalize all ranges from different target types
     for scan in filtered_scans:
         scan_id = scan.get("id")
-        scan_name = extract_scan_name(scan)
+        scan_name = get_scan_name(scan)
         if scan_id in (None, ""):
             LOGGER.warning("Skipping malformed scan record: %s", scan)
             continue
@@ -271,7 +278,7 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 "Skipping scan '%s' because details were not found", scan_name
             )
             continue
-        detail_scan_name = extract_scan_name(details)
+        detail_scan_name = get_scan_name(details)
         if detail_scan_name:
             scan_name = detail_scan_name
         if not scan_name:
@@ -280,9 +287,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
 
         ip_list = details.get("ipList")
         if ip_list and ip_list != "*":
-            # scope_ws.append(
-            #     [scan_name, INCLUDE, "Scan", "Direct IP List", ip_list]
-            # )
             normalize_scope(normalized_ws, scan_name, "SCAN_IPLIST", INCLUDE, ip_list)
 
         for asset_ref in details.get("assets", []):
@@ -307,9 +311,6 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 asset_name = asset.get("name") or f"Asset {asset_id}"
 
                 if defined:
-                    # scope_ws.append(
-                    #     [scan_name, INCLUDE, "Asset", asset_name, defined]
-                    # )
                     normalize_scope(
                         normalized_ws, scan_name, asset_name, INCLUDE, defined
                     )
@@ -324,10 +325,23 @@ def build_scope_sheets(scope_ws, normalized_ws, data_access, config):
                 walk_combination(
                     asset.get("typeFields", {}).get("combinations", {}),
                     scan_name,
-                    scope_ws,
                     normalized_ws,
                     data_access,
                 )
+            elif asset_type == "dynamic":
+                scopes = get_dynamic_asset_scopes(asset)
+                asset_name = asset.get("name") or f"Asset {asset_id}"
+                if scopes:
+                    for scope in scopes:
+                        normalize_scope(
+                            normalized_ws, scan_name, asset_name, INCLUDE, scope
+                        )
+                else:
+                    LOGGER.warning(
+                        "Dynamic asset '%s' on scan '%s' has no supported IP rules",
+                        asset_name,
+                        scan_name,
+                    )
             else:
                 LOGGER.debug(
                     "Skipping unsupported asset type '%s' for asset '%s' on scan '%s'",
@@ -480,7 +494,7 @@ def calculate_scan_intervals(
         )
         exclusion_ip_total += loss
 
-    # Merge first so overlapping configured ranges are not counted twice.
+    # merge include and exclude ranges to remove duplicates
     included = merge_intervals(included)
     excluded = merge_intervals(excluded)
 
@@ -510,7 +524,7 @@ def calculate_coverage_result(
     total_included_ips = 0
     exclusion_ip_total = 0
 
-    # Each covering scan can add scope or remove scope through an exclusion.
+    # each covering scan can add scope or remove scope through an exclusion
     for scan_name in covering_scans:
         included_ips, net_intervals, scan_exclusions, scan_excluded_ips = (
             calculate_scan_intervals(
@@ -532,7 +546,7 @@ def calculate_coverage_result(
         if scan_exclusions:
             relevant_exclusions[scan_name].extend(scan_exclusions)
 
-    # Several scans can cover the same addresses, so count the merged result.
+    # if multiple scans cover the same address range, merge the overlap
     cover_intervals = merge_intervals(cover_intervals)
     covered_count = sum(end - start + 1 for start, end in cover_intervals)
     covered_count = min(covered_count, expected_size)

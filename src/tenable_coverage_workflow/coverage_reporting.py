@@ -15,8 +15,8 @@ from ..core.scope_utils import (
 from .audit.audit_logger import atomic_write_json, atomic_write_text
 from .models import CoverageTarget, CoverageValidationResult, ValidationIssue
 
-# eports for coverage results
-# no changes are made here
+# Reports are derived from coverage results. They do not make or apply 
+# changes in Tenable
 
 DETAIL_COLUMNS = [
     "status",
@@ -62,7 +62,7 @@ def write_coverage_reports(
 ) -> dict[str, Any]:
     output_dir = Path(run_dir)
     details = [asdict(result) for result in coverage_results]
-    # Extra targets are configured scan addresses outside authoritative scope.
+    # extra targets are scan targets outside authoritative scope
     extras = detect_extra_scan_targets(actual_scopes, targets)
     proposed_exclusions = build_proposed_exclusions(extras)
     summary = build_coverage_summary(coverage_results, extras)
@@ -138,7 +138,7 @@ def build_coverage_summary(
         "site": _group_summary(results, lambda item: item.site_code),
         "vlan": _group_summary(
             results,
-            lambda item: (f"{item.site_code}/{item.vlan_name or item.target_type}"),
+            lambda item: f"{item.site_code}/{item.vlan_name or item.target_type}",
         ),
         "scan_type": _group_summary(results, lambda item: item.required_scan_name),
         "repository": _group_summary(results, lambda item: item.configured_repository),
@@ -228,7 +228,10 @@ def _aggregate(results: list[CoverageValidationResult]) -> dict[str, Any]:
 
 
 def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
-    """Detect extra scan targets that are not in network definitions source"""
+    """Detect extra scan targets
+    
+    "Extra" scan targets are scan targets not found in network definitions
+    """
     expected_intervals = [
         scope_to_interval(parse_scope_item(target.cidr)) for target in targets
     ]
@@ -241,7 +244,7 @@ def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
             end = min(actual_end, expected_end)
             if start <= end:
                 overlaps.append((start, end))
-        # Subtract the expected overlaps to find only the unowned scan scope.
+        # subtract the expected overlaps to find only the unowned scan scope
         extras = subtract_intervals(
             [(actual_start, actual_end)], merge_intervals(overlaps)
         )

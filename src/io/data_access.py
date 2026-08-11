@@ -19,18 +19,18 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
             with open(file_path, "r", encoding="utf-8") as handle:
                 obj = json.load(handle)
         except (OSError, json.JSONDecodeError) as exc:
-            LOGGER.warning("Skipping unreadable JSON file '%s': %s", file_path, exc)
+            LOGGER.warning("Skipping unreadable json file '%s': %s", file_path, exc)
             continue
 
         if not isinstance(obj, dict):
             LOGGER.warning(
-                "Skipping JSON file whose root is not an object: %s", file_path
+                "Skipping json file whose root is not an object: %s", file_path
             )
             continue
 
         object_id = obj.get("id")
         if object_id in (None, ""):
-            LOGGER.warning("Skipping JSON file without an 'id': %s", file_path)
+            LOGGER.warning("Skipping json file without an 'id': %s", file_path)
             continue
 
         object_id = str(object_id)
@@ -42,7 +42,7 @@ def load_json_folder(folder_path: str | None) -> dict[str, dict[str, Any]]:
             )
         data[object_id] = obj
 
-    LOGGER.info("Loaded %s JSON objects from %s", len(data), folder_path)
+    LOGGER.info("Loaded %s json objects from %s", len(data), folder_path)
     return data
 
 
@@ -54,12 +54,12 @@ class DataAccessConfig(Protocol):
 
     @property
     def scan_json_dir(self) -> str | None:
-        """Return the offline scan JSON directory"""
+        """Return the offline scan json directory"""
         ...
 
     @property
     def asset_json_dir(self) -> str | None:
-        """Return the offline asset JSON directory"""
+        """Return the offline asset json directory"""
         ...
 
     @property
@@ -83,13 +83,14 @@ class DataAccess:
     LIVE_RETRY_BACKOFF_SECONDS = 1.5
 
     def __init__(self, config: DataAccessConfig) -> None:
+        if config.mode not in {"offline", "live"}:
+            raise ValueError("mode must be 'offline' or 'live'")
         self.config = config
         self.sc: Any = None
         self.offline_scans = {}
         self.offline_assets = {}
 
         if config.mode == "live":
-            # validate settings before importing or connecting to Tenable
             self._validate_live_config(config)
             try:
                 from tenable.sc import TenableSC
@@ -116,7 +117,7 @@ class DataAccess:
                 ssl_verify=ssl_verify,
             )
         else:
-            # Offline mode only reads previously collected JSON files.
+            # offline mode gets scan and asset json folders
             self.offline_scans = load_json_folder(config.scan_json_dir)
             self.offline_assets = load_json_folder(config.asset_json_dir)
 
@@ -204,7 +205,41 @@ class DataAccess:
     ) -> dict[str, Any]:
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
-        if description:
+        if description is not None:
+            kwargs["description"] = description
+        return self._call_live(
+            lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
+            operation_name=f"asset_lists.edit({asset_id})",
+        )
+
+    def create_dynamic_asset(
+        self,
+        name: str,
+        rules: dict[str, Any],
+        description: str,
+    ) -> dict[str, Any]:
+        """Create a dynamic asset list from its saved rule definition."""
+        self._require_live_mutation()
+        return self._call_live(
+            lambda: self.sc.asset_lists.create(
+                name,
+                "dynamic",
+                rules=rules,
+                description=description,
+            ),
+            operation_name=f"asset_lists.create({name})",
+        )
+
+    def update_dynamic_asset(
+        self,
+        asset_id: int,
+        rules: dict[str, Any],
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update the rules and optional description of a dynamic asset list."""
+        self._require_live_mutation()
+        kwargs: dict[str, Any] = {"rules": rules}
+        if description is not None:
             kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
@@ -289,14 +324,20 @@ class DataAccess:
         repository_id: int,
         asset_ids: list[int],
         policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "asset_lists": asset_ids,
+            "policy_id": policy_id,
+        }
+        if description is not None:
+            kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.scans.create(
                 name,
                 repository_id,
-                asset_lists=asset_ids,
-                policy_id=policy_id,
+                **kwargs,
             ),
             operation_name=f"scans.create({name})",
         )
@@ -307,14 +348,20 @@ class DataAccess:
         asset_ids: list[int],
         repository_id: int,
         policy_id: int,
+        description: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "asset_lists": asset_ids,
+            "repo": repository_id,
+            "policy_id": policy_id,
+        }
+        if description is not None:
+            kwargs["description"] = description
         return self._call_live(
             lambda: self.sc.scans.edit(
                 scan_id,
-                asset_lists=asset_ids,
-                repo=repository_id,
-                policy_id=policy_id,
+                **kwargs,
             ),
             operation_name=f"scans.edit({scan_id})",
         )
@@ -351,7 +398,7 @@ class DataAccess:
                 if not self._is_retryable_exception(exc) or attempt >= attempts:
                     raise
 
-                # Retry connection-style failures with a longer wait each time.
+                # Retry connection-style failures with a longer wait each time
                 backoff = getattr(
                     self,
                     "live_retry_backoff_seconds",
@@ -428,6 +475,12 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
     if not isinstance(payload, dict):
         return
 
+    # if response has no asset / scan / policy wrapper,
+    # treat it as the record itself
+    if "id" in payload or "uuid" in payload:
+        yield payload
+        return
+
     for key in (
         "usable",
         "manageable",
@@ -447,6 +500,7 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
 
 
 def _parse_bool(value: Any) -> bool:
+    """Parse a boolean value for ssl_verify"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):

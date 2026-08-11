@@ -8,8 +8,6 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from ..io.parsing import parse_csv_list
-from .grouping_config import build_grouping_config
 from .models import GroupingConfig
 from .settings import (
     SettingsResolver,
@@ -17,7 +15,6 @@ from .settings import (
     load_config_section,
     optional_string,
     parse_bool,
-    parse_nonnegative_float,
     parse_positive_int,
 )
 from .subnet_source.source_config import (
@@ -25,6 +22,11 @@ from .subnet_source.source_config import (
     build_authoritative_source_config,
 )
 from .subnet_source.source_loader import AuthoritativeSourceConfig
+from .workflow_settings import (
+    build_grouping_config_from_settings,
+    build_scan_filter_config,
+    build_tenable_access_config,
+)
 
 
 @dataclass(frozen=True)
@@ -138,43 +140,15 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
 
     try:
         dry_run = parse_bool(pick("dry_run", True), "dry_run")
-        match_all_include = parse_bool(
-            pick("match_all_include", False), "match_all_include"
-        )
-        case_sensitive = parse_bool(pick("case_sensitive", False), "case_sensitive")
-        sc_ssl_verify = parse_bool(
-            pick("sc_ssl_verify", True, "SC_SSL_VERIFY"), "sc_ssl_verify"
-        )
         stale_lock_timeout_seconds = parse_positive_int(
             pick("stale_lock_timeout_seconds", 21600),
             "stale_lock_timeout_seconds",
-        )
-        sc_timeout_seconds = parse_positive_int(
-            pick("sc_timeout_seconds", 60, "SC_TIMEOUT_SECONDS"),
-            "sc_timeout_seconds",
-        )
-        sc_retries = parse_positive_int(
-            pick("sc_retries", 3, "SC_RETRIES"), "sc_retries"
-        )
-        sc_backoff_seconds = parse_nonnegative_float(
-            pick("sc_backoff_seconds", 1.5, "SC_BACKOFF_SECONDS"),
-            "sc_backoff_seconds",
         )
     except ValueError as exc:
         parser.error(str(exc))
 
     if not dry_run:
         parser.error("Scheduled detect-and-plan runs do not support dry_run=false")
-
-    mode = str(pick("mode", "offline")).strip().lower()
-    if mode not in {"offline", "live"}:
-        parser.error("--mode must be 'offline' or 'live'")
-
-    filter_disabled_mode = str(pick("filter_disabled_mode", "ALL"))
-    if filter_disabled_mode not in {"ALL", "ENABLED_ONLY", "DISABLED_ONLY"}:
-        parser.error(
-            "--filter-disabled-mode must be ALL, ENABLED_ONLY, or DISABLED_ONLY"
-        )
 
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
@@ -190,6 +164,16 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         scalar_getter=scalar_getter,
         csv_getter=csv_getter,
     )
+    try:
+        tenable = build_tenable_access_config(
+            scalar_getter,
+            optional_string=optional_string,
+        )
+        scan_filter = build_scan_filter_config(scalar_getter, csv_getter)
+        grouping_config = build_grouping_config_from_settings(scalar_getter)
+    except ValueError as exc:
+        parser.error(str(exc))
+
     job_name = str(pick("job_name", "tenable-coverage-scheduled")).strip()
     output_dir = as_path(pick("output_dir")) or Path("output")
     run_id_prefix = str(
@@ -200,44 +184,17 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     )
     lock_file = as_path(pick("lock_file")) or (output_dir / "scheduler.lock")
 
-    scan_json_dir = optional_string(pick("scan_json_dir"))
-    asset_json_dir = optional_string(pick("asset_json_dir"))
-    sc_url = optional_string(pick("sc_url"))
-    sc_access_key = optional_string(pick("sc_access_key"))
-    sc_secret_key = optional_string(pick("sc_secret_key"))
     log_format = str(pick("log_format", "text")).lower()
     if log_format not in {"text", "json"}:
         parser.error("--log-format must be 'text' or 'json'")
     log_file = as_path(pick("log_file"))
-    try:
-        grouping_config = build_grouping_config(
-            mode_value=pick("grouping_mode", "default", "GROUPING_MODE"),
-            prefix_value=pick(
-                "grouping_vlan_tag_prefix",
-                "vlan-",
-                "GROUPING_VLAN_TAG_PREFIX",
-            ),
-            tag_map_value=pick("grouping_tag_map", None, "GROUPING_TAG_MAP"),
-        )
-    except ValueError as exc:
-        parser.error(str(exc))
-
-    if mode == "offline":
+    if tenable.mode == "live":
         missing = []
-        if not scan_json_dir:
-            missing.append("scan_json_dir")
-        if not asset_json_dir:
-            missing.append("asset_json_dir")
-        if missing:
-            parser.error("Offline scheduled runs require: " + ", ".join(missing))
-
-    if mode == "live":
-        missing = []
-        if not sc_url:
+        if not tenable.sc_url:
             missing.append("TCW_SC_URL/SC_URL")
-        if not sc_access_key:
+        if not tenable.sc_access_key:
             missing.append("TCW_SC_ACCESS_KEY/SC_ACCESS_KEY")
-        if not sc_secret_key:
+        if not tenable.sc_secret_key:
             missing.append("TCW_SC_SECRET_KEY/SC_SECRET_KEY")
         if missing:
             parser.error("Live scheduled runs require: " + ", ".join(missing))
@@ -251,25 +208,25 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         lock_file=lock_file,
         stale_lock_timeout_seconds=stale_lock_timeout_seconds,
         dry_run=dry_run,
-        mode=mode,
-        scan_json_dir=scan_json_dir,
-        asset_json_dir=asset_json_dir,
-        sc_access_key=sc_access_key,
-        sc_secret_key=sc_secret_key,
-        sc_url=sc_url,
-        include_keywords=parse_csv_list(pick("include_keywords")),
-        exclude_keywords=parse_csv_list(pick("exclude_keywords")),
-        match_all_include=match_all_include,
-        case_sensitive=case_sensitive,
-        filter_disabled_mode=filter_disabled_mode,
+        mode=tenable.mode,
+        scan_json_dir=tenable.scan_json_dir,
+        asset_json_dir=tenable.asset_json_dir,
+        sc_access_key=tenable.sc_access_key,
+        sc_secret_key=tenable.sc_secret_key,
+        sc_url=tenable.sc_url,
+        include_keywords=scan_filter.include_keywords,
+        exclude_keywords=scan_filter.exclude_keywords,
+        match_all_include=scan_filter.match_all_include,
+        case_sensitive=scan_filter.case_sensitive,
+        filter_disabled_mode=scan_filter.filter_disabled_mode,
         log_level=str(pick("log_level", "INFO")),
         log_format=log_format,
         log_file=log_file,
         config_file=config_file,
-        sc_timeout_seconds=sc_timeout_seconds,
-        sc_retries=sc_retries,
-        sc_backoff_seconds=sc_backoff_seconds,
-        sc_ssl_verify=sc_ssl_verify,
+        sc_timeout_seconds=tenable.sc_timeout_seconds,
+        sc_retries=tenable.sc_retries,
+        sc_backoff_seconds=tenable.sc_backoff_seconds,
+        sc_ssl_verify=tenable.sc_ssl_verify,
         grouping_config=grouping_config,
     )
 

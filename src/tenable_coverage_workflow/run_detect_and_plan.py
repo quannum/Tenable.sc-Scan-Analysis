@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, TypedDict, cast
 
 from dotenv import load_dotenv
 
@@ -15,7 +15,7 @@ from ..core.tenable_scope_analysis import (
     build_scope_sheets,
     build_scope_tables,
     calculate_coverage_result,
-    extract_scan_name,
+    get_scan_name,
 )
 from ..io.data_access import DataAccess
 from ..io.parsing import parse_csv_list
@@ -23,14 +23,11 @@ from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
 from .exclusion_tags import find_exclusion_tag
-from .grouping_config import build_grouping_config
 from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
+from .planning.naming_rules import ASSESSMENT_MAPPING_UNMAPPED
 from .settings import (
     SettingsResolver,
-    parse_bool,
-    parse_nonnegative_float,
-    parse_positive_int,
 )
 from .subnet_source import (
     AuthoritativeSourceConfig,
@@ -40,11 +37,31 @@ from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
 )
+from .workflow_settings import (
+    build_grouping_config_from_settings,
+    build_scan_filter_config,
+    build_tenable_access_config,
+)
 
 LOGGER = logging.getLogger(__name__)
 
-# This module coordinates the dry-run workflow from source definitions through
-# coverage checks, proposed changes, and report files.
+
+class ConfigurationDataAccess(Protocol):
+    def get_asset_lists(self) -> list[dict[str, Any]]:
+        """List asset groups"""
+        ...
+
+    def get_scans(self) -> list[dict[str, Any]]:
+        """List scans"""
+        ...
+
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
+        """Read one asset group."""
+        ...
+
+    def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
+        """Read one scan configuration"""
+        ...
 
 
 @dataclass
@@ -72,25 +89,6 @@ class DetectAndPlanConfig:
     sc_backoff_seconds: float = 1.5
     sc_ssl_verify: bool = True
     grouping_config: GroupingConfig = field(default_factory=GroupingConfig)
-
-
-@dataclass
-class CoverageSourceConfig:
-    mode: str
-    scan_json_dir: str | None
-    asset_json_dir: str | None
-    sc_access_key: str | None
-    sc_secret_key: str | None
-    sc_url: str | None
-    include_keywords: list[str]
-    exclude_keywords: list[str]
-    match_all_include: bool
-    case_sensitive: bool
-    filter_disabled_mode: str
-    sc_timeout_seconds: int = 60
-    sc_retries: int = 3
-    sc_backoff_seconds: float = 1.5
-    sc_ssl_verify: bool = True
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -199,7 +197,6 @@ class ServiceContextFilter(logging.Filter):
 
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        """Format the requested value"""
         payload = {
             "timestamp": datetime.fromtimestamp(
                 record.created, tz=timezone.utc
@@ -252,13 +249,11 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
-        """Read one scalar setting"""
         return resolver.get(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        """Read one comma-separated setting"""
         return resolver.csv(name, default, environment_name)
 
     if args.dry_run is False:
@@ -268,35 +263,15 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         scalar_getter=scalar_getter,
         csv_getter=csv_getter,
     )
-    grouping_config = build_grouping_config(
-        mode_value=scalar_getter("grouping_mode", "GROUPING_MODE", "default"),
-        prefix_value=scalar_getter(
-            "grouping_vlan_tag_prefix",
-            "GROUPING_VLAN_TAG_PREFIX",
-            "vlan-",
+    grouping_config = build_grouping_config_from_settings(scalar_getter)
+    tenable = build_tenable_access_config(scalar_getter)
+    scan_filter = build_scan_filter_config(
+        scalar_getter=lambda name, _environment_name, default=None: getattr(
+            args, name, default
         ),
-        tag_map_value=scalar_getter("grouping_tag_map", "GROUPING_TAG_MAP", None),
-    )
-    scan_json_dir = scalar_getter("scan_json_dir", None)
-    asset_json_dir = scalar_getter("asset_json_dir", None)
-    if args.mode == "offline" and (not scan_json_dir or not asset_json_dir):
-        raise ValueError("Offline mode requires --scan-json-dir and --asset-json-dir.")
-
-    sc_timeout_seconds = parse_positive_int(
-        scalar_getter("sc_timeout_seconds", "SC_TIMEOUT_SECONDS", 60),
-        "sc_timeout_seconds",
-    )
-    sc_retries = parse_positive_int(
-        scalar_getter("sc_retries", "SC_RETRIES", 3),
-        "sc_retries",
-    )
-    sc_backoff_seconds = parse_nonnegative_float(
-        scalar_getter("sc_backoff_seconds", "SC_BACKOFF_SECONDS", 1.5),
-        "sc_backoff_seconds",
-    )
-    sc_ssl_verify = parse_bool(
-        scalar_getter("sc_ssl_verify", "SC_SSL_VERIFY", True),
-        "sc_ssl_verify",
+        csv_getter=lambda name, _environment_name, _default=None: (
+            parse_csv_list(getattr(args, name, None)) or None
+        ),
     )
 
     return DetectAndPlanConfig(
@@ -304,45 +279,25 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         output_dir=Path(args.output_dir),
         run_id=args.run_id,
         dry_run=bool(args.dry_run),
-        mode=args.mode,
-        scan_json_dir=scan_json_dir,
-        asset_json_dir=asset_json_dir,
-        sc_access_key=scalar_getter("sc_access_key", "SC_ACCESS_KEY"),
-        sc_secret_key=scalar_getter("sc_secret_key", "SC_SECRET_KEY"),
-        sc_url=scalar_getter("sc_url", "SC_URL"),
-        include_keywords=parse_csv_list(args.include_keywords),
-        exclude_keywords=parse_csv_list(args.exclude_keywords),
-        match_all_include=bool(args.match_all_include),
-        case_sensitive=bool(args.case_sensitive),
-        filter_disabled_mode=args.filter_disabled_mode,
+        mode=tenable.mode,
+        scan_json_dir=tenable.scan_json_dir,
+        asset_json_dir=tenable.asset_json_dir,
+        sc_access_key=tenable.sc_access_key,
+        sc_secret_key=tenable.sc_secret_key,
+        sc_url=tenable.sc_url,
+        include_keywords=scan_filter.include_keywords,
+        exclude_keywords=scan_filter.exclude_keywords,
+        match_all_include=scan_filter.match_all_include,
+        case_sensitive=scan_filter.case_sensitive,
+        filter_disabled_mode=scan_filter.filter_disabled_mode,
         log_level=args.log_level,
         log_format="text",
         log_file=None,
-        sc_timeout_seconds=sc_timeout_seconds,
-        sc_retries=sc_retries,
-        sc_backoff_seconds=sc_backoff_seconds,
-        sc_ssl_verify=sc_ssl_verify,
+        sc_timeout_seconds=tenable.sc_timeout_seconds,
+        sc_retries=tenable.sc_retries,
+        sc_backoff_seconds=tenable.sc_backoff_seconds,
+        sc_ssl_verify=tenable.sc_ssl_verify,
         grouping_config=grouping_config,
-    )
-
-
-def build_coverage_source_config(config: DetectAndPlanConfig) -> CoverageSourceConfig:
-    return CoverageSourceConfig(
-        mode=config.mode,
-        scan_json_dir=config.scan_json_dir,
-        asset_json_dir=config.asset_json_dir,
-        sc_access_key=config.sc_access_key,
-        sc_secret_key=config.sc_secret_key,
-        sc_url=config.sc_url,
-        include_keywords=list(config.include_keywords),
-        exclude_keywords=list(config.exclude_keywords),
-        match_all_include=bool(config.match_all_include),
-        case_sensitive=bool(config.case_sensitive),
-        filter_disabled_mode=config.filter_disabled_mode,
-        sc_timeout_seconds=config.sc_timeout_seconds,
-        sc_retries=config.sc_retries,
-        sc_backoff_seconds=config.sc_backoff_seconds,
-        sc_ssl_verify=config.sc_ssl_verify,
     )
 
 
@@ -357,7 +312,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
-    audit_logger.emit(
+    audit_logger.audit_log(
         "run_started",
         authoritative_source="subnet_as_code.get_sites",
         source_reference_id=config.source_config.reference_id,
@@ -371,8 +326,8 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         mode=config.mode,
     )
 
-    # build expected targets first, then compare them with the Tenable scans
-    # 
+    # get expected targets first then compare them with the Tenable
+    # scan targets collected below
     source_type, connector_result = load_authoritative_source(
         config.source_config,
         audit_logger=audit_logger,
@@ -381,9 +336,28 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         connector_result.coverage_targets,
         config.grouping_config,
     )
+    for target in named_targets:
+        if (
+            target.scan_classification.get("assessment_mapping")
+            == ASSESSMENT_MAPPING_UNMAPPED
+        ):
+            vlan_role = str(target.scan_classification.get("vlan_role") or "VLAN")
+            LOGGER.warning(
+                "assessment_mapping_missing site=%s vlan_role=%r cidr=%s",
+                target.site_code,
+                vlan_role,
+                target.cidr,
+            )
+            audit_logger.audit_log(
+                "assessment_mapping_missing",
+                site_code=target.site_code,
+                vlan_role=vlan_role,
+                cidr=target.cidr,
+                source_file=target.source_file,
+            )
 
     actual_scopes, actual_by_scan, excluded_by_scan, configuration_index = (
-        load_actual_scope_data(build_coverage_source_config(config))
+        load_actual_scope_data(config)
     )
     coverage_results = validate_coverage_targets(
         named_targets,
@@ -399,9 +373,9 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         grouping_config=config.grouping_config,
     )
 
-    # Record every proposal before writing the review files.
+    # Record every proposal before writing the review files
     for change in proposed_changes:
-        audit_logger.emit(
+        audit_logger.audit_log(
             "proposed_change_created",
             site_code=change.site_code,
             target_type=change.target_type,
@@ -473,15 +447,15 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     )
     summary["final_audit_report"] = str(final_audit_path)
     atomic_write_json(run_dir / "run_summary.json", summary)
-    audit_logger.emit("run_completed", **summary)
+    audit_logger.audit_log("run_completed", **summary)
     return summary
 
 
-def load_actual_scope_data(config: CoverageSourceConfig):
+def load_actual_scope_data(config: DetectAndPlanConfig):
     data_access = DataAccess(config)
-    scope_ws, normalized_ws = build_scope_tables()
-    build_scope_sheets(scope_ws, normalized_ws, data_access, config)
-    # Coverage uses normalized scope rows, not the original Tenable text.
+    normalized_ws = build_scope_tables()
+    build_scope_sheets(normalized_ws, data_access, config)
+    # coverage uses normalized scope rows, not the original Tenable text
     actual_scopes, _, actual_by_scan, excluded_by_scan = build_coverage_data(
         normalized_ws
     )
@@ -493,12 +467,24 @@ def load_actual_scope_data(config: CoverageSourceConfig):
     )
 
 
-def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
+class ConfigurationIndex(TypedDict):
+    assets_by_name: dict[str, list[dict[str, Any]]]
+    scans_by_name: dict[str, list[dict[str, Any]]]
+
+
+def build_configuration_index(
+    data_access: ConfigurationDataAccess,
+) -> ConfigurationIndex:
     assets_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for asset in data_access.get_asset_lists():
-        name = str(asset.get("name") or "").strip()
+        asset_id = asset.get("id")
+        details = (
+            data_access.get_asset(asset_id) if asset_id not in (None, "") else asset
+        )
+        record = details if isinstance(details, dict) and details else asset
+        name = str(record.get("name") or asset.get("name") or "").strip()
         if name:
-            assets_by_name[name].append(asset)
+            assets_by_name[name].append(record)
 
     scans_by_name: dict[str, list[dict[str, object]]] = defaultdict(list)
     for scan in data_access.get_scans():
@@ -507,7 +493,7 @@ def build_configuration_index(data_access: DataAccess) -> dict[str, object]:
             data_access.get_scan_details(scan_id) if scan_id not in (None, "") else scan
         )
         record = details if isinstance(details, dict) and details else scan
-        name = extract_scan_name(record) or extract_scan_name(scan)
+        name = get_scan_name(record) or get_scan_name(scan)
         if name:
             scans_by_name[name].append(record)
     return {
@@ -533,11 +519,11 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
-            # tagged exclusion is reported
+            # exclusion is reported, but doesn't make a change
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
-                audit_logger.emit(
+                audit_logger.audit_log(
                     "coverage_tag_exclusion_detected",
                     site_code=coverage_result.site_code,
                     target_type=coverage_result.target_type,
@@ -563,12 +549,21 @@ def validate_coverage_targets(
         status = derive_workflow_status(
             base_result.status, base_result.exclusion_ip_total
         )
-        # exact names confirm missing targets from scans that cover
+        # exact names distinguish missing resources from scans that cover
         # the same addresses
+        assessment_mapping_unmapped = (
+            target.scan_classification.get("assessment_mapping")
+            == ASSESSMENT_MAPPING_UNMAPPED
+        )
         matching_assets = assets_by_name.get(target.required_asset_name, [])
         matching_scans = scans_by_name.get(target.required_scan_name, [])
         required_asset_present = "Yes" if matching_assets else "No"
-        required_scan_present = "Yes" if matching_scans else "No"
+        configured_asset_type = ""
+        if len(matching_assets) == 1:
+            configured_asset_type = str(matching_assets[0].get("type") or "").lower()
+        required_scan_present = (
+            "" if assessment_mapping_unmapped else "Yes" if matching_scans else "No"
+        )
         required_scan = matching_scans[0] if len(matching_scans) == 1 else {}
         configured_repository = _resource_label(
             required_scan.get("repository"), required_scan.get("repositoryID")
@@ -576,7 +571,7 @@ def validate_coverage_targets(
         configured_policy = _resource_label(
             required_scan.get("policy"), required_scan.get("policyID")
         )
-        if not matching_scans:
+        if assessment_mapping_unmapped or not matching_scans:
             required_policy_configured = ""
         elif len(matching_scans) > 1:
             required_policy_configured = "No"
@@ -609,6 +604,7 @@ def validate_coverage_targets(
             exclusion_ip_total=base_result.exclusion_ip_total,
             coverage_pct=base_result.coverage_pct,
             required_asset_present=required_asset_present,
+            configured_asset_type=configured_asset_type,
             required_scan_present=required_scan_present,
             configured_repository=configured_repository,
             configured_policy=configured_policy,
@@ -622,7 +618,7 @@ def validate_coverage_targets(
         coverage_results.append(coverage_result)
 
         if audit_logger and coverage_result.status == "GAP":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_gap_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -631,7 +627,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "PARTIAL":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_partial_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -640,7 +636,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "EXCLUDED":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_exclusion_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -652,7 +648,7 @@ def validate_coverage_targets(
 
     if audit_logger:
         status_counts = Counter(result.status for result in coverage_results)
-        audit_logger.emit(
+        audit_logger.audit_log(
             "coverage_validation_completed",
             target_count=len(coverage_results),
             ok_count=status_counts.get("OK", 0),
@@ -723,6 +719,7 @@ def derive_workflow_status(status: str, exclusion_ip_total: int) -> str:
 
 
 def print_run_summary(run_id: str, summary: dict[str, object]) -> None:
+    """Print the summary for a completed run"""
     _print_lines(
         [
             f"Run ID: {run_id}",

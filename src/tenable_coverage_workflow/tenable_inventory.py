@@ -4,9 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
-
-from ..io.data_access import DataAccess
+from typing import Any, Callable, Protocol
 
 SENSITIVE_KEY_PARTS = (
     "password",
@@ -20,7 +18,57 @@ SENSITIVE_KEY_PARTS = (
 )
 
 
-def collect_tenable_inventory(data_access: DataAccess) -> dict[str, Any]:
+class InventoryDataAccessConfig(Protocol):
+    """Config field kept in an inventory snapshot"""
+
+    @property
+    def mode(self) -> str:
+        """Return the data access mode."""
+        ...
+
+
+class InventoryDataAccess(Protocol):
+    """The read-only data access surface required for inventory collection"""
+
+    @property
+    def config(self) -> InventoryDataAccessConfig:
+        """Return the selected data access config"""
+        ...
+
+    def get_repositories(self) -> list[dict[str, Any]]:
+        """List repositories"""
+        ...
+
+    def get_asset_lists(self) -> list[dict[str, Any]]:
+        """List asset groups"""
+        ...
+
+    def get_asset(self, asset_id: Any) -> dict[str, Any]:
+        """Read one asset group"""
+        ...
+
+    def get_scans(self) -> list[dict[str, Any]]:
+        """List scans"""
+        ...
+
+    def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
+        """Read one scan"""
+        ...
+
+    def get_policies(self) -> list[dict[str, Any]]:
+        """List policies"""
+        ...
+
+    def get_credentials(self) -> list[dict[str, Any]]:
+        """List credentials"""
+        ...
+
+    def get_observed_hosts(self) -> list[dict[str, Any]]:
+        """List observed hosts"""
+        ...
+
+
+def collect_tenable_inventory(data_access: InventoryDataAccess) -> dict[str, Any]:
     """Collect Tenable.sc configuration snapshot"""
     inventory: dict[str, Any] = {
         "schema_version": 1,
@@ -301,7 +349,7 @@ def _scan_rows(
 
 
 def _resource_name_index(records: Any) -> dict[str, str]:
-    """Get repo / policy / asset by ID"""
+    """Build repo / policy / asset group ID-to-name lookup"""
     return {
         str(resource_id): str(name)
         for record in _records(records)
@@ -310,9 +358,41 @@ def _resource_name_index(records: Any) -> dict[str, str]:
     }
 
 
+def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
+    """Reads a reference ID or object and returns ID and name
+
+    If there's no name, it just uses the index from _resource_name_index()
+    """
+    if isinstance(value, dict):
+        resource_id = _record_field(value, "id", "repositoryID", "policyID")
+        name = _record_field(value, "name")
+    else:
+        resource_id = value
+        name = None
+    resource_id_text = "" if resource_id in (None, "") else str(resource_id)
+    name_text = "" if name in (None, "") else str(name)
+    return resource_id_text, name_text or names.get(resource_id_text, "")
+
+
+def _record_field(record: dict[str, Any], *names: str) -> Any:
+    """Get a record field including nested scan info"""
+    info = record.get("info")
+    for source in (record, info if isinstance(info, dict) else {}):
+        for name in names:
+            if name in source and source[name] not in (None, ""):
+                return source[name]
+    return None
+
+
 def _asset_references(
     record: dict[str, Any], names: dict[str, str]
 ) -> tuple[list[str], list[str]]:
+    """Use _record_field() to look for asset groups that are scan targets
+
+    Use _resource_reference() to resolve ID to a name
+
+    Returns asset IDs and asset names that are targets of a scan
+    """
     value = _record_field(record, "assets", "assetLists")
     values = (
         value if isinstance(value, list) else ([] if value in (None, "") else [value])
@@ -328,18 +408,6 @@ def _asset_references(
     return ids, resolved_names
 
 
-def _resource_reference(value: Any, names: dict[str, str]) -> tuple[str, str]:
-    if isinstance(value, dict):
-        resource_id = _record_field(value, "id", "repositoryID", "policyID")
-        name = _record_field(value, "name")
-    else:
-        resource_id = value
-        name = None
-    resource_id_text = "" if resource_id in (None, "") else str(resource_id)
-    name_text = "" if name in (None, "") else str(name)
-    return resource_id_text, name_text or names.get(resource_id_text, "")
-
-
 def _asset_targets(record: dict[str, Any]) -> str:
     """Get direct targets from a record"""
     targets = _record_field(record, "ipList", "ips")
@@ -349,16 +417,6 @@ def _asset_targets(record: dict[str, Any]) -> str:
     if isinstance(type_fields, dict):
         return _format_value(_record_field(type_fields, "ipList", "ips"))
     return ""
-
-
-def _record_field(record: dict[str, Any], *names: str) -> Any:
-    """Get a record field including nested scan info"""
-    info = record.get("info")
-    for source in (record, info if isinstance(info, dict) else {}):
-        for name in names:
-            if name in source and source[name] not in (None, ""):
-                return source[name]
-    return None
 
 
 def _additional_details(record: dict[str, Any], excluded: set[str]) -> str:

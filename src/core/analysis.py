@@ -1,5 +1,5 @@
-# old left over from old openpyxl version
-# 
+# leftover from version that created xlsx workbook for coverage results
+#
 # from .tenable_scope_analysis import (
 #     CoverageResult,
 #     ExcludedScopeRecord,
@@ -13,7 +13,7 @@
 #     collect_covering_scans,
 #     determine_coverage_status,
 #     determine_required_scan_coverage,
-#     extract_scan_name,
+#     get_scan_name,
 #     filter_scans,
 #     normalize_scope,
 #     walk_combination,
@@ -32,7 +32,7 @@
 #     "collect_covering_scans",
 #     "determine_coverage_status",
 #     "determine_required_scan_coverage",
-#     "extract_scan_name",
+#     "get_scan_name",
 #     "filter_scans",
 #     "normalize_scope",
 #     "walk_combination",

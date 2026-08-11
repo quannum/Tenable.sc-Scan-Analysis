@@ -6,15 +6,9 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.408
     hooks:
-      - id: black
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
+      - id: pyright
         additional_dependencies:
-          - openpyxl
           - python-dotenv

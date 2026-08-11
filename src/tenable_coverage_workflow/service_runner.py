@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class SchedulerLockError(RuntimeError):
-    """When a scheduled run cannot start because another run is active."""
+    """When a scheduled run cannot start because another run is active"""
 
 
 def main(argv=None) -> int:
@@ -121,7 +121,6 @@ def build_detect_config(
 
 
 def build_run_id(run_id_prefix: str) -> str:
-    """Build run id"""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"{run_id_prefix}{timestamp}"
 

@@ -36,7 +36,7 @@ def parse_scope_item(scope):
         return _parsed_cache[scope]
 
     try:
-        # parse cidr, range, or single ip address
+        # keep the original meaning of each input while making it comparable later
         if "/" in scope:
             network = ipaddress.ip_network(scope, strict=False)
             ensure_ipv4(network, scope)

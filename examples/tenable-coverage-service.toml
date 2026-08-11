@@ -10,11 +10,11 @@ job_name = "tenable-coverage-all-sites"
 # source_network_type = "private"
 # source_routing_type = "core"
 
-# Optional VLAN tag grouping for site-code-and-role asset/scan naming:
+# Optional VLAN tag grouping: asset names retain the tag; scan names use a bucket.
 # The first tag starting with grouping_vlan_tag_prefix wins.
 # grouping_mode = "vlan_tag"
 # grouping_vlan_tag_prefix = "vlan-"
-# grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
+# grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "WORKSTATION", vlan-wireless = "WORKSTATION" }
 
 # Output + scheduler state
 output_dir = "/data/output"

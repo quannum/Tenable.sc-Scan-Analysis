@@ -6,7 +6,7 @@ an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| subnet_as_code API authoritative source | Implemented | `subnet_source/source_loader.py`; connector tests |
+| `rsg_subnet_as_code` API authoritative source | Implemented | `subnet_source/source_loader.py`; connector tests |
 | Common internal source model | Implemented | `models.py`; `docs/authoritative-schema.md` |
 | Site, region, timezone, tags, environment, business function, scan metadata | Implemented | source connectors and coverage detail reports |
 | CIDR and IP-range normalization with `ipaddress` | Implemented | subnet-as-code normalization and parser tests |
@@ -27,7 +27,7 @@ an external Tenable.sc or GitHub Enterprise tenant was modified during tests.
 | Required six CLI commands | Implemented | `application_cli.py` and CLI tests |
 | YAML-driven configuration | Implemented | unified and scheduled YAML config loaders and examples |
 | Unit/integration-safe tests | Implemented | parsing, math, analysis, reports, planning, application, service tests |
-| Representative payload defines final strong schema | Implemented | `docs/authoritative-schema.md`; subnet-as-code parser and source tests now cover the supplied `site_definition` / `supernet` / `subnets` schema and API-first JSON ingestion path |
+| Representative payload defines final strong schema | Implemented | `docs/authoritative-schema.md`; subnet-as-code parser and source tests cover the supplied top-level site list with `supernet` / `subnets` and API-first JSON ingestion path |
 | Real tenant smoke validation | Environment-dependent | Requires authorized non-production Tenable.sc/GitHub endpoints |
 
 ## Output Audit

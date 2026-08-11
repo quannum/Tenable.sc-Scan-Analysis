@@ -209,9 +209,9 @@ Example config files:
 ## Authoritative Source
 
 The authoritative source is `rsg_subnet_as_code.get_sites`, which returns complete
-site definitions from the source YAML as JSON.
+site definitions as JSON.
 
-The supported payload has one `site_definition` object or list. Each site uses
+The supported payload is a non-empty list of site objects. Each site uses
 `site_code`, `site_name`, optional site metadata, `public_ranges`, and
 `private_ranges`. A range contains a `supernet` with `network` and `cidr`, plus
 `subnets`. Each subnet uses `vlan_name`, `display_name`, `vlan`, `network`,
@@ -419,14 +419,16 @@ When `grouping_mode` is `vlan_tag`:
 
 - only tags starting with `grouping_vlan_tag_prefix` are considered
 - the first matching tag wins
-- `grouping_tag_map` translates tags into internal group roles
+- `grouping_tag_map` maps exact VLAN tags to one of three shared scan buckets: `WORKSTATION`, `SERVER`, or `NETWORK`
 - generated VLAN asset groups use `ABC Corp <SITE-CODE> VLAN <GROUP>`; scans use
-  `ABC Corp Assessment <SITE-CODE> <ROLE>`
+  `ABC Corp Assessment <SITE-CODE> <BUCKET>`
 - public scans use `ABC Corp Assessment <SITE-CODE> Public`; private discovery
   scans use `ABC Corp Discovery <SITE-CODE> Private`
 - `vlan-workstation` and `vlan-wireless` keep separate tag-based asset groups but use the same Workstation Assessment and Basic Assessment Policy unless a custom tag map overrides either tag
 - `vlan-storage`, `vlan-other`, and `vlan-environment` keep separate tag-based asset groups but use the Server Assessment and Basic Assessment Policy unless a custom tag map overrides the tag
-- Server, workstation, wireless, environment, and standard VLAN groups use `Basic Assessment Policy`; Network and AV groups use their specialized policies
+- `vlan-mgmt`, `vlan-network`, `vlan-av`, and `vlan-media` use the Network Assessment and Network Infrastructure Assessment policy
+- the built-in tag map and any explicit `grouping_tag_map` entry are exact; there are no role aliases
+- a VLAN tag without an assessment mapping remains in coverage and asset analysis, but produces `REVIEW_ASSESSMENT_MAPPING`; it does not receive an inferred scan or policy
 - source descriptions remain available in reporting but do not override grouped scan roles
 - missing matching tags fall back to VLAN-name-based grouping
 
@@ -440,7 +442,7 @@ Example:
 ```toml
 grouping_mode = "vlan_tag"
 grouping_vlan_tag_prefix = "vlan-"
-grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "END_USER", vlan-wireless = "END_USER" }
+grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "WORKSTATION", vlan-wireless = "WORKSTATION" }
 ```
 
 ## Running From Source

@@ -1,10 +1,14 @@
 import unittest
 from collections import defaultdict
+from types import SimpleNamespace
 
+from src.constants import INCLUDE
 from src.core.scope_utils import parse_scope_item, scope_to_interval
 from src.core.tenable_scope_analysis import (
     ExcludedScopeRecord,
     ScopeRecord,
+    build_scope_sheets,
+    build_scope_tables,
     calculate_coverage_result,
     calculate_scan_intervals,
 )
@@ -93,6 +97,79 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(excluded_total, 3)
         self.assertEqual(net_total, 7)
         self.assertEqual(exclusions[0].asset, "Excluded Segment")
+
+    def test_dynamic_asset_ip_rules_supply_planning_scope(self):
+        class FakeDataAccess:
+            @staticmethod
+            def get_scans():
+                return [{"id": 1, "name": "Workstation Assessment"}]
+
+            @staticmethod
+            def get_scan_details(scan_id):
+                return {
+                    "id": scan_id,
+                    "name": "Workstation Assessment",
+                    "assets": [{"id": 10}],
+                }
+
+            @staticmethod
+            def get_asset(asset_id):
+                return {
+                    "id": asset_id,
+                    "name": "NYC01 Workstation",
+                    "type": "dynamic",
+                    "typeFields": {
+                        "rules": {
+                            "operator": "all",
+                            "children": [
+                                {
+                                    "operator": "any",
+                                    "children": [
+                                        {
+                                            "filtername": "ip",
+                                            "operator": "eq",
+                                            "value": "10.1.16.0/24",
+                                            "type": "clause",
+                                        }
+                                    ],
+                                    "type": "group",
+                                },
+                                {
+                                    "filtername": "lastseen",
+                                    "operator": "lt",
+                                    "value": "30",
+                                    "type": "clause",
+                                },
+                            ],
+                            "type": "group",
+                        }
+                    },
+                }
+
+        table = build_scope_tables()
+        build_scope_sheets(
+            table,
+            FakeDataAccess(),
+            SimpleNamespace(
+                include_keywords=[],
+                exclude_keywords=[],
+                match_all_include=False,
+                case_sensitive=False,
+                filter_disabled_mode="ALL",
+            ),
+        )
+
+        self.assertEqual(
+            list(table.iter_rows(min_row=2, values_only=True)),
+            [
+                (
+                    "Workstation Assessment",
+                    "NYC01 Workstation",
+                    INCLUDE,
+                    "10.1.16.0/24",
+                )
+            ],
+        )
 
 
 if __name__ == "__main__":

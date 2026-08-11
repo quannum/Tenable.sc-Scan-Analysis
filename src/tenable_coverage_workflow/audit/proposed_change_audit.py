@@ -19,6 +19,7 @@ CSV_COLUMNS = [
     "Issue",
     "Proposed Action",
     "Proposed Asset Name",
+    "Desired Asset Type",
     "Proposed Scan Name",
     "Proposed Policy Name",
     "Approval Status",
@@ -39,7 +40,7 @@ def write_proposed_change_audits(
     md_path = _write_markdown(run_id, run_directory, proposed_changes)
 
     if audit_logger:
-        audit_logger.emit(
+        audit_logger.audit_log(
             "proposed_change_audit_written",
             csv_path=csv_path,
             markdown_path=md_path,
@@ -73,6 +74,7 @@ def _write_csv(
                 change.issue,
                 change.proposed_action,
                 change.proposed_asset_name or "",
+                change.desired_asset_type,
                 change.proposed_scan_name or "",
                 change.proposed_policy_name or "",
                 change.approval_status,
@@ -118,6 +120,7 @@ def _write_markdown(
             lines.append(f"- Issue: {change.issue}")
             lines.append(f"- Proposed Action: {change.proposed_action}")
             lines.append(f"- Proposed Asset: {change.proposed_asset_name or 'N/A'}")
+            lines.append(f"- Desired Asset Type: {change.desired_asset_type}")
             lines.append(f"- Proposed Scan: {change.proposed_scan_name or 'N/A'}")
             lines.append(f"- Proposed Policy: {change.proposed_policy_name or 'N/A'}")
             lines.append(f"- Approval Status: {change.approval_status}")

@@ -1,26 +1,40 @@
 import json
 import shutil
 import sys
+import tempfile
 import types
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from src.io.data_access import DataAccess, load_json_folder, normalize_resource_list
 
 
-def make_config(**overrides):
-    defaults = {
+@dataclass
+class TestDataAccessConfig:
+    mode: str = "live"
+    sc_url: str | None = "https://tenable.local"
+    sc_access_key: str | None = "access"
+    sc_secret_key: str | None = "secret"
+    scan_json_dir: str | None = None
+    asset_json_dir: str | None = None
+    sc_ssl_verify: str | bool = True
+
+
+def make_config(**overrides: Any) -> TestDataAccessConfig:
+    defaults: dict[str, Any] = {
         "mode": "live",
         "sc_url": "https://tenable.local",
         "sc_access_key": "access",
         "sc_secret_key": "secret",
         "scan_json_dir": None,
         "asset_json_dir": None,
+        "sc_ssl_verify": True,
     }
     defaults.update(overrides)
-    return SimpleNamespace(**defaults)
+    return TestDataAccessConfig(**defaults)
 
 
 class FakeScans:
@@ -56,7 +70,7 @@ class FakeAssetLists:
 
 
 class FakeTenableSC:
-    last_init = None
+    last_init: dict[str, Any] | None = None
 
     def __init__(self, url, access_key, secret_key, **kwargs):
         FakeTenableSC.last_init = {
@@ -67,6 +81,14 @@ class FakeTenableSC:
         }
         self.scans = FakeScans()
         self.asset_lists = FakeAssetLists()
+
+
+def fake_tenable_modules() -> dict[str, types.ModuleType]:
+    tenable_module = types.ModuleType("tenable")
+    tenable_sc_module = types.ModuleType("tenable.sc")
+    setattr(tenable_sc_module, "TenableSC", FakeTenableSC)
+    setattr(tenable_module, "sc", tenable_sc_module)
+    return {"tenable": tenable_module, "tenable.sc": tenable_sc_module}
 
 
 class DataAccessTests(unittest.TestCase):
@@ -110,6 +132,17 @@ class DataAccessTests(unittest.TestCase):
             [{"id": 1, "name": "assets"}, {"id": 2, "name": "policy"}],
         )
 
+    # responses with no asset / scan / policy wrapper
+    def test_resource_payload_normalization_handles_a_single_resource(self):
+        self.assertEqual(
+            normalize_resource_list({"id": 1, "name": "one"}),
+            [{"id": 1, "name": "one"}],
+        )
+
+    def test_invalid_mode_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "mode must be 'offline' or 'live'"):
+            DataAccess(make_config(mode="invalid"))
+
     def test_live_mode_requires_credentials_and_url(self):
         with self.assertRaises(ValueError) as ctx:
             DataAccess(
@@ -126,14 +159,9 @@ class DataAccessTests(unittest.TestCase):
         self.assertIn("TCW_SC_SECRET_KEY/SC_SECRET_KEY", error_text)
 
     def test_live_mode_uses_tenable_client_and_methods(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
-
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             access = DataAccess(make_config())
@@ -155,29 +183,22 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(access.get_asset(20), {"id": 20, "name": "Asset Details"})
 
     def test_live_mode_parses_string_false_ssl_verify(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
-
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             DataAccess(make_config(sc_ssl_verify="false"))
 
-        self.assertFalse(FakeTenableSC.last_init["ssl_verify"])
+        last_init = FakeTenableSC.last_init
+        self.assertIsNotNone(last_init)
+        assert last_init is not None
+        self.assertFalse(last_init["ssl_verify"])
 
     def test_live_mode_handles_unexpected_scan_list_shape(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
-
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             access = DataAccess(make_config())
@@ -186,14 +207,9 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(access.get_scans(), [])
 
     def test_live_mode_normalizes_alternate_scan_list_shapes(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
-
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             access = DataAccess(make_config())
@@ -211,13 +227,9 @@ class DataAccessTests(unittest.TestCase):
         )
 
     def test_live_mutation_methods_use_supported_pytenable_arguments(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             access = DataAccess(make_config())
@@ -232,48 +244,40 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(updated["repo"], 7)
         self.assertEqual(updated["policy_id"], 30)
 
-    def test_live_dynamic_asset_methods_use_supported_pytenable_arguments(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
+    def test_live_dynamic_asset_methods_use_rule_payloads(self):
         rules = {
             "operator": "all",
-            "children": [{"type": "clause", "filterName": "lastseen"}],
+            "children": [
+                {
+                    "filtername": "lastseen",
+                    "operator": "lt",
+                    "value": "30",
+                    "type": "clause",
+                }
+            ],
+            "type": "group",
         }
         with patch.dict(
             sys.modules,
-            {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+            fake_tenable_modules(),
             clear=False,
         ):
             access = DataAccess(make_config())
 
-        dynamic = access.create_dynamic_asset("Recent Hosts", rules, "managed")
-        combination = access.create_combination_asset("Target", 21, 22, "managed")
-        updated = access.update_combination_asset(23, 21, 22, "managed")
+        created = access.create_dynamic_asset("Dynamic", rules, "managed")
+        updated = access.update_dynamic_asset(21, rules, "updated")
 
-        self.assertEqual(dynamic["type"], "dynamic")
-        self.assertEqual(dynamic["rules"], rules)
-        self.assertEqual(
-            combination["combinations"],
-            {
-                "operator": "difference",
-                "operand1": {"id": 21},
-                "operand2": {"id": 22},
-            },
-        )
-        self.assertEqual(updated["type"], "combination")
+        self.assertEqual(created["type"], "dynamic")
+        self.assertEqual(created["rules"], rules)
+        self.assertEqual(created["description"], "managed")
+        self.assertEqual(updated["rules"], rules)
+        self.assertEqual(updated["description"], "updated")
 
     def test_live_mode_retries_retryable_errors(self):
-        tenable_module = types.ModuleType("tenable")
-        tenable_sc_module = types.ModuleType("tenable.sc")
-        tenable_sc_module.TenableSC = FakeTenableSC
-        tenable_module.sc = tenable_sc_module
-
         with (
             patch.dict(
                 sys.modules,
-                {"tenable": tenable_module, "tenable.sc": tenable_sc_module},
+                fake_tenable_modules(),
                 clear=False,
             ),
             patch("src.io.data_access.time.sleep") as sleep_mock,
@@ -286,11 +290,7 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(sleep_mock.call_count, 2)
 
     def test_offline_duplicate_ids_replace_previous_object(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "duplicate_id_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-data-access-"))
 
         scan_dir = temp_path / "scans"
         asset_dir = temp_path / "assets"
@@ -324,11 +324,7 @@ class DataAccessTests(unittest.TestCase):
                 shutil.rmtree(temp_path)
 
     def test_load_json_folder_skips_non_object_json_roots(self):
-        temp_root = Path.cwd() / ".tmp-test-artifacts"
-        temp_path = temp_root / "non_object_json_case"
-        if temp_path.exists():
-            shutil.rmtree(temp_path)
-        temp_path.mkdir(parents=True, exist_ok=True)
+        temp_path = Path(tempfile.mkdtemp(prefix="tenable-data-access-"))
 
         try:
             (temp_path / "array.json").write_text(

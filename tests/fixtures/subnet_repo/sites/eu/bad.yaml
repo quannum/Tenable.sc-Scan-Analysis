@@ -1,6 +1,0 @@
-name: Broken Site
-site_code: BAD01
-private_network_definition:
-  name: Broken
-  network: 10.50.0.0
-  cidr: [this is: not valid yaml

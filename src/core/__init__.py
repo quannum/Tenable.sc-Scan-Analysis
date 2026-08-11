@@ -22,8 +22,8 @@ from .tenable_scope_analysis import (
     collect_covering_scans,
     determine_coverage_status,
     determine_required_scan_coverage,
-    extract_scan_name,
     filter_scans,
+    get_scan_name,
     normalize_scope,
     walk_combination,
 )
@@ -42,7 +42,7 @@ __all__ = [
     "collect_covering_scans",
     "determine_coverage_status",
     "determine_required_scan_coverage",
-    "extract_scan_name",
+    "get_scan_name",
     "filter_scans",
     "merge_intervals",
     "normalize_scope",

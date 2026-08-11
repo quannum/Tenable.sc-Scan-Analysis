@@ -4,7 +4,7 @@ from ..models import CoverageTarget, SourceLoadResult, ValidationIssue
 
 
 def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
-    """Add duplicate and overlap ranges"""
+    """Add duplicate and overlap findings across valid targets"""
     targets = result.coverage_targets
     for target in targets:
         network = ipaddress.ip_network(target.cidr, strict=False)
@@ -64,7 +64,7 @@ def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
                     )
                 )
             elif left_network.overlaps(right_network):
-                # Parent private networks are expected to contain their own VLANs.
+                # private networks should contain their own VLANs.
                 if _is_expected_parent_child(left, right):
                     continue
                 result.validation_issues.append(
@@ -84,7 +84,7 @@ def _relationship_issue(
     label: str,
     severity: str,
 ) -> ValidationIssue:
-    """Create an issue for an invalid relationship between targets"""
+    """Create an issue for an invalid relationship between coverage targets"""
     return ValidationIssue(
         source_file=left.source_file or "authoritative-source",
         site_code=left.site_code,
@@ -99,14 +99,14 @@ def _relationship_issue(
 
 
 def _is_expected_parent_child(left: CoverageTarget, right: CoverageTarget) -> bool:
-    """Check whether expected parent child"""
+    """Check if private_supernet is parent of VLAN"""
     if left.site_code != right.site_code:
         return False
     return {left.target_type, right.target_type} == {"PRIVATE_SUPERNET", "VLAN"}
 
 
 def _target_identity(target: CoverageTarget) -> str:
-    """Build a stable identity string for a coverage target"""
+    """Build a identity string for a coverage target"""
     return "|".join(
         (
             target.source_file or "",

@@ -14,7 +14,8 @@ class AuditLogger:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.run_dir / "audit.jsonl"
 
-    def emit(self, event_type: str, **fields: Any) -> None:
+    def audit_log(self, event_type: str, **fields: Any) -> None:
+        """Write one audit event"""
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "run_id": self.run_id,
@@ -25,7 +26,7 @@ class AuditLogger:
         self._append_jsonl(payload)
 
     def _append_jsonl(self, payload: dict[str, Any]) -> None:
-        """Add one JSON line to the audit log"""
+        """Add one line to the audit log"""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True))
