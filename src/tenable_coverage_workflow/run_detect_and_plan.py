@@ -312,7 +312,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     audit_logger = AuditLogger(run_id=run_id, run_dir=run_dir)
-    audit_logger.emit(
+    audit_logger.audit_log(
         "run_started",
         authoritative_source="subnet_as_code.get_sites",
         source_reference_id=config.source_config.reference_id,
@@ -348,7 +348,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
                 vlan_role,
                 target.cidr,
             )
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "assessment_mapping_missing",
                 site_code=target.site_code,
                 vlan_role=vlan_role,
@@ -373,9 +373,9 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         grouping_config=config.grouping_config,
     )
 
-    # Record every proposal before writing the review files.
+    # Record every proposal before writing the review files
     for change in proposed_changes:
-        audit_logger.emit(
+        audit_logger.audit_log(
             "proposed_change_created",
             site_code=change.site_code,
             target_type=change.target_type,
@@ -447,7 +447,7 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
     )
     summary["final_audit_report"] = str(final_audit_path)
     atomic_write_json(run_dir / "run_summary.json", summary)
-    audit_logger.emit("run_completed", **summary)
+    audit_logger.audit_log("run_completed", **summary)
     return summary
 
 
@@ -519,7 +519,7 @@ def validate_coverage_targets(
     for target in targets:
         exclusion_tag = find_exclusion_tag(target.tags)
         if exclusion_tag:
-            # exclusion is reported, but doesn't make a change.
+            # exclusion is reported, but doesn't make a change
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:

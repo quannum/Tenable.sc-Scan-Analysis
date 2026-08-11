@@ -37,7 +37,7 @@ def build_tenable_access_config(
     *,
     optional_string: Callable[[Any], str | None] | None = None,
 ) -> TenableAccessConfig:
-    """Build and validate shared Tenable.sc connection settings."""
+    """Build and validate Tenable.sc connection settings"""
     mode = str(scalar_getter("mode", None, "offline") or "").strip().lower()
     if mode not in {"offline", "live"}:
         raise ValueError("mode must be 'offline' or 'live'.")
@@ -78,7 +78,7 @@ def build_scan_filter_config(
     scalar_getter: ScalarGetter,
     csv_getter: CsvGetter,
 ) -> ScanFilterConfig:
-    """Build and validate shared scan-filter settings."""
+    """Build and validate shared scan-filter settings"""
     filter_disabled_mode = str(scalar_getter("filter_disabled_mode", None, "ALL"))
     if filter_disabled_mode not in {"ALL", "ENABLED_ONLY", "DISABLED_ONLY"}:
         raise ValueError(
@@ -101,7 +101,7 @@ def build_scan_filter_config(
 
 
 def build_grouping_config_from_settings(scalar_getter: ScalarGetter) -> GroupingConfig:
-    """Build VLAN grouping settings using the shared setting precedence."""
+    """Build VLAN grouping settings using the shared setting precedence"""
     return build_grouping_config(
         mode_value=scalar_getter("grouping_mode", "GROUPING_MODE", "default"),
         prefix_value=scalar_getter(

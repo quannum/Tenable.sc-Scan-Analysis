@@ -11,7 +11,7 @@ from ..core.scope_utils import split_scope_items
 from .audit.audit_logger import atomic_write_text
 
 # This module applies only reviewed plan rows and verifies each Tenable change
-# before reporting it as successful.
+# before reporting it as successful
 
 SUPPORTED_ACTIONS = {
     "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
@@ -267,7 +267,7 @@ class ChangeApplier:
             if current_type and current_type != definition.asset_type:
                 errors.append(
                     f"Asset '{definition.name}' is {current_type}, but the plan "
-                    f"requires {definition.asset_type}. Manual migration is required"
+                    f"requires {definition.asset_type}. Manual change is required"
                 )
         if errors:
             raise ValueError("Apply preflight failed: " + "; ".join(errors))
@@ -363,7 +363,14 @@ class ChangeApplier:
         )
 
     def _confirm_asset(self, definition: AssetDefinition) -> tuple[dict[str, Any], str]:
-        """Create or reconcile one static or dynamic asset definition."""
+        """Checks if asset already exists and is correctly scoped
+        
+        If doesn't exist, creates an asset
+
+        If exists and matches criteria, do nothing
+
+        If exists and criteria is different, updates criteria
+        """
         existing = self.assets.get(definition.name)
         if existing is None:
             if definition.asset_type == "static":
@@ -389,7 +396,7 @@ class ChangeApplier:
         if current_type and current_type != definition.asset_type:
             raise RuntimeError(
                 f"Asset '{definition.name}' is {current_type}, but requires "
-                f"{definition.asset_type}. Manual migration is required."
+                f"{definition.asset_type}. Manual change is required."
             )
 
         if definition.asset_type == "static":
@@ -432,7 +439,7 @@ class ChangeApplier:
     ) -> tuple[dict[str, Any], str]:
         """Confirm scan created or updated"""
         existing = self.scans.get(change.scan_name)
-        # Policy names are resolved here so each Tenable instance uses its own ID
+        # policy names are resolved by name so each Tenable instance uses its own ID
         policy_id = _resource_id(
             self.policies[change.policy_name], "policy", change.policy_name
         )
@@ -480,7 +487,7 @@ class ChangeApplier:
         return merged, "UPDATED"
 
     def _verify_asset(self, asset_id: int, definition: AssetDefinition) -> None:
-        """Check that an asset group matches its desired static or dynamic state."""
+        """Check that an asset group matches its desired static or dynamic state"""
         details = self.data_access.get_asset(asset_id)
         if _asset_type(details) != definition.asset_type:
             raise RuntimeError(
@@ -540,7 +547,7 @@ class ChangeApplier:
     def _unique_name_index(
         records: list[dict[str, Any]], resource_type: str
     ) -> dict[str, dict[str, Any]]:
-        """Index resources by name and reject duplicate names"""
+        """Index resources by name and reject duplicates"""
         result = {}
         for record in records:
             name = _text(record.get("name"))
@@ -573,7 +580,7 @@ def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
 
 
 def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
-    """Build the exported Tenable.sc rule shape for a VLAN asset group."""
+    """Build the exported Tenable.sc rule shape for a VLAN asset group"""
     return {
         "operator": "all",
         "children": [
@@ -602,7 +609,7 @@ def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
 
 
 def get_dynamic_asset_rules(asset: dict[str, Any]) -> dict[str, Any] | None:
-    """Read saved dynamic rules from the common Tenable.sc response locations."""
+    """Read saved dynamic rules from Tenable.sc"""
     for record in (asset, asset.get("typeFields")):
         if not isinstance(record, dict):
             continue
@@ -614,7 +621,7 @@ def get_dynamic_asset_rules(asset: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _rules_signature(rules: dict[str, Any] | None) -> tuple[Any, ...] | None:
-    """Compare dynamic rules independent of API key casing and child order."""
+    """Compare dynamic rules to see if it needs to be updated"""
     if not isinstance(rules, dict):
         return None
     children = rules.get("children")
@@ -659,7 +666,7 @@ def _build_asset_definitions(
     for name, members in grouped.items():
         asset_types = {change.desired_asset_type for change in members}
         if len(asset_types) != 1:
-            raise ValueError(f"Asset '{name}' has conflicting desired asset types.")
+            raise ValueError(f"Asset '{name}' has conflicting asset types.")
         definitions[name] = AssetDefinition(
             name=name,
             asset_type=next(iter(asset_types)),
@@ -803,7 +810,7 @@ def get_nested_id(
 
 
 def _resource_id(record: dict[str, Any], resource_type: str, name: str) -> int:
-    """Read a resource ID or raise a clear error"""
+    """Read a resource ID or throw an error"""
     try:
         return int(record["id"])
     except (KeyError, TypeError, ValueError) as exc:

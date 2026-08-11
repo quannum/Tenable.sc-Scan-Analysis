@@ -19,7 +19,7 @@ SENSITIVE_KEY_PARTS = (
 
 
 class InventoryDataAccessConfig(Protocol):
-    """Config field kept in an inventory snapshot."""
+    """Config field kept in an inventory snapshot"""
 
     @property
     def mode(self) -> str:

@@ -59,7 +59,7 @@ def generate_proposed_changes(
     run_id: str,
     grouping_config: GroupingConfig | None = None,
 ) -> list[ProposedChange]:
-    """Create the asset and scan changes needed for coverage"""
+    """Create proposed asset and scan changes"""
     changes: list[ProposedChange] = []
     grouping_config = grouping_config or GroupingConfig()
 
@@ -103,6 +103,7 @@ def generate_proposed_changes(
 
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
+    """Determine proposed action (review / update / no action)"""
     desired_asset_type = "dynamic" if result.target_type == "VLAN" else "static"
     configured_asset_type = str(
         getattr(result, "configured_asset_type", "") or ""
@@ -130,9 +131,8 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
         return "REVIEW_WRONG_SCAN"
 
     if result.status == "OK":
-        # Asset rules and descriptions are authoritative state too.  Keep an
-        # approved, fully covered target on the reconciliation path; the apply
-        # step remains idempotent and will leave an unchanged asset/scan alone.
+        # keep an approved, fully covered target 
+        # apply step will leave an unchanged asset/scan alone
         if result.target_type in {"PUBLIC", "PRIVATE_SUPERNET", "VLAN"}:
             return _create_or_update_action(result.target_type)
         return "NO_ACTION"
@@ -157,6 +157,7 @@ def _create_or_update_action(target_type: str) -> str:
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
+
     if proposed_action == "REVIEW_ASSET_TYPE_CONFLICT":
         desired = "dynamic" if result.target_type == "VLAN" else "static"
         configured = str(getattr(result, "configured_asset_type", "") or "")

@@ -30,7 +30,6 @@ def load_config_section(
     section_error: str,
     unsupported_error: str,
 ) -> dict[str, Any]:
-    """Load config section"""
     if not config_file_path.is_file():
         raise ValueError(f"Config file does not exist: {config_file_path}")
 

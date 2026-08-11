@@ -469,7 +469,7 @@ class ChangeApplicationTests(unittest.TestCase):
                 "typeFields": {"definedIPs": "10.1.16.0/24"},
             }
 
-            with self.assertRaisesRegex(ValueError, "Manual migration is required"):
+            with self.assertRaisesRegex(ValueError, "Manual change is required"):
                 ChangeApplier(data_access, repository_id=7).apply(plan)
             self.assertEqual(data_access.calls, [])
 

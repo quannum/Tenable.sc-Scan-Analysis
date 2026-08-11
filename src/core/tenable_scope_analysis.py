@@ -233,12 +233,7 @@ def walk_combination(node, scan_name, normalized_ws, data_access, in_complement=
 
 
 def get_dynamic_asset_scopes(asset: dict[str, Any]) -> list[str]:
-    """Return CIDR clauses from a dynamic asset's saved rule definition.
-
-    These rows represent the authoritative IP side of the dynamic rule for
-    planning purposes.  They do not claim to enumerate the current hosts that
-    also satisfy a temporal rule such as ``lastseen < 30``.
-    """
+    """Return CIDR clauses from a dynamic asset's rule definition"""
     type_fields = asset.get("typeFields")
     rules = asset.get("rules")
     if not isinstance(rules, dict) and isinstance(type_fields, dict):
@@ -270,8 +265,8 @@ def build_scope_sheets(normalized_ws, data_access, config):
     all_scans = data_access.get_scans()
     filtered_scans = filter_scans(all_scans, config)
 
-    # A scan can get targets directly, through static assets, or through
-    # nested combination assets. Normalize every source into the same rows.
+    # scan targets can be direct IP addresses, static, or combination assets
+    # normalize all ranges from different target types
     for scan in filtered_scans:
         scan_id = scan.get("id")
         scan_name = get_scan_name(scan)
@@ -501,7 +496,7 @@ def calculate_scan_intervals(
         )
         exclusion_ip_total += loss
 
-    # Merge first so overlapping configured ranges are not counted twice.
+    # merge include and exclude ranges to remove duplicates
     included = merge_intervals(included)
     excluded = merge_intervals(excluded)
 
