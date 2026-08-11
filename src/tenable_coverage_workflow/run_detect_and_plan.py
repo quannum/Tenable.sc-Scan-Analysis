@@ -523,7 +523,7 @@ def validate_coverage_targets(
             coverage_result = _build_tag_excluded_result(target, exclusion_tag)
             coverage_results.append(coverage_result)
             if audit_logger:
-                audit_logger.emit(
+                audit_logger.audit_log(
                     "coverage_tag_exclusion_detected",
                     site_code=coverage_result.site_code,
                     target_type=coverage_result.target_type,
@@ -618,7 +618,7 @@ def validate_coverage_targets(
         coverage_results.append(coverage_result)
 
         if audit_logger and coverage_result.status == "GAP":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_gap_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -627,7 +627,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "PARTIAL":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_partial_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -636,7 +636,7 @@ def validate_coverage_targets(
                 source_file=coverage_result.source_file,
             )
         elif audit_logger and coverage_result.status == "EXCLUDED":
-            audit_logger.emit(
+            audit_logger.audit_log(
                 "coverage_exclusion_detected",
                 site_code=coverage_result.site_code,
                 target_type=coverage_result.target_type,
@@ -648,7 +648,7 @@ def validate_coverage_targets(
 
     if audit_logger:
         status_counts = Counter(result.status for result in coverage_results)
-        audit_logger.emit(
+        audit_logger.audit_log(
             "coverage_validation_completed",
             target_count=len(coverage_results),
             ok_count=status_counts.get("OK", 0),

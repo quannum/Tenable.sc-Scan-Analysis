@@ -40,7 +40,7 @@ def write_proposed_change_audits(
     md_path = _write_markdown(run_id, run_directory, proposed_changes)
 
     if audit_logger:
-        audit_logger.emit(
+        audit_logger.audit_log(
             "proposed_change_audit_written",
             csv_path=csv_path,
             markdown_path=md_path,
