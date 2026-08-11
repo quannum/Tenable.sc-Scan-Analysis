@@ -693,7 +693,7 @@ def _build_tag_excluded_result(
 
 
 def _resource_name(value) -> str | None:
-    """Read a resource name from a Tenable.sc value"""
+    """Read a policy name from a Tenable.sc"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         return name or None
@@ -701,7 +701,7 @@ def _resource_name(value) -> str | None:
 
 
 def _resource_label(value, fallback_id=None) -> str | None:
-    """Read a readable resource label from a Tenable.sc value"""
+    """Read a repo / policy label from a Tenable.sc"""
     if isinstance(value, dict):
         name = str(value.get("name") or "").strip()
         if name:

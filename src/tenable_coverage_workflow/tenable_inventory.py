@@ -420,13 +420,11 @@ def _asset_targets(record: dict[str, Any]) -> str:
 
 
 def _additional_details(record: dict[str, Any], excluded: set[str]) -> str:
-    """Format fields not shown in their own column"""
     details = {key: value for key, value in record.items() if key not in excluded}
     return _format_value(details) if details else ""
 
 
 def _format_value(value: Any) -> str:
-    """Format a value for CSV output"""
     if value in (None, ""):
         return ""
     if isinstance(value, (dict, list)):

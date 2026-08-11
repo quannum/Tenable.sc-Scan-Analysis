@@ -62,7 +62,6 @@ class ScheduledServiceConfig:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    """Build argument parser"""
     parser = argparse.ArgumentParser(
         description=(
             "Scheduler-friendly wrapper for the Tenable coverage detect-and-plan "
@@ -154,13 +153,11 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
     def scalar_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> Any:
-        """Read one scalar setting"""
         return pick(name, default, environment_name)
 
     def csv_getter(
         name: str, environment_name: str | None, default: Any = None
     ) -> list[str] | None:
-        """Read one comma-separated setting"""
         return resolver.csv(name, default, environment_name)
 
     source_config = build_authoritative_source_config(

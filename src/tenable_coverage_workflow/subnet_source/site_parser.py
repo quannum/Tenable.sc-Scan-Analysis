@@ -303,7 +303,7 @@ def _parse_vlan_number(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> int | None:
-    """Read an optional numeric VLAN identifier"""
+    """Read an numeric VLAN identifier"""
     if value in (None, ""):
         return None
     try:
@@ -320,7 +320,7 @@ def _parse_ip_addresses(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> list[IpAddress]:
-    """Parse IP address records attached to one VLAN"""
+    """Parse IP address records in one VLAN"""
     if value is None:
         return []
     records: list[IpAddress] = []
@@ -493,7 +493,7 @@ def _issue(
     field_name: str,
     message: str,
 ) -> None:
-    """Add one source validation issue"""
+    """Add a source validation issue"""
     issues.append(
         ValidationIssue(
             source_file=source_file,

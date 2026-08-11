@@ -238,6 +238,8 @@ class ChangeApplier:
         )
         self.scans = self._unique_name_index(data_access.get_scans(), "scan")
         self.policies = self._unique_name_index(data_access.get_policies(), "policy")
+        self.asset_scopes: dict[str, set[str]] = {}
+        self.agent_asset: dict[str, Any] | None = None
 
     def preflight(
         self,
@@ -820,7 +822,6 @@ def _resource_id(record: dict[str, Any], resource_type: str, name: str) -> int:
 
 
 def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
-    """Read a required text value from a CSV row"""
     value = _text(row.get(column))
     if not value:
         raise ValueError(f"Row {row_number} has no {column}.")

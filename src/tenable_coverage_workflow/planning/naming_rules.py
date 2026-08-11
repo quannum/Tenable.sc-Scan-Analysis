@@ -37,6 +37,7 @@ def normalize_name_part(value: str | None, fallback: str = "Unknown") -> str:
     cleaned = _UNDERSCORE_PATTERN.sub("_", cleaned).strip("_")
     return cleaned or fallback
 
+# old function for normalizing names
 
 # clean up and standardize display names, site codes, and vlan roles/tags
 # used in scan / asset / policy name builders below

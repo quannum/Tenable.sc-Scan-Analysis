@@ -27,7 +27,6 @@ class InMemoryTable:
         self._rows: list[list[Any]] = [list(headers)]
 
     def append(self, row: Iterable[Any]) -> None:
-        """Add a row to the in-memory table"""
         self._rows.append(list(row))
 
     def iter_rows(self, min_row: int = 1, values_only: bool = False):
@@ -171,7 +170,6 @@ def filter_scans(scans, config):
 def normalize_scope(
     normalized_ws, scan_name, asset_name, inclusion_type, defined_string
 ):
-    """Normalize scope"""
     for scope_item in split_scope_items(defined_string):
         normalized_ws.append([scan_name, asset_name, inclusion_type, scope_item])
 

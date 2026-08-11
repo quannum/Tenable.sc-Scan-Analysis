@@ -157,7 +157,7 @@ def main(argv=None) -> int:
 
 
 def _source_config(args):
-    """Build the authoritative source settings from command options"""
+    """Build the authoritative source settings from command args"""
     return build_authoritative_source_config(
         scalar_getter=lambda name, environment_name, default=None: _setting(
             args, name, environment_name, default
@@ -355,7 +355,7 @@ def _setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> Any:
-    """Get one resolved command setting"""
+    """Get one command arg"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.get(name, default, environment_name)
 
@@ -370,7 +370,7 @@ def _csv_setting(
     environment_name: str | None = None,
     default: Any = None,
 ) -> list[str] | None:
-    """Get one comma-separated command setting"""
+    """Get one command arg from csv"""
     resolver = getattr(args, "_settings", SettingsResolver(args))
     return resolver.csv(name, default, environment_name)
 

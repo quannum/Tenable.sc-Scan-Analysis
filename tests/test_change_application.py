@@ -86,23 +86,66 @@ class FakeDataAccess:
     def get_scan_details(self, scan_id):
         return self.scans.get(int(scan_id), {})
 
-    def create_static_asset(self, name, ips, description):
-        self.calls.append(("create_asset", name, tuple(ips)))
+    def create_dynamic_asset(self, name, rules, description):
+        self.calls.append(("create_dynamic_asset", name, rules))
         asset_id = self.next_asset_id
         self.next_asset_id += 1
         record = {
             "id": asset_id,
             "name": name,
-            "type": "static",
+            "type": "dynamic",
             "description": description,
-            "typeFields": {"definedIPs": ",".join(ips)},
+            "typeFields": {"rules": rules},
         }
         self.assets[asset_id] = record
         return record
 
-    def update_static_asset(self, asset_id, ips, description=None):
-        self.calls.append(("update_asset", asset_id, tuple(ips)))
-        self.assets[asset_id]["typeFields"]["definedIPs"] = ",".join(ips)
+    def update_dynamic_asset(self, asset_id, rules, description=None):
+        self.calls.append(("update_dynamic_asset", asset_id, rules))
+        self.assets[asset_id]["type"] = "dynamic"
+        self.assets[asset_id]["typeFields"] = {"rules": rules}
+        if description is not None:
+            self.assets[asset_id]["description"] = description
+        return self.assets[asset_id]
+
+    def create_combination_asset(
+        self, name, included_asset_id, excluded_asset_id, description
+    ):
+        self.calls.append(
+            ("create_combination_asset", name, included_asset_id, excluded_asset_id)
+        )
+        asset_id = self.next_asset_id
+        self.next_asset_id += 1
+        record = {
+            "id": asset_id,
+            "name": name,
+            "type": "combination",
+            "description": description,
+            "typeFields": {
+                "combinations": {
+                    "operator": "difference",
+                    "operand1": {"id": included_asset_id},
+                    "operand2": {"id": excluded_asset_id},
+                }
+            },
+        }
+        self.assets[asset_id] = record
+        return record
+
+    def update_combination_asset(
+        self, asset_id, included_asset_id, excluded_asset_id, description=None
+    ):
+        self.calls.append(
+            ("update_combination_asset", asset_id, included_asset_id, excluded_asset_id)
+        )
+        self.assets[asset_id]["type"] = "combination"
+        self.assets[asset_id]["typeFields"] = {
+            "combinations": {
+                "operator": "difference",
+                "operand1": {"id": included_asset_id},
+                "operand2": {"id": excluded_asset_id},
+            }
+        }
         if description is not None:
             self.assets[asset_id]["description"] = description
         return self.assets[asset_id]
@@ -184,8 +227,52 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(first["status_counts"], {"APPLIED": 1})
             self.assertEqual(second["status_counts"], {"UNCHANGED": 1})
             self.assertEqual(data_access.calls, calls_after_first)
-            self.assertEqual(len(data_access.assets), 1)
+            self.assertEqual(len(data_access.assets), 3)
             self.assertEqual(len(data_access.scans), 1)
+
+    def test_proposed_target_is_recent_cidr_hosts_minus_agent_hosts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            data_access = FakeDataAccess()
+
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+
+            agent_asset = next(
+                asset
+                for asset in data_access.assets.values()
+                if asset["name"] == "Tenable.sc Scan Analysis - Nessus Agent Detected"
+            )
+            self.assertEqual(
+                [
+                    child["value"]["id"]
+                    for child in agent_asset["typeFields"]["rules"]["children"]
+                ],
+                [100574, 110230, 110231],
+            )
+            candidate = next(
+                asset
+                for asset in data_access.assets.values()
+                if asset["name"] == "NYC01 Servers VLAN 120 - Recent Hosts"
+            )
+            rules = candidate["typeFields"]["rules"]
+            self.assertEqual(
+                rules["children"][0]["children"][0]["value"],
+                "10.1.16.0/24",
+            )
+            self.assertEqual(rules["children"][1]["filterName"], "lastseen")
+            self.assertEqual(rules["children"][1]["operator"], "lt")
+            self.assertEqual(rules["children"][1]["value"], "30")
+            target = next(
+                asset
+                for asset in data_access.assets.values()
+                if asset["name"] == "NYC01 Servers VLAN 120"
+            )
+            combination = target["typeFields"]["combinations"]
+            self.assertEqual(combination["operator"], "difference")
+            self.assertEqual(combination["operand1"], {"id": candidate["id"]})
+            self.assertEqual(combination["operand2"], {"id": agent_asset["id"]})
 
     def test_created_scan_policy_is_verified(self):
         class WrongPolicyDataAccess(FakeDataAccess):
@@ -254,6 +341,12 @@ class ChangeApplicationTests(unittest.TestCase):
             operation = result["operations"][0]
             self.assertEqual(operation["asset_status"], "UPDATED")
             self.assertEqual(operation["scan_status"], "UPDATED")
+            self.assertEqual(data_access.assets[8]["type"], "combination")
+            candidate = next(
+                asset
+                for asset in data_access.assets.values()
+                if asset["name"] == "NYC01 Servers VLAN 120 - Recent Hosts"
+            )
             self.assertEqual(
                 data_access.assets[8]["typeFields"]["definedIPs"],
                 "10.1.0.0/16,10.1.15.0/24",
@@ -601,11 +694,22 @@ class ChangeApplicationTests(unittest.TestCase):
 
             ChangeApplier(data_access, repository_id=7).apply(plan)
 
-            self.assertEqual(len(data_access.assets), 2)
+            self.assertEqual(len(data_access.assets), 5)
             self.assertEqual(len(data_access.scans), 1)
             scan = next(iter(data_access.scans.values()))
             self.assertEqual(scan["name"], "NYC01 Workstation Assessment")
-            self.assertEqual(scan["assets"], [{"id": 10}, {"id": 11}])
+            target_ids = [
+                next(
+                    asset["id"]
+                    for asset in data_access.assets.values()
+                    if asset["name"] == name
+                )
+                for name in (
+                    "NYC01 Workstation VLAN Group",
+                    "NYC01 Wireless VLAN Group",
+                )
+            ]
+            self.assertEqual(scan["assets"], [{"id": item} for item in target_ids])
 
     def test_missing_policy_fails_preflight_before_mutation(self):
         with tempfile.TemporaryDirectory() as directory:

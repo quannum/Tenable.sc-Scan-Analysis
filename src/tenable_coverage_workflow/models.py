@@ -41,6 +41,8 @@ class VlanRange:
     tags: list[str] = field(default_factory=list)
     ip_addresses: list[IpAddress] = field(default_factory=list)
 
+# used for old tests 
+# remind me to remove and use private/public range
 
 @dataclass(frozen=True)
 class PublicNetworkRange:
