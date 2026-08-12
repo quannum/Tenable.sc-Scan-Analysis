@@ -364,7 +364,7 @@ class ChangeApplier:
 
     def _confirm_asset(self, definition: AssetDefinition) -> tuple[dict[str, Any], str]:
         """Checks if asset already exists and is correctly scoped
-        
+
         If doesn't exist, creates an asset
 
         If exists and matches criteria, do nothing

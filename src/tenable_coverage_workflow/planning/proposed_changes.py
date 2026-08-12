@@ -131,7 +131,7 @@ def determine_proposed_action(result: CoverageValidationResult) -> str:
         return "REVIEW_WRONG_SCAN"
 
     if result.status == "OK":
-        # keep an approved, fully covered target 
+        # keep an approved, fully covered target
         # apply step will leave an unchanged asset/scan alone
         if result.target_type in {"PUBLIC", "PRIVATE_SUPERNET", "VLAN"}:
             return _create_or_update_action(result.target_type)

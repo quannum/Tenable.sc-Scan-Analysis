@@ -15,7 +15,7 @@ from ..core.scope_utils import (
 from .audit.audit_logger import atomic_write_json, atomic_write_text
 from .models import CoverageTarget, CoverageValidationResult, ValidationIssue
 
-# Reports are derived from coverage results. They do not make or apply 
+# Reports are derived from coverage results. They do not make or apply
 # changes in Tenable
 
 DETAIL_COLUMNS = [
@@ -229,7 +229,7 @@ def _aggregate(results: list[CoverageValidationResult]) -> dict[str, Any]:
 
 def detect_extra_scan_targets(actual_scopes, targets) -> list[dict[str, Any]]:
     """Detect extra scan targets
-    
+
     "Extra" scan targets are scan targets not found in network definitions
     """
     expected_intervals = [
