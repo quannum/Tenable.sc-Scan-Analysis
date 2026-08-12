@@ -307,13 +307,13 @@ class ChangeApplicationTests(unittest.TestCase):
                             "operator": "any",
                             "children": [
                                 {
-                                    "filtername": "ip",
+                                    "filterName": "ip",
                                     "operator": "eq",
                                     "value": "10.1.16.0/24",
                                     "type": "clause",
                                 },
                                 {
-                                    "filtername": "ip",
+                                    "filterName": "ip",
                                     "operator": "eq",
                                     "value": "10.1.17.0/24",
                                     "type": "clause",
@@ -322,7 +322,7 @@ class ChangeApplicationTests(unittest.TestCase):
                             "type": "group",
                         },
                         {
-                            "filtername": "lastseen",
+                            "filterName": "lastseen",
                             "operator": "lt",
                             "value": "30",
                             "type": "clause",
@@ -367,7 +367,7 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(
                 rules["children"][1],
                 {
-                    "filtername": "lastseen",
+                    "filterName": "lastseen",
                     "operator": "lt",
                     "value": "30",
                     "type": "clause",
@@ -572,29 +572,30 @@ class ChangeApplicationTests(unittest.TestCase):
 
     def test_separate_vlan_assets_attach_to_the_same_workstation_scan(self):
         with tempfile.TemporaryDirectory() as directory:
+            rows = [
+                approved_row(
+                    **{
+                        "Proposed Asset Name": "NYC01 Workstation VLAN Group",
+                        "Proposed Scan Name": "NYC01 Workstation Assessment",
+                        "Proposed Policy Name": "Basic Assessment Policy",
+                        "VLAN Grouping Tag": "vlan-workstation",
+                    }
+                ),
+                approved_row(
+                    **{
+                        "CIDR": "10.1.17.0/24",
+                        "Proposed Asset Name": "NYC01 Wireless VLAN Group",
+                        "Proposed Scan Name": "NYC01 Workstation Assessment",
+                        "Proposed Policy Name": "Basic Assessment Policy",
+                        "VLAN Name": "vl17-it-services-sandbox",
+                        "VLAN Grouping Tag": "vlan-wireless",
+                    }
+                ),
+            ]
             plan = load_approved_plan(
                 write_plan(
                     Path(directory) / "plan.csv",
-                    [
-                        approved_row(
-                            **{
-                                "Proposed Asset Name": "NYC01 Workstation VLAN Group",
-                                "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Basic Assessment Policy",
-                                "VLAN Grouping Tag": "vlan-workstation",
-                            }
-                        ),
-                        approved_row(
-                            **{
-                                "CIDR": "10.1.17.0/24",
-                                "Proposed Asset Name": "NYC01 Wireless VLAN Group",
-                                "Proposed Scan Name": "NYC01 Workstation Assessment",
-                                "Proposed Policy Name": "Basic Assessment Policy",
-                                "VLAN Name": "vl17-it-services-sandbox",
-                                "VLAN Grouping Tag": "vlan-wireless",
-                            }
-                        ),
-                    ],
+                    rows,
                 )
             )
             data_access = FakeDataAccess()
@@ -606,6 +607,17 @@ class ChangeApplicationTests(unittest.TestCase):
             scan = next(iter(data_access.scans.values()))
             self.assertEqual(scan["name"], "NYC01 Workstation Assessment")
             self.assertEqual(scan["assets"], [{"id": 10}, {"id": 11}])
+            self.assertIn("Assessment scan for NYC01 VLAN groups.", scan["description"])
+            self.assertIn("- vlan-wireless", scan["description"])
+            self.assertIn("- vlan-workstation", scan["description"])
+
+            reverse_plan = load_approved_plan(
+                write_plan(Path(directory) / "reverse.csv", list(reversed(rows)))
+            )
+            reverse_access = FakeDataAccess()
+            ChangeApplier(reverse_access, repository_id=7).apply(reverse_plan)
+            reverse_scan = next(iter(reverse_access.scans.values()))
+            self.assertEqual(scan["description"], reverse_scan["description"])
 
     def test_missing_policy_fails_preflight_before_mutation(self):
         with tempfile.TemporaryDirectory() as directory:

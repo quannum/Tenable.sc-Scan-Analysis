@@ -249,7 +249,7 @@ class DataAccessTests(unittest.TestCase):
             "operator": "all",
             "children": [
                 {
-                    "filtername": "lastseen",
+                    "filterName": "lastseen",
                     "operator": "lt",
                     "value": "30",
                     "type": "clause",

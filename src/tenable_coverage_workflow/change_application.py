@@ -588,7 +588,7 @@ def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
                 "operator": "any",
                 "children": [
                     {
-                        "filtername": "ip",
+                        "filterName": "ip",
                         "operator": "eq",
                         "value": cidr,
                         "type": "clause",
@@ -598,7 +598,7 @@ def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
                 "type": "group",
             },
             {
-                "filtername": "lastseen",
+                "filterName": "lastseen",
                 "operator": "lt",
                 "value": "30",
                 "type": "clause",
@@ -734,21 +734,42 @@ def _build_scan_definitions(changes: list[ApprovedChange]) -> dict[str, ScanDefi
 
 def _build_scan_description(changes: list[ApprovedChange]) -> str:
     first = changes[0]
-    role = _grouping_role_label(first.grouping_tag)
     asset_names = sorted({change.asset_name for change in changes})
+    grouping_tags = sorted(
+        {change.grouping_tag for change in changes if change.grouping_tag}
+    )
+    if len(grouping_tags) == 1:
+        heading = (
+            f"Assessment scan for {first.site_code} "
+            f"{_grouping_role_label(grouping_tags[0])} VLANs."
+        )
+    else:
+        heading = f"Assessment scan for {first.site_code} VLAN groups."
     lines = [
-        f"Assessment scan for {first.site_code} {role} VLANs.",
+        heading,
         "",
         "Target assets:",
         *(f"- {name}" for name in asset_names),
-        "",
-        "Included VLANs:",
-        *(_vlan_description_line(change) for change in _sorted_vlans(changes)),
-        "",
-        "Asset membership is dynamically limited to hosts seen within the last "
-        "30 days.",
-        "Source of truth: subnet-as-code.",
     ]
+    if len(grouping_tags) > 1:
+        lines.extend(
+            (
+                "",
+                "Source grouping tags:",
+                *(f"- {tag}" for tag in grouping_tags),
+            )
+        )
+    lines.extend(
+        (
+            "",
+            "Included VLANs:",
+            *(_vlan_description_line(change) for change in _sorted_vlans(changes)),
+            "",
+            "Asset membership is dynamically limited to hosts seen within the last "
+            "30 days.",
+            "Source of truth: subnet-as-code.",
+        )
+    )
     return "\n".join(lines)
 
 
