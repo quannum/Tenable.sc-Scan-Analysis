@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from src.io.data_access import DataAccess, load_json_folder, normalize_resource_list
+from src.io.data_access import (
+    DataAccess,
+    load_json_folder,
+    normalize_resource_list,
+    normalize_usable_resource_list,
+)
 
 
 @dataclass
@@ -104,6 +109,17 @@ class DataAccessTests(unittest.TestCase):
                 }
             ),
             [{"id": 1, "name": "one"}, {"id": 2, "name": "two"}],
+        )
+
+    def test_usable_resource_normalization_excludes_manageable_records(self):
+        self.assertEqual(
+            normalize_usable_resource_list(
+                {
+                    "usable": [{"id": 1, "name": "usable"}],
+                    "manageable": [{"id": 2, "name": "manageable"}],
+                }
+            ),
+            [{"id": 1, "name": "usable"}],
         )
 
     def test_resource_payload_normalization_handles_nested_response_results(self):
@@ -225,6 +241,20 @@ class DataAccessTests(unittest.TestCase):
                 {"id": 3, "name": "Response Scan"},
             ],
         )
+
+    def test_live_mode_can_limit_scans_to_usable_records(self):
+        with patch.dict(
+            sys.modules,
+            fake_tenable_modules(),
+            clear=False,
+        ):
+            access = DataAccess(make_config())
+            access.sc.scans._list_payload = {
+                "usable": [{"id": 1, "name": "Usable Scan"}],
+                "manageable": [{"id": 2, "name": "Other Group Scan"}],
+            }
+
+        self.assertEqual(access.get_usable_scans(), [{"id": 1, "name": "Usable Scan"}])
 
     def test_live_mutation_methods_use_supported_pytenable_arguments(self):
         with patch.dict(

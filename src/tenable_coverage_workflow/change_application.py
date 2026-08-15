@@ -234,10 +234,19 @@ class ChangeApplier:
         self.data_access = data_access
         self.repository_id = int(repository_id)
         self.assets = self._unique_name_index(
-            data_access.get_asset_lists(), "asset group"
+            _apply_resource_list(
+                data_access, "get_usable_asset_lists", "get_asset_lists"
+            ),
+            "asset group",
         )
-        self.scans = self._unique_name_index(data_access.get_scans(), "scan")
-        self.policies = self._unique_name_index(data_access.get_policies(), "policy")
+        self.scans = self._unique_name_index(
+            _apply_resource_list(data_access, "get_usable_scans", "get_scans"),
+            "scan",
+        )
+        self.policies = self._unique_name_index(
+            _apply_resource_list(data_access, "get_usable_policies", "get_policies"),
+            "policy",
+        )
 
     def preflight(
         self,
@@ -850,6 +859,21 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
 
 def _text(value: Any) -> str:
     return "" if value is None else str(value).strip()
+
+
+def _apply_resource_list(
+    data_access: ChangeDataAccess,
+    usable_method_name: str,
+    fallback_method_name: str,
+) -> list[dict[str, Any]]:
+    """Only look at 'usable' lists of assets / scans / policies 
+    
+    when detecting duplicate names"""
+    usable_method = getattr(cast(Any, data_access), usable_method_name, None)
+    if callable(usable_method):
+        return cast(list[dict[str, Any]], usable_method())
+    fallback_method = getattr(data_access, fallback_method_name)
+    return cast(list[dict[str, Any]], fallback_method())
 
 
 def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path:

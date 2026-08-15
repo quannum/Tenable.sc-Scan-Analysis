@@ -177,8 +177,24 @@ class DataAccess:
             return list(self.offline_assets.values())
         return self._list_live_resource("asset_lists")
 
+    def get_usable_asset_lists(self) -> list[dict[str, Any]]:
+        """List asset groups that are 'usable'"""
+        if self.config.mode != "live":
+            return list(self.offline_assets.values())
+        return self._list_live_usable_resource("asset_lists")
+
     def get_policies(self) -> list[dict[str, Any]]:
         return self._list_live_resource("policies")
+
+    def get_usable_policies(self) -> list[dict[str, Any]]:
+        """List policies that are 'usable'"""
+        return self._list_live_usable_resource("policies")
+
+    def get_usable_scans(self) -> list[dict[str, Any]]:
+        """List scan definitions that are 'usable'"""
+        if self.config.mode != "live":
+            return list(self.offline_scans.values())
+        return self._list_live_usable_resource("scans")
 
     def get_credentials(self) -> list[dict[str, Any]]:
         return self._list_live_resource("credentials")
@@ -315,6 +331,22 @@ class DataAccess:
         )
         return normalize_resource_list(payload)
 
+    def _list_live_usable_resource(self, resource_name: str) -> list[dict[str, Any]]:
+        """List only usable scans/assets/policies in Tenable.sc"""
+        if self.config.mode != "live":
+            return []
+        endpoint = getattr(self.sc, resource_name, None)
+        list_method = getattr(endpoint, "list", None)
+        if not callable(list_method):
+            raise RuntimeError(
+                f"Installed pyTenable does not expose sc.{resource_name}.list"
+            )
+        payload = self._call_live(
+            list_method,
+            operation_name=f"{resource_name}.list",
+        )
+        return normalize_usable_resource_list(payload)
+
     def _call_live(self, call_fn: Callable[[], Any], operation_name: str) -> Any:
         """Call Tenable.sc and retry temporary failures"""
         attempts = getattr(self, "live_call_max_retries", self.LIVE_CALL_MAX_RETRIES)
@@ -380,6 +412,22 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
         seen.add(identity)
         records.append(item)
     return records
+
+
+def normalize_usable_resource_list(payload: Any) -> list[dict[str, Any]]:
+    """Normalize only the usable list when an access-level wrapper is present."""
+    usable_payload = _usable_payload(payload)
+    return normalize_resource_list(
+        payload if usable_payload is None else usable_payload
+    )
+
+
+def _usable_payload(payload: Any) -> Any | None:
+    if not isinstance(payload, dict):
+        return None
+    if "usable" in payload:
+        return payload["usable"]
+    return _usable_payload(payload.get("response"))
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:

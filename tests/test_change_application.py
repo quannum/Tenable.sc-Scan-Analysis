@@ -161,6 +161,34 @@ class FakeDataAccess:
 
 
 class ChangeApplicationTests(unittest.TestCase):
+    def test_apply_prefers_usable_resources_when_available(self):
+        class UsableOnlyDataAccess(FakeDataAccess):
+            def get_asset_lists(self):
+                raise AssertionError("apply should use usable asset groups")
+
+            def get_scans(self):
+                raise AssertionError("apply should use usable scans")
+
+            def get_policies(self):
+                raise AssertionError("apply should use usable policies")
+
+            def get_usable_asset_lists(self):
+                return super().get_asset_lists()
+
+            def get_usable_scans(self):
+                return super().get_scans()
+
+            def get_usable_policies(self):
+                return super().get_policies()
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            result = ChangeApplier(UsableOnlyDataAccess(), repository_id=7).apply(plan)
+
+        self.assertEqual(result["status_counts"], {"APPLIED": 1})
+
     def test_approved_plan_requires_reviewer(self):
         with tempfile.TemporaryDirectory() as directory:
             path = write_plan(
