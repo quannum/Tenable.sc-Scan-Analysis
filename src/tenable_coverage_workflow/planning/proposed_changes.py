@@ -163,11 +163,11 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
         configured = str(getattr(result, "configured_asset_type", "") or "")
         return (
             f"Asset '{result.required_asset_name}' is {configured}, but this "
-            f"target requires a {desired} asset. Manual migration is required."
+            f"target requires a {desired} asset. Manual migration is required"
         )
     if proposed_action == "REVIEW_ASSESSMENT_MAPPING":
         vlan_role = result.scan_classification.get("vlan_role") or result.vlan_name
-        return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'."
+        return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'"
 
     if proposed_action == "REVIEW_WRONG_SCAN":
         covering_scans = ", ".join(sorted(result.covering_scans)) or "none"
@@ -180,14 +180,14 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
         return result.reason
 
     if result.status == "OK":
-        return "Coverage target is fully covered."
+        return "Coverage target is fully covered"
     if result.status == "EXCLUDED":
-        return "Coverage is impacted by exclusions."
+        return "Coverage is impacted by exclusions"
     if result.status == "PARTIAL":
-        return "Coverage target is only partially covered."
+        return "Coverage target is only partially covered"
     if result.status == "GAP":
-        return "Coverage target is not covered by any scan scope."
-    return "Coverage target requires review."
+        return "Coverage target is not covered by any scan scope"
+    return "Coverage target requires review"
 
 
 def _build_getter(row: Any):

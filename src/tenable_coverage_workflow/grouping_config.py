@@ -11,7 +11,7 @@ def build_grouping_config(
 ) -> GroupingConfig:
     mode = str(mode_value or "default").strip() or "default"
     if mode not in {"default", "vlan_tag"}:
-        raise ValueError("grouping_mode must be 'default' or 'vlan_tag'.")
+        raise ValueError("grouping_mode must be 'default' or 'vlan_tag'")
 
     prefix = str(prefix_value or "vlan-").strip() or "vlan-"
     grouping_config = GroupingConfig(
@@ -27,7 +27,7 @@ def build_grouping_config(
         invalid = ", ".join(invalid_buckets)
         raise ValueError(
             "grouping_tag_map values must be scan buckets: "
-            f"{allowed}. Invalid: {invalid}."
+            f"{allowed}. Invalid: {invalid}"
         )
 
     return grouping_config

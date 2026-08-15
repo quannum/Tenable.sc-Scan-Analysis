@@ -234,13 +234,13 @@ class DataAccess:
         rules: dict[str, Any],
         description: str,
     ) -> dict[str, Any]:
-        """Create a dynamic asset list from its saved rule definition."""
+        """Create a dynamic asset from its saved rule definition"""
         self._require_live_mutation()
         return self._call_live(
             lambda: self.sc.asset_lists.create(
                 name,
                 "dynamic",
-                rules=rules,
+                rules=_dynamic_rules_as_tuple(rules),
                 description=description,
             ),
             operation_name=f"asset_lists.create({name})",
@@ -252,9 +252,9 @@ class DataAccess:
         rules: dict[str, Any],
         description: str | None = None,
     ) -> dict[str, Any]:
-        """Update the rules and optional description of a dynamic asset list."""
+        """Update the dynamic asset rules and optional description"""
         self._require_live_mutation()
-        kwargs: dict[str, Any] = {"rules": rules}
+        kwargs: dict[str, Any] = {"rules": _dynamic_rules_as_tuple(rules)}
         if description is not None:
             kwargs["description"] = description
         return self._call_live(
@@ -428,6 +428,35 @@ def _usable_payload(payload: Any) -> Any | None:
     if "usable" in payload:
         return payload["usable"]
     return _usable_payload(payload.get("response"))
+
+
+def _dynamic_rules_as_tuple(rules: dict[str, Any]) -> tuple[Any, ...]:
+    """Turn saved dynamic rules into pyTenable's tuple input"""
+    operator = str(rules.get("operator") or "").lower()
+    children = rules.get("children")
+    if operator not in {"all", "any"} or not isinstance(children, list):
+        raise ValueError("Dynamic rules must start with an 'all' or 'any' group.")
+    return (operator, *(_dynamic_rule_as_tuple(child) for child in children))
+
+
+def _dynamic_rule_as_tuple(rule: Any) -> tuple[Any, ...]:
+    if not isinstance(rule, dict):
+        raise ValueError("Dynamic rule entries must be objects")
+    children = rule.get("children")
+    if isinstance(children, list):
+        operator = str(rule.get("operator") or "").lower()
+        if operator not in {"all", "any"}:
+            raise ValueError("Dynamic rule groups must use 'all' or 'any'.")
+        return (operator, *(_dynamic_rule_as_tuple(child) for child in children))
+
+    filter_name = str(rule.get("filterName") or rule.get("filtername") or "").strip()
+    operator = str(rule.get("operator") or "").lower()
+    value = rule.get("value")
+    if not filter_name or not operator or value in (None, ""):
+        raise ValueError(
+            "Dynamic rule clauses require filter name, operator, and value"
+        )
+    return (filter_name, operator, str(value))
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:

@@ -290,7 +290,7 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(
                 data_access.assets[8]["description"],
                 "Static authoritative private supernet for NYC01.\n\n"
-                "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code.",
+                "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code",
             )
 
     def test_grouped_vlan_asset_description_lists_each_vlan(self):
@@ -368,7 +368,7 @@ class ChangeApplicationTests(unittest.TestCase):
                 "Source grouping tag: vlan-workstation\n"
                 "Membership criteria: IP address within the listed VLAN ranges "
                 "AND Last Seen < 30 days.\n"
-                "Source of truth: subnet-as-code.",
+                "Source of truth: subnet-as-code",
             )
             scan = next(iter(data_access.scans.values()))
             self.assertEqual(scan["assets"], [{"id": asset["id"]}])
@@ -590,12 +590,12 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(
                 descriptions["NYC01 Public"],
                 "Static authoritative public range for NYC01.\n\n"
-                "Ranges:\n- 203.0.113.0/24\n\nSource of truth: subnet-as-code.",
+                "Ranges:\n- 203.0.113.0/24\n\nSource of truth: subnet-as-code",
             )
             self.assertEqual(
                 descriptions["NYC01 Private Discovery"],
                 "Static authoritative private supernet for NYC01.\n\n"
-                "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code.",
+                "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code",
             )
 
     def test_separate_vlan_assets_attach_to_the_same_workstation_scan(self):
@@ -635,7 +635,7 @@ class ChangeApplicationTests(unittest.TestCase):
             scan = next(iter(data_access.scans.values()))
             self.assertEqual(scan["name"], "NYC01 Workstation Assessment")
             self.assertEqual(scan["assets"], [{"id": 10}, {"id": 11}])
-            self.assertIn("Assessment scan for NYC01 VLAN groups.", scan["description"])
+            self.assertIn("Assessment scan for NYC01 VLAN groups", scan["description"])
             self.assertIn("- vlan-wireless", scan["description"])
             self.assertIn("- vlan-workstation", scan["description"])
 

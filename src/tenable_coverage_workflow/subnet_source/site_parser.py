@@ -22,7 +22,7 @@ def get_site_objects(payload: Any) -> list[dict[str, Any]] | None:
 def parse_site_object(
     raw: dict[str, Any], source_file: str
 ) -> tuple[SiteNetworkDefinition | None, list[ValidationIssue]]:
-    """Parse one strict subnet-as-code site object."""
+    """Parse one strict subnet-as-code site object"""
     issues: list[ValidationIssue] = []
     site_code = _required_text(raw, "site_code", source_file, None, issues)
     site_name = _required_text(raw, "site_name", source_file, site_code, issues)
@@ -263,7 +263,7 @@ def _parse_network(
     field_name: str,
     issues: list[ValidationIssue],
 ) -> str | None:
-    """Build an IPv4 CIDR from strict network and cidr fields."""
+    """Build an IPv4 CIDR from strict network and cidr fields"""
     if not isinstance(value, dict):
         _issue(issues, source_file, site_code, field_name, "must be an object")
         return None
@@ -309,7 +309,7 @@ def _parse_vlan_number(
     try:
         return int(value)
     except (TypeError, ValueError):
-        _issue(issues, source_file, site_code, field_name, "must be a number.")
+        _issue(issues, source_file, site_code, field_name, "must be a number")
         return None
 
 
@@ -329,7 +329,7 @@ def _parse_ip_addresses(
     ):
         item_field = f"{field_name}[{index}]"
         if not isinstance(raw_address, dict):
-            _issue(issues, source_file, site_code, item_field, "must be an object.")
+            _issue(issues, source_file, site_code, item_field, "must be an object")
             continue
         address = _required_text(
             raw_address, "ip", source_file, site_code, issues, item_field
@@ -392,7 +392,7 @@ def _contained_subnets(
             source_file,
             site_code,
             field_name,
-            f"VLAN CIDR {subnet.cidr} is outside parent range {parent_cidr}.",
+            f"VLAN CIDR {subnet.cidr} is outside parent range {parent_cidr}",
         )
     return contained
 
@@ -413,7 +413,7 @@ def _validate_subnet_mask(
             source_file,
             site_code,
             field_name,
-            f"does not match CIDR {cidr}.",
+            f"does not match CIDR {cidr}",
         )
 
 

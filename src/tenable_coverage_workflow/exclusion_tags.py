@@ -1,4 +1,4 @@
-"""Helper for ranges with exclude tags."""
+"""Helper for ranges with exclude tags"""
 
 from collections.abc import Iterable
 

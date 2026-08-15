@@ -56,7 +56,7 @@ class ConfigurationDataAccess(Protocol):
         ...
 
     def get_asset(self, asset_id: Any) -> dict[str, Any]:
-        """Read one asset group."""
+        """Read one asset group"""
         ...
 
     def get_scan_details(self, scan_id: Any) -> dict[str, Any]:
@@ -95,7 +95,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Load subnet_as_code scope definitions, validate Tenable.sc "
-            "coverage, and generate detect-and-plan audit outputs."
+            "coverage, and generate detect-and-plan audit outputs"
         )
     )
     add_authoritative_source_arguments(parser)
@@ -128,7 +128,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument(
         "--grouping-tag-map",
-        help="JSON object or comma-separated key=value mappings for vlan tag groups.",
+        help="JSON object or comma-separated key=value mappings for vlan tag groups",
     )
     parser.add_argument(
         "--no-sc-ssl-verify",
@@ -140,21 +140,21 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--sc-url",
         help=(
             "Optional Tenable.sc URL override for live mode. Defaults to "
-            "TCW_SC_URL or SC_URL."
+            "TCW_SC_URL or SC_URL"
         ),
     )
     parser.add_argument(
         "--sc-access-key",
         help=(
             "Optional Tenable.sc access key override for live mode. "
-            "Defaults to TCW_SC_ACCESS_KEY or SC_ACCESS_KEY."
+            "Defaults to TCW_SC_ACCESS_KEY or SC_ACCESS_KEY"
         ),
     )
     parser.add_argument(
         "--sc-secret-key",
         help=(
             "Optional Tenable.sc secret key override for live mode. "
-            "Defaults to TCW_SC_SECRET_KEY or SC_SECRET_KEY."
+            "Defaults to TCW_SC_SECRET_KEY or SC_SECRET_KEY"
         ),
     )
     return parser
@@ -676,7 +676,7 @@ def _build_tag_excluded_result(
         vlan_name=target.vlan_name,
         vlan_tag=target.vlan_tag,
         covering_scans=[],
-        reason=f"Excluded by authoritative source tag '{exclusion_tag}'.",
+        reason=f"Excluded by authoritative source tag '{exclusion_tag}'",
         source_file=target.source_file,
         required_asset_name=None,
         required_scan_name=None,

@@ -66,7 +66,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Scheduler-friendly wrapper for the Tenable coverage detect-and-plan "
-            "workflow."
+            "workflow"
         )
     )
     parser.add_argument("--config-file")
@@ -238,12 +238,12 @@ def load_config_file(config_file_path: Path) -> dict[str, Any]:
     return load_config_section(
         config_file_path,
         section_name="tenable_coverage_workflow_service",
-        root_error="Config file root must be an object/dictionary.",
+        root_error="Config file root must be an object/dictionary",
         section_error=(
             "Config 'tenable_coverage_workflow_service' section must be an "
-            "object/dictionary."
+            "object/dictionary"
         ),
-        unsupported_error="Unsupported config file type. Use .yaml, .json, or .toml.",
+        unsupported_error="Unsupported config file type. Use .yaml, .json, or .toml",
     )
 
 

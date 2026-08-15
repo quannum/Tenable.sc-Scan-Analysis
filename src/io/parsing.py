@@ -31,7 +31,7 @@ def parse_string_mapping(value: Any) -> dict[str, str]:
 
         parsed = json.loads(text)
         if not isinstance(parsed, dict):
-            raise ValueError("Mapping JSON must decode to an object.")
+            raise ValueError("Mapping JSON must decode to an object")
         return {
             str(key).strip(): str(item).strip()
             for key, item in parsed.items()

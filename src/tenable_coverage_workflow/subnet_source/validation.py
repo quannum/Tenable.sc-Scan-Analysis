@@ -17,7 +17,7 @@ def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
                     severity="WARNING",
                     message=(
                         f"Public range {target.cidr} is classified as non-public "
-                        "by Python ipaddress. Verify the source classification."
+                        "by Python ipaddress. Verify the source classification"
                     ),
                 )
             )
@@ -32,7 +32,7 @@ def add_relationship_issues(result: SourceLoadResult) -> SourceLoadResult:
                     severity="WARNING",
                     message=(
                         f"Private/VLAN range {target.cidr} is not classified as "
-                        "private by Python ipaddress. Verify the source classification."
+                        "private by Python ipaddress. Verify the source classification"
                     ),
                 )
             )
@@ -93,7 +93,7 @@ def _relationship_issue(
         message=(
             f"{label}: {left.site_code}/{left.target_type} {left.cidr} and "
             f"{right.site_code}/{right.target_type} {right.cidr} "
-            f"({right.source_file or 'authoritative-source'})."
+            f"({right.source_file or 'authoritative-source'})"
         ),
     )
 

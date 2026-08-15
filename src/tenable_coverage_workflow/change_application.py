@@ -159,13 +159,13 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
             approval = _text(row.get("Approval Status")).upper()
             if approval not in {"PENDING", "APPROVED", "REJECTED", "SKIPPED"}:
                 raise ValueError(
-                    f"Row {row_number} has invalid Approval Status '{approval}'."
+                    f"Row {row_number} has invalid Approval Status '{approval}'"
                 )
             if approval != "APPROVED":
                 continue
             reviewer = _text(row.get("Reviewer"))
             if not reviewer:
-                raise ValueError(f"Row {row_number} is APPROVED but has no Reviewer.")
+                raise ValueError(f"Row {row_number} is APPROVED but has no Reviewer")
             run_id = _required_text(row, "Run ID", row_number)
             change = ApprovedChange(
                 run_id=run_id,
@@ -198,7 +198,7 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                 raise ValueError(
                     f"Row {row_number} has Desired Asset Type "
                     f"'{desired_asset_type}', but {change.target_type} requires "
-                    f"'{expected_asset_type}'."
+                    f"'{expected_asset_type}'"
                 )
             change = ApprovedChange(
                 **{**asdict(change), "desired_asset_type": desired_asset_type}
@@ -206,16 +206,16 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
             identity = (change.asset_name, change.scan_name, change.cidr)
             if identity in identities:
                 raise ValueError(
-                    f"Row {row_number} duplicates an approved asset/scan/CIDR change."
+                    f"Row {row_number} duplicates an approved asset/scan/CIDR change"
                 )
             identities.add(identity)
             run_ids.add(run_id)
             approved.append(change)
 
     if not approved:
-        raise ValueError("Plan contains no APPROVED changes.")
+        raise ValueError("Plan contains no APPROVED changes")
     if len(run_ids) != 1:
-        raise ValueError("All APPROVED rows must have the same Run ID.")
+        raise ValueError("All APPROVED rows must have the same Run ID")
     return ApprovedPlan(
         path=str(path),
         sha256=fingerprint,
@@ -301,7 +301,7 @@ class ChangeApplier:
                         asset_id=None,
                         scan_id=None,
                         message=(
-                            "Action requires manual review and is not auto-applied."
+                            "Action requires manual review and is not auto-applied"
                         ),
                     )
                 )
@@ -368,7 +368,7 @@ class ChangeApplier:
             scan_status=scan_status,
             asset_id=asset_id,
             scan_id=scan_id,
-            message="Post-change verification passed.",
+            message="Post-change verification passed",
         )
 
     def _confirm_asset(self, definition: AssetDefinition) -> tuple[dict[str, Any], str]:
@@ -405,7 +405,7 @@ class ChangeApplier:
         if current_type and current_type != definition.asset_type:
             raise RuntimeError(
                 f"Asset '{definition.name}' is {current_type}, but requires "
-                f"{definition.asset_type}. Manual change is required."
+                f"{definition.asset_type}. Manual change is required"
             )
 
         if definition.asset_type == "static":
@@ -675,7 +675,7 @@ def _build_asset_definitions(
     for name, members in grouped.items():
         asset_types = {change.desired_asset_type for change in members}
         if len(asset_types) != 1:
-            raise ValueError(f"Asset '{name}' has conflicting asset types.")
+            raise ValueError(f"Asset '{name}' has conflicting asset types")
         definitions[name] = AssetDefinition(
             name=name,
             asset_type=next(iter(asset_types)),
@@ -690,7 +690,7 @@ def _build_asset_description(changes: list[ApprovedChange]) -> str:
     if first.desired_asset_type == "dynamic":
         role = _grouping_role_label(first.grouping_tag)
         lines = [
-            f"Dynamic VLAN asset for {first.site_code} {role} networks.",
+            f"Dynamic VLAN asset for {first.site_code} {role} networks",
             "",
             "VLANs:",
         ]
@@ -702,22 +702,22 @@ def _build_asset_description(changes: list[ApprovedChange]) -> str:
                 "",
                 f"Source grouping tag: {first.grouping_tag or 'N/A'}",
                 "Membership criteria: IP address within the listed VLAN ranges "
-                "AND Last Seen < 30 days.",
-                "Source of truth: subnet-as-code.",
+                "AND Last Seen < 30 days",
+                "Source of truth: subnet-as-code",
             )
         )
         return "\n".join(lines)
 
     scope_kind = "public range" if first.target_type == "PUBLIC" else "private supernet"
     lines = [
-        f"Static authoritative {scope_kind} for {first.site_code}.",
+        f"Static authoritative {scope_kind} for {first.site_code}",
         "",
         "Ranges:",
     ]
     lines.extend(
         f"- {change.cidr}" for change in sorted(changes, key=lambda item: item.cidr)
     )
-    lines.extend(("", "Source of truth: subnet-as-code."))
+    lines.extend(("", "Source of truth: subnet-as-code"))
     return "\n".join(lines)
 
 
@@ -750,10 +750,10 @@ def _build_scan_description(changes: list[ApprovedChange]) -> str:
     if len(grouping_tags) == 1:
         heading = (
             f"Assessment scan for {first.site_code} "
-            f"{_grouping_role_label(grouping_tags[0])} VLANs."
+            f"{_grouping_role_label(grouping_tags[0])} VLANs"
         )
     else:
-        heading = f"Assessment scan for {first.site_code} VLAN groups."
+        heading = f"Assessment scan for {first.site_code} VLAN groups"
     lines = [
         heading,
         "",
@@ -775,8 +775,8 @@ def _build_scan_description(changes: list[ApprovedChange]) -> str:
             *(_vlan_description_line(change) for change in _sorted_vlans(changes)),
             "",
             "Asset membership is dynamically limited to hosts seen within the last "
-            "30 days.",
-            "Source of truth: subnet-as-code.",
+            "30 days",
+            "Source of truth: subnet-as-code",
         )
     )
     return "\n".join(lines)
@@ -853,7 +853,7 @@ def _required_text(row: dict[str, Any], column: str, row_number: int) -> str:
     """Read a required text value from a CSV row"""
     value = _text(row.get(column))
     if not value:
-        raise ValueError(f"Row {row_number} has no {column}.")
+        raise ValueError(f"Row {row_number} has no {column}")
     return value
 
 
@@ -866,8 +866,8 @@ def _apply_resource_list(
     usable_method_name: str,
     fallback_method_name: str,
 ) -> list[dict[str, Any]]:
-    """Only look at 'usable' lists of assets / scans / policies 
-    
+    """Only look at 'usable' lists of assets / scans / policies
+
     when detecting duplicate names"""
     usable_method = getattr(cast(Any, data_access), usable_method_name, None)
     if callable(usable_method):

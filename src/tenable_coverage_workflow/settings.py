@@ -178,7 +178,7 @@ def parse_positive_int(value: Any, field_name: str) -> int:
 
     if parsed <= 0:
         raise ValueError(
-            f"Invalid integer value for '{field_name}': {value}. Must be > 0."
+            f"Invalid integer value for '{field_name}': {value}. Must be > 0"
         )
     return parsed
 
@@ -191,6 +191,6 @@ def parse_nonnegative_float(value: Any, field_name: str) -> float:
 
     if parsed < 0:
         raise ValueError(
-            f"Invalid numeric value for '{field_name}': {value}. Must be >= 0."
+            f"Invalid numeric value for '{field_name}': {value}. Must be >= 0"
         )
     return parsed

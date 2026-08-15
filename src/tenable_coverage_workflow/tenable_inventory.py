@@ -23,7 +23,7 @@ class InventoryDataAccessConfig(Protocol):
 
     @property
     def mode(self) -> str:
-        """Return the data access mode."""
+        """Return the data access mode"""
         ...
 
 

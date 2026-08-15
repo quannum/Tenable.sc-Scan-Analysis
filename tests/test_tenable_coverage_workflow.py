@@ -863,7 +863,7 @@ class DetectAndPlanCliTests(unittest.TestCase):
             with (
                 patch("sys.stdout", new=stdout),
                 patch(
-                    "src.tenable_coverage_workflow.subnet_source.source_loader."
+                    "src.tenable_coverage_workflow.subnet_source.source_loader"
                     "importlib.import_module",
                     return_value=self._subnet_module(),
                 ),

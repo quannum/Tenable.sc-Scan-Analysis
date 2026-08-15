@@ -89,7 +89,7 @@ class CoverageReportingTests(unittest.TestCase):
             vlan_name="Restricted",
             vlan_tag=25,
             covering_scans=[],
-            reason="Excluded by authoritative source tag 'exclude'.",
+            reason="Excluded by authoritative source tag 'exclude'",
             source_file="lab.json",
             required_asset_name=None,
             required_scan_name=None,

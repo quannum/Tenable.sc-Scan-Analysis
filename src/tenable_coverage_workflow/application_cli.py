@@ -51,13 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     validate = commands.add_parser(
-        "validate-definitions", help="Validate and normalize authoritative scope."
+        "validate-definitions", help="Validate and normalize authoritative scope"
     )
     _add_source_arguments(validate)
     validate.add_argument("--output-file")
 
     collect = commands.add_parser(
-        "collect-tenable", help="Collect a Tenable.sc inventory snapshot."
+        "collect-tenable", help="Collect a Tenable.sc inventory snapshot"
     )
     _add_tenable_arguments(collect)
     collect.add_argument("--output-file")
@@ -66,9 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
     for name, help_text in (
         (
             "analyze-coverage",
-            "Analyze the subnet-as-code definitions against Tenable.sc scans.",
+            "Analyze the subnet-as-code definitions against Tenable.sc scans",
         ),
-        ("propose-changes", "Generate dry-run, proposed changes for review."),
+        ("propose-changes", "Generate dry-run, proposed changes for review"),
     ):
         command = commands.add_parser(name, help=help_text)
         _add_source_arguments(command)
@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--run-id")
 
     apply_command = commands.add_parser(
-        "apply-changes", help="Apply an explicitly approved change plan."
+        "apply-changes", help="Apply an explicitly approved change plan"
     )
     _add_tenable_arguments(apply_command)
     apply_command.add_argument("--plan-file")
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     apply_command.add_argument("--apply", action="store_true", default=None)
 
     export = commands.add_parser(
-        "export-report", help="Export a portable report bundle from a completed run."
+        "export-report", help="Export a portable report bundle from a completed run"
     )
     export.add_argument("--run-dir")
     export.add_argument("--output-dir")
@@ -183,7 +183,7 @@ def _validate_definitions(args) -> int:
     print(
         f"Validated {len(result.site_definitions)} site(s), "
         f"{len(result.coverage_targets)} target(s), "
-        f"{len(result.validation_issues)} issue(s)."
+        f"{len(result.validation_issues)} issue(s)"
     )
     has_errors = any(issue.severity == "ERROR" for issue in result.validation_issues)
     return EXIT_VALIDATION if has_errors else EXIT_OK
@@ -203,7 +203,7 @@ def _collect_tenable(args) -> int:
     output_file = _setting(args, "output_file")
     if not output_file:
         raise ValueError(
-            "collect-tenable requires --output-file or config output_file."
+            "collect-tenable requires --output-file or config output_file"
         )
     output = write_inventory_snapshot(snapshot, output_file)
     reports = write_inventory_reports(snapshot, output)
@@ -263,17 +263,17 @@ def _analyze_or_propose(args) -> int:
 
 def _apply_changes(args) -> int:
     if args.apply is not True:
-        print("Refusing mutation: apply-changes requires the explicit --apply flag.")
+        print("Refusing mutation: apply-changes requires the explicit --apply flag")
         return EXIT_APPLY_REQUIRED
     plan_file = _setting(args, "plan_file")
     if not plan_file:
-        raise ValueError("apply-changes requires --plan-file or config plan_file.")
+        raise ValueError("apply-changes requires --plan-file or config plan_file")
     plan = Path(plan_file)
     if not plan.is_file():
         raise ValueError(f"Plan file does not exist: {plan}")
     repository_id = _setting(args, "repository_id")
     if repository_id is None:
-        raise ValueError("apply-changes requires --repository-id or config value.")
+        raise ValueError("apply-changes requires --repository-id or config value")
     approved_plan = load_approved_plan(plan)
     data_access = DataAccess(_tenable_config(args))
     result = ChangeApplier(data_access, int(repository_id)).apply(approved_plan)
@@ -289,7 +289,7 @@ def _apply_changes(args) -> int:
         f"Apply results written to {output} and {markdown_output}; "
         f"{result['status_counts'].get('APPLIED', 0)} applied, "
         f"{result['status_counts'].get('UNCHANGED', 0)} unchanged, "
-        f"{failed} failed."
+        f"{failed} failed"
     )
     return EXIT_OPERATION if failed else EXIT_OK
 
@@ -299,7 +299,7 @@ def _export_report(args) -> int:
     run_dir_value = _setting(args, "run_dir")
     output_dir_value = _setting(args, "output_dir")
     if not run_dir_value or not output_dir_value:
-        raise ValueError("export-report requires run_dir and output_dir.")
+        raise ValueError("export-report requires run_dir and output_dir")
     run_dir = Path(run_dir_value)
     if not run_dir.is_dir():
         raise ValueError(f"Run directory does not exist: {run_dir}")
@@ -343,9 +343,9 @@ def _load_cli_config(path_value: str | None) -> dict[str, Any]:
     return load_config_section(
         Path(path_value),
         section_name="tenable_sc_scan_analysis",
-        root_error="Config file root must be an object/mapping.",
-        section_error="tenable_sc_scan_analysis config must be a mapping.",
-        unsupported_error="Config file must use .yaml, .yml, .json, or .toml.",
+        root_error="Config file root must be an object/mapping",
+        section_error="tenable_sc_scan_analysis config must be a mapping",
+        unsupported_error="Config file must use .yaml, .yml, .json, or .toml",
     )
 
 
