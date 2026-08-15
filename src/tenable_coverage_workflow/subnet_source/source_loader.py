@@ -25,7 +25,7 @@ def load_authoritative_source(
     except ImportError as exc:
         raise RuntimeError(
             "rsg_subnet_as_code module is not installed or importable in this "
-            "environment."
+            "environment"
         ) from exc
 
     try:

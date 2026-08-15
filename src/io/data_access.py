@@ -415,7 +415,7 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def normalize_usable_resource_list(payload: Any) -> list[dict[str, Any]]:
-    """Normalize only the usable list when an access-level wrapper is present."""
+    """Normalize only the usable list when an access-level wrapper is present"""
     usable_payload = _usable_payload(payload)
     return normalize_resource_list(
         payload if usable_payload is None else usable_payload
@@ -431,11 +431,11 @@ def _usable_payload(payload: Any) -> Any | None:
 
 
 def _dynamic_rules_as_tuple(rules: dict[str, Any]) -> tuple[Any, ...]:
-    """Turn saved dynamic rules into pyTenable's tuple input"""
+    """Turn dynamic rules into filter, operator, value tuple"""
     operator = str(rules.get("operator") or "").lower()
     children = rules.get("children")
     if operator not in {"all", "any"} or not isinstance(children, list):
-        raise ValueError("Dynamic rules must start with an 'all' or 'any' group.")
+        raise ValueError("Dynamic rules must start with an 'all' or 'any' group")
     return (operator, *(_dynamic_rule_as_tuple(child) for child in children))
 
 
@@ -446,7 +446,7 @@ def _dynamic_rule_as_tuple(rule: Any) -> tuple[Any, ...]:
     if isinstance(children, list):
         operator = str(rule.get("operator") or "").lower()
         if operator not in {"all", "any"}:
-            raise ValueError("Dynamic rule groups must use 'all' or 'any'.")
+            raise ValueError("Dynamic rule groups must use 'all' or 'any'")
         return (operator, *(_dynamic_rule_as_tuple(child) for child in children))
 
     filter_name = str(rule.get("filterName") or rule.get("filtername") or "").strip()
@@ -475,6 +475,9 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
         yield payload
         return
 
+    # 'usable' list is what the running account can...use, obviously
+    # 'manageable' list is what running account can see from api
+    # output but cannot use
     for key in (
         "usable",
         "manageable",

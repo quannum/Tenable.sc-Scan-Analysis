@@ -202,9 +202,7 @@ def _collect_tenable(args) -> int:
     snapshot = collect_tenable_inventory(DataAccess(_tenable_config(args)))
     output_file = _setting(args, "output_file")
     if not output_file:
-        raise ValueError(
-            "collect-tenable requires --output-file or config output_file"
-        )
+        raise ValueError("collect-tenable requires --output-file or config output_file")
     output = write_inventory_snapshot(snapshot, output_file)
     reports = write_inventory_reports(snapshot, output)
     print(

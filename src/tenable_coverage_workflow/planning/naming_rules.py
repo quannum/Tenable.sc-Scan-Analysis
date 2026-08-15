@@ -152,7 +152,7 @@ def _assessment_bucket_for_grouping_tag(
     grouping_tag: str,
     grouping_config: GroupingConfig,
 ) -> str | None:
-    """Return the direct scan bucket assigned to a VLAN grouping tag."""
+    """Return the direct scan bucket assigned to a VLAN grouping tag"""
     normalized_tag = str(grouping_tag).strip().lower()
     configured_bucket = grouping_config.tag_map.get(normalized_tag)
     if configured_bucket is not None:
@@ -198,7 +198,7 @@ def has_explicit_assessment_mapping(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> bool:
-    """Return whether a VLAN role has a defined scan and policy mapping."""
+    """Return whether a VLAN role has a defined scan and policy mapping"""
     if target.target_type != "VLAN":
         return True
 
@@ -213,7 +213,7 @@ def vlan_role_name(
     target: CoverageTarget,
     grouping_config: GroupingConfig | None = None,
 ) -> str:
-    """Return the readable role supplied by the VLAN name or grouping tag."""
+    """Return the readable role supplied by the VLAN name or grouping tag"""
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
     if grouping_tag:
