@@ -241,6 +241,10 @@ class ChangeApplicationTests(unittest.TestCase):
             operation = result["operations"][0]
             self.assertEqual(operation["status"], "FAILED")
             self.assertIn("policy mismatch", operation["message"])
+            self.assertEqual(operation["asset_status"], "CREATED")
+            self.assertEqual(operation["scan_status"], "CREATED")
+            self.assertEqual(operation["asset_id"], 10)
+            self.assertEqual(operation["scan_id"], 20)
 
     def test_dynamic_asset_verification_normalizes_security_center_rule_shape(self):
         class NormalizedRulesDataAccess(FakeDataAccess):
@@ -249,9 +253,7 @@ class ChangeApplicationTests(unittest.TestCase):
                 if asset.get("type") != "dynamic":
                     return asset
                 rules = json.loads(json.dumps(asset["typeFields"]["rules"]))
-                rules["children"][0]["children"][0]["value"] = (
-                    "10.1.16.0-10.1.16.255"
-                )
+                rules["children"][0]["children"][0]["value"] = "10.1.16.0-10.1.16.255"
                 rules["children"][0]["children"][0]["pluginIDConstraint"] = "-1"
                 return {**asset, "typeFields": json.dumps({"rules": rules})}
 
@@ -259,9 +261,9 @@ class ChangeApplicationTests(unittest.TestCase):
             plan = load_approved_plan(
                 write_plan(Path(directory) / "plan.csv", [approved_row()])
             )
-            result = ChangeApplier(
-                NormalizedRulesDataAccess(), repository_id=7
-            ).apply(plan)
+            result = ChangeApplier(NormalizedRulesDataAccess(), repository_id=7).apply(
+                plan
+            )
 
         self.assertEqual(result["status_counts"], {"APPLIED": 1})
 
@@ -272,9 +274,7 @@ class ChangeApplicationTests(unittest.TestCase):
                 if asset.get("type") != "dynamic":
                     return asset
                 rules = json.loads(json.dumps(asset["typeFields"]["rules"]))
-                rules["children"][0]["children"][0]["value"] = (
-                    "10.1.16.0-10.1.16.255"
-                )
+                rules["children"][0]["children"][0]["value"] = "10.1.16.0-10.1.16.255"
                 rules["children"][0]["children"][0]["pluginIDConstraint"] = "-1"
                 return {**asset, "typeFields": {"rules": rules}}
 
@@ -306,9 +306,9 @@ class ChangeApplicationTests(unittest.TestCase):
             plan = load_approved_plan(
                 write_plan(Path(directory) / "plan.csv", [approved_row()])
             )
-            result = ChangeApplier(
-                SerializedRulesDataAccess(), repository_id=7
-            ).apply(plan)
+            result = ChangeApplier(SerializedRulesDataAccess(), repository_id=7).apply(
+                plan
+            )
 
         self.assertEqual(result["status_counts"], {"APPLIED": 1})
 
@@ -325,9 +325,7 @@ class ChangeApplicationTests(unittest.TestCase):
     def test_dynamic_rules_match_rejects_different_ip_range(self):
         expected = build_dynamic_asset_rules(("10.1.16.0/24",))
         actual = json.loads(json.dumps(expected))
-        actual["children"][0]["children"][0]["value"] = (
-            "10.1.17.0-10.1.17.255"
-        )
+        actual["children"][0]["children"][0]["value"] = "10.1.17.0-10.1.17.255"
 
         self.assertFalse(_dynamic_rules_match({"rules": actual}, expected))
 
@@ -337,6 +335,64 @@ class ChangeApplicationTests(unittest.TestCase):
         actual["children"][0]["children"][0]["value"] = "10.1.16.1"
 
         self.assertTrue(_dynamic_rules_match({"rules": actual}, expected))
+
+    def test_dynamic_rules_match_accepts_top_level_rules_response(self):
+        expected = build_dynamic_asset_rules(("10.1.16.0/24",))
+        actual = json.loads(json.dumps(expected))
+        actual["children"][0]["children"][0]["value"] = "10.1.16.0-10.1.16.255"
+
+        self.assertTrue(
+            _dynamic_rules_match({"type": "dynamic", "rules": actual}, expected)
+        )
+
+    def test_dynamic_asset_with_unmanaged_rules_requires_manual_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            data_access = FakeDataAccess()
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+            asset = data_access.assets[10]
+            asset["typeFields"]["rules"]["children"].append(
+                {
+                    "filterName": "os",
+                    "operator": "contains",
+                    "value": "Windows",
+                    "type": "clause",
+                }
+            )
+            calls_before_second_apply = list(data_access.calls)
+
+            result = ChangeApplier(data_access, repository_id=7).apply(plan)
+
+        operation = result["operations"][0]
+        self.assertEqual(operation["status"], "FAILED")
+        self.assertEqual(operation["asset_status"], "UNKNOWN")
+        self.assertIn("non-managed dynamic rules", operation["message"])
+        self.assertEqual(data_access.calls, calls_before_second_apply)
+
+    def test_asset_verification_failure_reports_created_asset_id(self):
+        class WrongRulesDataAccess(FakeDataAccess):
+            def get_asset(self, asset_id):
+                asset = super().get_asset(asset_id)
+                if asset.get("type") != "dynamic":
+                    return asset
+                rules = json.loads(json.dumps(asset["typeFields"]["rules"]))
+                rules["children"][0]["children"][0]["value"] = "10.1.17.0/24"
+                return {**asset, "typeFields": {"rules": rules}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            result = ChangeApplier(WrongRulesDataAccess(), repository_id=7).apply(plan)
+
+        operation = result["operations"][0]
+        self.assertEqual(operation["status"], "FAILED")
+        self.assertEqual(operation["asset_status"], "CREATED")
+        self.assertEqual(operation["asset_id"], 10)
+        self.assertIsNone(operation["scan_id"])
+        self.assertIn("dynamic rules do not match", operation["message"])
 
     def test_existing_static_asset_and_scan_are_extended_without_replacement(self):
         with tempfile.TemporaryDirectory() as directory:

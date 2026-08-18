@@ -62,6 +62,24 @@ class ApplyOperation:
     message: str
 
 
+class _ApplyChangeFailure(RuntimeError):
+    """Carry known resource state when a change applies only partially."""
+
+    def __init__(
+        self,
+        message: str,
+        asset_status: str,
+        scan_status: str,
+        asset_id: int | None,
+        scan_id: int | None,
+    ) -> None:
+        super().__init__(message)
+        self.asset_status = asset_status
+        self.scan_status = scan_status
+        self.asset_id = asset_id
+        self.scan_id = scan_id
+
+
 @dataclass(frozen=True)
 class AssetDefinition:
     name: str
@@ -316,17 +334,28 @@ class ChangeApplier:
                     )
                 )
             except Exception as exc:
+                failure = (
+                    exc
+                    if isinstance(exc, _ApplyChangeFailure)
+                    else _ApplyChangeFailure(
+                        str(exc),
+                        asset_status="UNKNOWN",
+                        scan_status="UNKNOWN",
+                        asset_id=None,
+                        scan_id=None,
+                    )
+                )
                 operations.append(
                     ApplyOperation(
                         site_code=change.site_code,
                         cidr=change.cidr,
                         action=change.proposed_action,
                         status="FAILED",
-                        asset_status="UNKNOWN",
-                        scan_status="UNKNOWN",
-                        asset_id=None,
-                        scan_id=None,
-                        message=str(exc),
+                        asset_status=failure.asset_status,
+                        scan_status=failure.scan_status,
+                        asset_id=failure.asset_id,
+                        scan_id=failure.scan_id,
+                        message=str(failure),
                     )
                 )
 
@@ -351,10 +380,26 @@ class ChangeApplier:
         asset_definition: AssetDefinition,
         scan_definition: ScanDefinition,
     ) -> ApplyOperation:
-        asset, asset_status = self._confirm_asset(asset_definition)
-        asset_id = _resource_id(asset, "asset group", change.asset_name)
-        scan, scan_status = self._confirm_scan(change, asset_id, scan_definition)
-        scan_id = _resource_id(scan, "scan", change.scan_name)
+        asset_status = "UNKNOWN"
+        scan_status = "UNKNOWN"
+        asset_id: int | None = None
+        scan_id: int | None = None
+        try:
+            asset, asset_status = self._confirm_asset(asset_definition)
+            asset_id = _resource_id(asset, "asset group", change.asset_name)
+            self._verify_asset(asset_id, asset_definition)
+
+            scan, scan_status = self._confirm_scan(change, asset_id, scan_definition)
+            scan_id = _resource_id(scan, "scan", change.scan_name)
+            policy_id = _resource_id(
+                self.policies[change.policy_name], "policy", change.policy_name
+            )
+            self._verify_scan(scan_id, asset_id, policy_id, scan_definition.description)
+        except Exception as exc:
+            raise _ApplyChangeFailure(
+                str(exc), asset_status, scan_status, asset_id, scan_id
+            ) from exc
+
         status = (
             "UNCHANGED"
             if asset_status == "UNCHANGED" and scan_status == "UNCHANGED"
@@ -397,7 +442,6 @@ class ChangeApplier:
                 )
             asset_id = _resource_id(created, "asset group", definition.name)
             self.assets[definition.name] = created
-            self._verify_asset(asset_id, definition)
             return created, "CREATED"
 
         asset_id = _resource_id(existing, "asset group", definition.name)
@@ -425,17 +469,21 @@ class ChangeApplier:
         else:
             desired_rules = build_dynamic_asset_rules(definition.cidrs)
             if (
-                _dynamic_rules_match(details.get("typeFields"), desired_rules)
+                _dynamic_rules_match(details, desired_rules)
                 and _text(details.get("description")) == definition.description
             ):
                 return details, "UNCHANGED"
+            if _has_unmanaged_dynamic_rules(get_dynamic_asset_rules(details)):
+                raise RuntimeError(
+                    f"Asset '{definition.name}' contains non-managed dynamic rules; "
+                    "manual change is required"
+                )
             updated = self.data_access.update_dynamic_asset(
                 asset_id,
                 desired_rules,
                 definition.description,
             )
 
-        self._verify_asset(asset_id, definition)
         merged = updated if isinstance(updated, dict) and updated else details
         self.assets[definition.name] = merged
         return merged, "UPDATED"
@@ -462,7 +510,6 @@ class ChangeApplier:
             )
             scan_id = _resource_id(created, "scan", change.scan_name)
             self.scans[change.scan_name] = created
-            self._verify_scan(scan_id, asset_id, policy_id, definition.description)
             return created, "CREATED"
 
         scan_id = _resource_id(existing, "scan", change.scan_name)
@@ -490,7 +537,6 @@ class ChangeApplier:
             policy_id,
             description=definition.description,
         )
-        self._verify_scan(scan_id, asset_id, policy_id, definition.description)
         merged = updated if isinstance(updated, dict) and updated else details
         self.scans[change.scan_name] = merged
         return merged, "UPDATED"
@@ -521,11 +567,10 @@ class ChangeApplier:
                 )
         else:
             expected_rules = build_dynamic_asset_rules(definition.cidrs)
-            type_fields = details.get("typeFields")
-            if not _dynamic_rules_match(type_fields, expected_rules):
+            if not _dynamic_rules_match(details, expected_rules):
                 expected_signature = _normalize_dynamic_rule(expected_rules)
                 actual_signature = _normalize_dynamic_rule(
-                    _dynamic_rules_from_type_fields(type_fields)
+                    get_dynamic_asset_rules(details)
                 )
                 return (
                     f"Asset {asset_id} verification failed: dynamic rules do not "
@@ -634,9 +679,7 @@ def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
 
 def get_dynamic_asset_rules(asset: dict[str, Any]) -> dict[str, Any] | None:
     """Read dynamic rules across Security Center detail response shapes"""
-    return _dynamic_rules_from_type_fields(asset.get("typeFields")) or (
-        _dynamic_rules_from_type_fields(asset)
-    )
+    return _dynamic_rules_from_response(asset)
 
 
 def _json_object(value: Any) -> dict[str, Any] | None:
@@ -652,11 +695,21 @@ def _json_object(value: Any) -> dict[str, Any] | None:
     return decoded if isinstance(decoded, dict) else None
 
 
-def _dynamic_rules_match(type_fields: Any, expected_rules: dict[str, Any]) -> bool:
+def _dynamic_rules_match(response: Any, expected_rules: dict[str, Any]) -> bool:
     """Compare requested and stored dynamic rules by their semantic content"""
     return _normalize_dynamic_rule(
-        _dynamic_rules_from_type_fields(type_fields)
+        _dynamic_rules_from_response(response)
     ) == _normalize_dynamic_rule(expected_rules)
+
+
+def _dynamic_rules_from_response(response: Any) -> dict[str, Any] | None:
+    """Extract rules whether Security Center returns them at root or typeFields."""
+    record = _json_object(response)
+    if record is None:
+        return None
+    return _dynamic_rules_from_type_fields(record.get("typeFields")) or (
+        _dynamic_rules_from_type_fields(record)
+    )
 
 
 def _dynamic_rules_from_type_fields(type_fields: Any) -> dict[str, Any] | None:
@@ -669,6 +722,36 @@ def _dynamic_rules_from_type_fields(type_fields: Any) -> dict[str, Any] | None:
         if rules is not None:
             return rules
     return None
+
+
+def _has_unmanaged_dynamic_rules(rules: dict[str, Any] | None) -> bool:
+    """Identify dynamic clauses that an application update cannot safely replace."""
+    if not isinstance(rules, dict):
+        return False
+    children = rules.get("children")
+    if _text(rules.get("operator")).lower() != "all" or not isinstance(
+        children, (list, tuple)
+    ):
+        return True
+    return any(not _is_managed_dynamic_child(child) for child in children)
+
+
+def _is_managed_dynamic_child(rule: Any) -> bool:
+    """Return whether a root rule is generated and safely owned by this workflow."""
+    if not isinstance(rule, dict):
+        return False
+    if _dynamic_filter_name(rule) == "lastseen":
+        return True
+    children = rule.get("children")
+    if not isinstance(children, (list, tuple)):
+        return False
+    return bool(children) and all(
+        _dynamic_filter_name(child) == "ip" for child in children
+    )
+
+
+def _dynamic_filter_name(rule: dict[str, Any]) -> str:
+    return _text(rule.get("filtername", rule.get("filterName"))).lower()
 
 
 def _normalize_dynamic_rule(rule: Any) -> tuple[Any, ...] | None:
@@ -688,9 +771,7 @@ def _normalize_dynamic_rule(rule: Any) -> tuple[Any, ...] | None:
                 )
             ),
         )
-    filter_name = str(
-        rule.get("filtername", rule.get("filterName", ""))
-    ).lower()
+    filter_name = _dynamic_filter_name(rule)
     return (
         "clause",
         _text(rule.get("type")).lower() or "clause",
