@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import ipaddress
+import json
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -424,8 +425,7 @@ class ChangeApplier:
         else:
             desired_rules = build_dynamic_asset_rules(definition.cidrs)
             if (
-                _rules_signature(get_dynamic_asset_rules(details))
-                == _rules_signature(desired_rules)
+                _dynamic_rules_match(details.get("typeFields"), desired_rules)
                 and _text(details.get("description")) == definition.description
             ):
                 return details, "UNCHANGED"
@@ -497,29 +497,44 @@ class ChangeApplier:
 
     def _verify_asset(self, asset_id: int, definition: AssetDefinition) -> None:
         """Check that an asset group matches its desired static or dynamic state"""
-        details = self.data_access.get_asset(asset_id)
+        details = self.data_access.get_asset(asset_id) or {}
+        message = self._asset_verification_message(asset_id, details, definition)
+        if message:
+            raise RuntimeError(message)
+
+    @staticmethod
+    def _asset_verification_message(
+        asset_id: int, details: dict[str, Any], definition: AssetDefinition
+    ) -> str:
+        """Return an asset verification failure message, or an empty string"""
         if _asset_type(details) != definition.asset_type:
-            raise RuntimeError(
+            return (
                 f"Asset {asset_id} verification failed: expected "
                 f"{definition.asset_type} type"
             )
         if definition.asset_type == "static":
             missing = set(definition.cidrs).difference(get_asset_scopes(details))
             if missing:
-                raise RuntimeError(
+                return (
                     f"Asset {asset_id} verification failed: missing "
                     f"{', '.join(sorted(missing))}"
                 )
-        elif _rules_signature(get_dynamic_asset_rules(details)) != _rules_signature(
-            build_dynamic_asset_rules(definition.cidrs)
-        ):
-            raise RuntimeError(
-                f"Asset {asset_id} verification failed: dynamic rules do not match"
-            )
+        else:
+            expected_rules = build_dynamic_asset_rules(definition.cidrs)
+            type_fields = details.get("typeFields")
+            if not _dynamic_rules_match(type_fields, expected_rules):
+                expected_signature = _normalize_dynamic_rule(expected_rules)
+                actual_signature = _normalize_dynamic_rule(
+                    _dynamic_rules_from_type_fields(type_fields)
+                )
+                return (
+                    f"Asset {asset_id} verification failed: dynamic rules do not "
+                    f"match (expected {expected_signature!r}; "
+                    f"received {actual_signature!r})"
+                )
         if _text(details.get("description")) != definition.description:
-            raise RuntimeError(
-                f"Asset {asset_id} verification failed: description does not match"
-            )
+            return f"Asset {asset_id} verification failed: description does not match"
+        return ""
 
     def _verify_scan(
         self,
@@ -618,34 +633,102 @@ def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
 
 
 def get_dynamic_asset_rules(asset: dict[str, Any]) -> dict[str, Any] | None:
-    """Read saved dynamic rules from Tenable.sc"""
-    for record in (asset, asset.get("typeFields")):
-        if not isinstance(record, dict):
-            continue
-        for key in ("rules", "dynamicRules"):
-            rules = record.get(key)
-            if isinstance(rules, dict):
-                return rules
+    """Read dynamic rules across Security Center detail response shapes"""
+    return _dynamic_rules_from_type_fields(asset.get("typeFields")) or (
+        _dynamic_rules_from_type_fields(asset)
+    )
+
+
+def _json_object(value: Any) -> dict[str, Any] | None:
+    """Return an object directly or when Security Center serializes it as JSON"""
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _dynamic_rules_match(type_fields: Any, expected_rules: dict[str, Any]) -> bool:
+    """Compare requested and stored dynamic rules by their semantic content"""
+    return _normalize_dynamic_rule(
+        _dynamic_rules_from_type_fields(type_fields)
+    ) == _normalize_dynamic_rule(expected_rules)
+
+
+def _dynamic_rules_from_type_fields(type_fields: Any) -> dict[str, Any] | None:
+    """Extract dynamic rules from a Security Center typeFields object"""
+    record = _json_object(type_fields)
+    if record is None:
+        return None
+    for key in ("rules", "dynamicRules"):
+        rules = _json_object(record.get(key))
+        if rules is not None:
+            return rules
     return None
 
 
-def _rules_signature(rules: dict[str, Any] | None) -> tuple[Any, ...] | None:
-    """Compare dynamic rules to see if it needs to be updated"""
-    if not isinstance(rules, dict):
+def _normalize_dynamic_rule(rule: Any) -> tuple[Any, ...] | None:
+    """Create an order-independent representation of a dynamic rule tree"""
+    if not isinstance(rule, dict):
         return None
-    children = rules.get("children")
-    if isinstance(children, list):
+    children = rule.get("children")
+    if isinstance(children, (list, tuple)):
         return (
             "group",
-            str(rules.get("operator") or "").lower(),
-            tuple(sorted((_rules_signature(child) for child in children), key=repr)),
+            _text(rule.get("type")).lower() or "group",
+            _text(rule.get("operator")).lower(),
+            tuple(
+                sorted(
+                    (_normalize_dynamic_rule(child) for child in children),
+                    key=repr,
+                )
+            ),
         )
+    filter_name = str(
+        rule.get("filtername", rule.get("filterName", ""))
+    ).lower()
     return (
         "clause",
-        str(rules.get("filtername", rules.get("filterName", ""))).lower(),
-        str(rules.get("operator") or "").lower(),
-        str(rules.get("value") or ""),
+        _text(rule.get("type")).lower() or "clause",
+        _text(rule.get("operator")).lower(),
+        filter_name,
+        _normalize_dynamic_rule_value(filter_name, rule.get("value")),
     )
+
+
+def _normalize_dynamic_rule_value(filter_name: str, value: Any) -> Any:
+    """Normalize IP rule values while preserving all non-IP values exactly"""
+    if filter_name != "ip":
+        return value
+    normalized = _text(value)
+    if "-" in normalized:
+        start_text, end_text = (part.strip() for part in normalized.split("-", 1))
+        try:
+            start = ipaddress.ip_address(start_text)
+            end = ipaddress.ip_address(end_text)
+        except ValueError:
+            return normalized
+        if start.version == end.version and int(start) <= int(end):
+            return ("ip-range", start.version, int(start), int(end))
+        return normalized
+    try:
+        network = ipaddress.ip_network(normalized, strict=False)
+        return (
+            "ip-range",
+            network.version,
+            int(network.network_address),
+            int(network.broadcast_address),
+        )
+    except ValueError:
+        try:
+            address = ipaddress.ip_address(normalized)
+        except ValueError:
+            return normalized
+        return ("ip-range", address.version, int(address), int(address))
 
 
 def _asset_type(asset: dict[str, Any]) -> str:

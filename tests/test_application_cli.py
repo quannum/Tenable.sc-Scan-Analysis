@@ -95,7 +95,7 @@ class ApplicationCliTests(unittest.TestCase):
             output = root / "normalized.json"
 
             with patch(
-                "src.tenable_coverage_workflow.subnet_source.source_loader"
+                "src.tenable_coverage_workflow.subnet_source.source_loader."
                 "importlib.import_module",
                 return_value=self._subnet_module("LAB01", "10.0.0.0/24"),
             ):
@@ -159,7 +159,7 @@ class ApplicationCliTests(unittest.TestCase):
                     "src.tenable_coverage_workflow.application_cli.DataAccess"
                 ) as data_access_cls,
                 patch(
-                    "src.tenable_coverage_workflow.application_cli"
+                    "src.tenable_coverage_workflow.application_cli."
                     "collect_tenable_inventory",
                     return_value={"schema_version": 1, "collection_errors": {}},
                 ),
@@ -245,7 +245,7 @@ class ApplicationCliTests(unittest.TestCase):
             )
 
             with patch(
-                "src.tenable_coverage_workflow.subnet_source.source_loader"
+                "src.tenable_coverage_workflow.subnet_source.source_loader."
                 "importlib.import_module",
                 return_value=self._subnet_module("CFG01", "192.0.2.0/30"),
             ):

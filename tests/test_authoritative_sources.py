@@ -82,7 +82,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                 ]
 
         with patch(
-            "src.tenable_coverage_workflow.subnet_source.source_loader"
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
             "importlib.import_module",
             return_value=Module,
         ):
@@ -133,7 +133,7 @@ class JsonAuthoritativeSourceTests(unittest.TestCase):
                 ]
 
         with patch(
-            "src.tenable_coverage_workflow.subnet_source.source_loader"
+            "src.tenable_coverage_workflow.subnet_source.source_loader."
             "importlib.import_module",
             return_value=Module,
         ):

@@ -1,4 +1,5 @@
 import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +7,8 @@ from types import SimpleNamespace
 
 from src.tenable_coverage_workflow.change_application import (
     ChangeApplier,
+    _dynamic_rules_match,
+    build_dynamic_asset_rules,
     load_approved_plan,
 )
 
@@ -239,6 +242,102 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(operation["status"], "FAILED")
             self.assertIn("policy mismatch", operation["message"])
 
+    def test_dynamic_asset_verification_normalizes_security_center_rule_shape(self):
+        class NormalizedRulesDataAccess(FakeDataAccess):
+            def get_asset(self, asset_id):
+                asset = super().get_asset(asset_id)
+                if asset.get("type") != "dynamic":
+                    return asset
+                rules = json.loads(json.dumps(asset["typeFields"]["rules"]))
+                rules["children"][0]["children"][0]["value"] = (
+                    "10.1.16.0-10.1.16.255"
+                )
+                rules["children"][0]["children"][0]["pluginIDConstraint"] = "-1"
+                return {**asset, "typeFields": json.dumps({"rules": rules})}
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            result = ChangeApplier(
+                NormalizedRulesDataAccess(), repository_id=7
+            ).apply(plan)
+
+        self.assertEqual(result["status_counts"], {"APPLIED": 1})
+
+    def test_existing_dynamic_asset_with_tenable_range_is_unchanged(self):
+        class RangeRulesDataAccess(FakeDataAccess):
+            def get_asset(self, asset_id):
+                asset = super().get_asset(asset_id)
+                if asset.get("type") != "dynamic":
+                    return asset
+                rules = json.loads(json.dumps(asset["typeFields"]["rules"]))
+                rules["children"][0]["children"][0]["value"] = (
+                    "10.1.16.0-10.1.16.255"
+                )
+                rules["children"][0]["children"][0]["pluginIDConstraint"] = "-1"
+                return {**asset, "typeFields": {"rules": rules}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            data_access = RangeRulesDataAccess()
+            ChangeApplier(data_access, repository_id=7).apply(plan)
+            calls_after_first_apply = list(data_access.calls)
+
+            result = ChangeApplier(data_access, repository_id=7).apply(plan)
+
+        self.assertEqual(result["status_counts"], {"UNCHANGED": 1})
+        self.assertEqual(data_access.calls, calls_after_first_apply)
+
+    def test_dynamic_asset_verification_accepts_serialized_rule_readback(self):
+        class SerializedRulesDataAccess(FakeDataAccess):
+            def get_asset(self, asset_id):
+                asset = super().get_asset(asset_id)
+                if asset.get("type") != "dynamic":
+                    return asset
+                return {
+                    **asset,
+                    "typeFields": {"rules": json.dumps(asset["typeFields"]["rules"])},
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            result = ChangeApplier(
+                SerializedRulesDataAccess(), repository_id=7
+            ).apply(plan)
+
+        self.assertEqual(result["status_counts"], {"APPLIED": 1})
+
+    def test_dynamic_rules_match_cidr_to_tenable_range_ignores_metadata(self):
+        expected = build_dynamic_asset_rules(("10.1.16.0/24",))
+        actual = json.loads(json.dumps(expected))
+        ip_rule = actual["children"][0]["children"][0]
+        ip_rule["value"] = "10.1.16.0-10.1.16.255"
+        ip_rule["pluginIDConstraint"] = "-1"
+        actual["children"].reverse()
+
+        self.assertTrue(_dynamic_rules_match({"rules": actual}, expected))
+
+    def test_dynamic_rules_match_rejects_different_ip_range(self):
+        expected = build_dynamic_asset_rules(("10.1.16.0/24",))
+        actual = json.loads(json.dumps(expected))
+        actual["children"][0]["children"][0]["value"] = (
+            "10.1.17.0-10.1.17.255"
+        )
+
+        self.assertFalse(_dynamic_rules_match({"rules": actual}, expected))
+
+    def test_dynamic_rules_match_accepts_an_individual_ip(self):
+        expected = build_dynamic_asset_rules(("10.1.16.1/32",))
+        actual = json.loads(json.dumps(expected))
+        actual["children"][0]["children"][0]["value"] = "10.1.16.1"
+
+        self.assertTrue(_dynamic_rules_match({"rules": actual}, expected))
+
     def test_existing_static_asset_and_scan_are_extended_without_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
             plan = load_approved_plan(
@@ -289,7 +388,7 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(data_access.scans[9]["assets"], [{"id": 8}, {"id": 99}])
             self.assertEqual(
                 data_access.assets[8]["description"],
-                "Static authoritative private supernet for NYC01.\n\n"
+                "Static authoritative private supernet for NYC01\n\n"
                 "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code",
             )
 
@@ -361,13 +460,13 @@ class ChangeApplicationTests(unittest.TestCase):
             )
             self.assertEqual(
                 asset["description"],
-                "Dynamic VLAN asset for NYC01 Workstation networks.\n\n"
+                "Dynamic VLAN asset for NYC01 Workstation networks\n\n"
                 "VLANs:\n"
                 "- VLAN 16 - vl16-it-services-static - 10.1.16.0/24\n"
                 "- VLAN 16 - vl17-it-services-sandbox - 10.1.17.0/24\n\n"
                 "Source grouping tag: vlan-workstation\n"
                 "Membership criteria: IP address within the listed VLAN ranges "
-                "AND Last Seen < 30 days.\n"
+                "AND Last Seen < 30 days\n"
                 "Source of truth: subnet-as-code",
             )
             scan = next(iter(data_access.scans.values()))
@@ -589,12 +688,12 @@ class ChangeApplicationTests(unittest.TestCase):
             }
             self.assertEqual(
                 descriptions["NYC01 Public"],
-                "Static authoritative public range for NYC01.\n\n"
+                "Static authoritative public range for NYC01\n\n"
                 "Ranges:\n- 203.0.113.0/24\n\nSource of truth: subnet-as-code",
             )
             self.assertEqual(
                 descriptions["NYC01 Private Discovery"],
-                "Static authoritative private supernet for NYC01.\n\n"
+                "Static authoritative private supernet for NYC01\n\n"
                 "Ranges:\n- 10.1.0.0/16\n\nSource of truth: subnet-as-code",
             )
 

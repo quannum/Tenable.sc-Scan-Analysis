@@ -415,7 +415,7 @@ def normalize_resource_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def normalize_usable_resource_list(payload: Any) -> list[dict[str, Any]]:
-    """Normalize only the usable list when an access-level wrapper is present"""
+    """Normalize only the usable list when usable/manageable lists returned"""
     usable_payload = _usable_payload(payload)
     return normalize_resource_list(
         payload if usable_payload is None else usable_payload
@@ -475,7 +475,7 @@ def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:
         yield payload
         return
 
-    # 'usable' list is what the running account can...use, obviously
+    # 'usable' list is what the running account can...use
     # 'manageable' list is what running account can see from api
     # output but cannot use
     for key in (
