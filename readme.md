@@ -329,6 +329,7 @@ tenable-sc-scan-analysis apply-changes `
   --mode live `
   --plan-file C:\output\runs\run-001\proposed_changes.csv `
   --repository-id 7 `
+  --asset-label "Managed by Coverage Workflow" `
   --result-file C:\output\runs\run-001\apply_result.json `
   --apply
 ```
@@ -337,6 +338,11 @@ Static assets and scan attachments are reconciled idempotently. Existing target
 ranges and scan assets are retained, matching reruns report `UNCHANGED`, and
 each write is followed by a live details read that verifies the expected CIDR,
 asset group, repository, and policy.
+
+Set `--asset-label`, `TCW_ASSET_LABEL`, or `asset_label` under the
+`apply_changes` command configuration to add a Tenable.sc Label to every asset
+tag created or updated by the workflow. Existing asset labels are preserved;
+this option only adds the requested label and verifies it after the write.
 
 ## Scheduled Service
 

@@ -86,6 +86,7 @@ class AssetDefinition:
     asset_type: str
     cidrs: tuple[str, ...]
     description: str
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,15 +109,27 @@ class ChangeDataAccess(Protocol):
     def get_scan_details(self, scan_id: int) -> dict[str, Any]: ...
 
     def create_static_asset(
-        self, name: str, ips: list[str], description: str
+        self,
+        name: str,
+        ips: list[str],
+        description: str,
+        label: str | None = None,
     ) -> dict[str, Any]: ...
 
     def update_static_asset(
-        self, asset_id: int, ips: list[str], description: str | None = None
+        self,
+        asset_id: int,
+        ips: list[str],
+        description: str | None = None,
+        label: str | None = None,
     ) -> dict[str, Any]: ...
 
     def create_dynamic_asset(
-        self, name: str, rules: dict[str, Any], description: str
+        self,
+        name: str,
+        rules: dict[str, Any],
+        description: str,
+        label: str | None = None,
     ) -> dict[str, Any]: ...
 
     def update_dynamic_asset(
@@ -124,6 +137,7 @@ class ChangeDataAccess(Protocol):
         asset_id: int,
         rules: dict[str, Any],
         description: str | None = None,
+        label: str | None = None,
     ) -> dict[str, Any]: ...
 
     def create_scan(
@@ -245,13 +259,19 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
 
 
 class ChangeApplier:
-    def __init__(self, data_access: ChangeDataAccess, repository_id: int) -> None:
+    def __init__(
+        self,
+        data_access: ChangeDataAccess,
+        repository_id: int,
+        asset_label: str | None = None,
+    ) -> None:
         if data_access.config.mode != "live":
             raise ValueError("apply-changes requires --mode live")
         if int(repository_id) <= 0:
             raise ValueError("repository_id must be a positive integer")
         self.data_access = data_access
         self.repository_id = int(repository_id)
+        self.asset_label = _optional_text(asset_label)
         self.assets = self._unique_name_index(
             _apply_resource_list(
                 data_access, "get_usable_asset_lists", "get_asset_lists"
@@ -283,7 +303,7 @@ class ChangeApplier:
                     f"{change.site_code}: policy '{change.policy_name}' was not found"
                 )
         asset_definitions = asset_definitions or _build_asset_definitions(
-            plan.approved_changes
+            plan.approved_changes, self.asset_label
         )
         for definition in asset_definitions.values():
             existing = self.assets.get(definition.name)
@@ -301,7 +321,9 @@ class ChangeApplier:
             raise ValueError("Apply preflight failed: " + "; ".join(errors))
 
     def apply(self, plan: ApprovedPlan) -> dict[str, Any]:
-        asset_definitions = _build_asset_definitions(plan.approved_changes)
+        asset_definitions = _build_asset_definitions(
+            plan.approved_changes, self.asset_label
+        )
         scan_definitions = _build_scan_definitions(plan.approved_changes)
         self.preflight(plan, asset_definitions)
         started_at = datetime.now(timezone.utc)
@@ -369,6 +391,7 @@ class ChangeApplier:
             "started_at": started_at.isoformat(),
             "completed_at": completed_at.isoformat(),
             "repository_id": self.repository_id,
+            "asset_label": self.asset_label,
             "approved_change_count": len(plan.approved_changes),
             "status_counts": dict(sorted(counts.items())),
             "operations": [asdict(operation) for operation in operations],
@@ -433,12 +456,14 @@ class ChangeApplier:
                     definition.name,
                     list(definition.cidrs),
                     definition.description,
+                    definition.label,
                 )
             else:
                 created = self.data_access.create_dynamic_asset(
                     definition.name,
                     build_dynamic_asset_rules(definition.cidrs),
                     definition.description,
+                    definition.label,
                 )
             asset_id = _resource_id(created, "asset group", definition.name)
             self.assets[definition.name] = created
@@ -459,18 +484,21 @@ class ChangeApplier:
             if (
                 desired_scopes == tuple(sorted(current_scopes))
                 and _text(details.get("description")) == definition.description
+                and _asset_has_label(details, definition.label)
             ):
                 return details, "UNCHANGED"
             updated = self.data_access.update_static_asset(
                 asset_id,
                 list(desired_scopes),
                 definition.description,
+                _merged_asset_label(details, definition.label),
             )
         else:
             desired_rules = build_dynamic_asset_rules(definition.cidrs)
             if (
                 _dynamic_rules_match(details, desired_rules)
                 and _text(details.get("description")) == definition.description
+                and _asset_has_label(details, definition.label)
             ):
                 return details, "UNCHANGED"
             if _has_unmanaged_dynamic_rules(get_dynamic_asset_rules(details)):
@@ -482,6 +510,7 @@ class ChangeApplier:
                 asset_id,
                 desired_rules,
                 definition.description,
+                _merged_asset_label(details, definition.label),
             )
 
         merged = updated if isinstance(updated, dict) and updated else details
@@ -579,6 +608,8 @@ class ChangeApplier:
                 )
         if _text(details.get("description")) != definition.description:
             return f"Asset {asset_id} verification failed: description does not match"
+        if not _asset_has_label(details, definition.label):
+            return f"Asset {asset_id} verification failed: label does not match"
         return ""
 
     def _verify_scan(
@@ -646,6 +677,28 @@ def get_asset_scopes(asset: dict[str, Any]) -> set[str]:
             except ValueError:
                 scopes.add(str(item).strip())
     return {scope for scope in scopes if scope}
+
+
+def get_asset_labels(asset: dict[str, Any]) -> tuple[str, ...]:
+    """Read the API's comma-separated asset-label field."""
+    value = asset.get("tags")
+    if isinstance(value, (list, tuple, set)):
+        values = value
+    else:
+        values = _text(value).split(",")
+    return tuple(sorted({_text(item) for item in values if _text(item)}))
+
+
+def _asset_has_label(asset: dict[str, Any], label: str | None) -> bool:
+    return label is None or label in get_asset_labels(asset)
+
+
+def _merged_asset_label(asset: dict[str, Any], label: str | None) -> str | None:
+    if label is None:
+        return None
+    return ",".join((*get_asset_labels(asset), label)) if not _asset_has_label(
+        asset, label
+    ) else ",".join(get_asset_labels(asset))
 
 
 def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
@@ -827,7 +880,7 @@ def _asset_type_for_target(target_type: str) -> str:
 
 
 def _build_asset_definitions(
-    changes: list[ApprovedChange],
+    changes: list[ApprovedChange], asset_label: str | None = None
 ) -> dict[str, AssetDefinition]:
     grouped: dict[str, list[ApprovedChange]] = {}
     for change in changes:
@@ -845,6 +898,7 @@ def _build_asset_definitions(
             asset_type=next(iter(asset_types)),
             cidrs=tuple(sorted({change.cidr for change in members})),
             description=_build_asset_description(members),
+            label=_optional_text(asset_label),
         )
     return definitions
 
@@ -1025,6 +1079,11 @@ def _text(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+def _optional_text(value: Any) -> str | None:
+    text = _text(value)
+    return text or None
+
+
 def _apply_resource_list(
     data_access: ChangeDataAccess,
     usable_method_name: str,
@@ -1047,6 +1106,7 @@ def write_apply_markdown(result: dict[str, Any], path_value: str | Path) -> Path
         f"- Run ID: `{result['run_id']}`",
         f"- Plan SHA-256: `{result['plan_sha256']}`",
         f"- Repository ID: `{result['repository_id']}`",
+        f"- Asset label: `{result.get('asset_label') or 'None'}`",
         f"- Started: `{result['started_at']}`",
         f"- Completed: `{result['completed_at']}`",
         "",

@@ -264,12 +264,18 @@ class DataAccessTests(unittest.TestCase):
         ):
             access = DataAccess(make_config())
 
-        asset = access.create_static_asset("Asset", ["10.0.0.0/24"], "managed")
+        asset = access.create_static_asset(
+            "Asset",
+            ["10.0.0.0/24"],
+            "managed",
+            label="Managed by Coverage Workflow",
+        )
         scan = access.create_scan("Scan", 7, [21], 30)
         updated = access.update_scan_configuration(2, [21, 22], 7, 30)
 
         self.assertEqual(asset["type"], "static")
         self.assertEqual(asset["ips"], ["10.0.0.0/24"])
+        self.assertEqual(asset["tags"], "Managed by Coverage Workflow")
         self.assertEqual(scan["asset_lists"], [21])
         self.assertEqual(updated["repo"], 7)
         self.assertEqual(updated["policy_id"], 30)
@@ -306,8 +312,18 @@ class DataAccessTests(unittest.TestCase):
         ):
             access = DataAccess(make_config())
 
-        created = access.create_dynamic_asset("Dynamic", rules, "managed")
-        updated = access.update_dynamic_asset(21, rules, "updated")
+        created = access.create_dynamic_asset(
+            "Dynamic",
+            rules,
+            "managed",
+            label="Managed by Coverage Workflow",
+        )
+        updated = access.update_dynamic_asset(
+            21,
+            rules,
+            "updated",
+            label="Managed by Coverage Workflow",
+        )
         expected_rules = (
             "all",
             ("any", ("ip", "eq", "10.0.0.0/24")),
@@ -317,8 +333,10 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(created["type"], "dynamic")
         self.assertEqual(created["rules"], expected_rules)
         self.assertEqual(created["description"], "managed")
+        self.assertEqual(created["tags"], "Managed by Coverage Workflow")
         self.assertEqual(updated["rules"], expected_rules)
         self.assertEqual(updated["description"], "updated")
+        self.assertEqual(updated["tags"], "Managed by Coverage Workflow")
 
     def test_live_mode_retries_retryable_errors(self):
         with (

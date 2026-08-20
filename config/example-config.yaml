@@ -39,6 +39,9 @@ tenable_sc_scan_analysis:
       mode: live
       plan_file: /data/output/runs/approved-run-id/proposed_changes.csv
       repository_id: 7
+      # Optional Tenable.sc Label for every asset tag this workflow creates/updates.
+      # Existing asset labels are preserved.
+      asset_label: Managed by Coverage Workflow
       result_file: /data/output/runs/approved-run-id/apply_result.json
     export_report:
       run_dir: /data/output/runs/approved-run-id

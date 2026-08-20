@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tenable_arguments(apply_command)
     apply_command.add_argument("--plan-file")
     apply_command.add_argument("--repository-id", type=int)
+    apply_command.add_argument("--asset-label")
     apply_command.add_argument("--result-file")
     apply_command.add_argument("--apply", action="store_true", default=None)
 
@@ -274,7 +275,13 @@ def _apply_changes(args) -> int:
         raise ValueError("apply-changes requires --repository-id or config value")
     approved_plan = load_approved_plan(plan)
     data_access = DataAccess(_tenable_config(args))
-    result = ChangeApplier(data_access, int(repository_id)).apply(approved_plan)
+    asset_label = _setting(args, "asset_label")
+    asset_label = str(asset_label).strip() if asset_label is not None else None
+    result = ChangeApplier(
+        data_access,
+        int(repository_id),
+        asset_label=asset_label or None,
+    ).apply(approved_plan)
     result_file = _setting(
         args,
         "result_file",

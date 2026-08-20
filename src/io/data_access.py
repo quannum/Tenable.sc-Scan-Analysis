@@ -203,26 +203,39 @@ class DataAccess:
         return self._list_live_resource("hosts")
 
     def create_static_asset(
-        self, name: str, ips: list[str], description: str
+        self,
+        name: str,
+        ips: list[str],
+        description: str,
+        label: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {"ips": ips, "description": description}
+        if label is not None:
+            # Tenable.sc calls the Label UI field `tags` in the Asset API.
+            kwargs["tags"] = label
         return self._call_live(
             lambda: self.sc.asset_lists.create(
                 name,
                 "static",
-                ips=ips,
-                description=description,
+                **kwargs,
             ),
             operation_name=f"asset_lists.create({name})",
         )
 
     def update_static_asset(
-        self, asset_id: int, ips: list[str], description: str | None = None
+        self,
+        asset_id: int,
+        ips: list[str],
+        description: str | None = None,
+        label: str | None = None,
     ) -> dict[str, Any]:
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"ips": ips}
         if description is not None:
             kwargs["description"] = description
+        if label is not None:
+            kwargs["tags"] = label
         return self._call_live(
             lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
             operation_name=f"asset_lists.edit({asset_id})",
@@ -233,15 +246,21 @@ class DataAccess:
         name: str,
         rules: dict[str, Any],
         description: str,
+        label: str | None = None,
     ) -> dict[str, Any]:
         """Create a dynamic asset from its saved rule definition"""
         self._require_live_mutation()
+        kwargs: dict[str, Any] = {
+            "rules": _dynamic_rules_as_tuple(rules),
+            "description": description,
+        }
+        if label is not None:
+            kwargs["tags"] = label
         return self._call_live(
             lambda: self.sc.asset_lists.create(
                 name,
                 "dynamic",
-                rules=_dynamic_rules_as_tuple(rules),
-                description=description,
+                **kwargs,
             ),
             operation_name=f"asset_lists.create({name})",
         )
@@ -251,12 +270,15 @@ class DataAccess:
         asset_id: int,
         rules: dict[str, Any],
         description: str | None = None,
+        label: str | None = None,
     ) -> dict[str, Any]:
         """Update the dynamic asset rules and optional description"""
         self._require_live_mutation()
         kwargs: dict[str, Any] = {"rules": _dynamic_rules_as_tuple(rules)}
         if description is not None:
             kwargs["description"] = description
+        if label is not None:
+            kwargs["tags"] = label
         return self._call_live(
             lambda: self.sc.asset_lists.edit(asset_id, **kwargs),
             operation_name=f"asset_lists.edit({asset_id})",

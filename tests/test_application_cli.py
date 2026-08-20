@@ -289,6 +289,48 @@ class ApplicationCliTests(unittest.TestCase):
                 result_file.with_suffix(".md").read_text(encoding="utf-8"),
             )
 
+    def test_apply_changes_applies_asset_label_from_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan = write_plan(root / "plan.csv", [approved_row()])
+            result_file = root / "result.json"
+            config = root / "config.yaml"
+            config.write_text(
+                "tenable_sc_scan_analysis:\n"
+                "  commands:\n"
+                "    apply_changes:\n"
+                "      asset_label: Managed by Coverage Workflow\n",
+                encoding="utf-8",
+            )
+            data_access = FakeDataAccess()
+
+            with patch(
+                "src.tenable_coverage_workflow.application_cli.DataAccess",
+                return_value=data_access,
+            ):
+                exit_code = main(
+                    [
+                        "--config-file",
+                        str(config),
+                        "apply-changes",
+                        "--mode",
+                        "live",
+                        "--plan-file",
+                        str(plan),
+                        "--repository-id",
+                        "7",
+                        "--result-file",
+                        str(result_file),
+                        "--apply",
+                    ]
+                )
+
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertEqual(
+                next(iter(data_access.assets.values()))["tags"],
+                "Managed by Coverage Workflow",
+            )
+
     def test_analyze_coverage_config_can_set_vlan_tag_grouping(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

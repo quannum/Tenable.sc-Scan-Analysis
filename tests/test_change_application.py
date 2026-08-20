@@ -89,7 +89,7 @@ class FakeDataAccess:
     def get_scan_details(self, scan_id):
         return self.scans.get(int(scan_id), {})
 
-    def create_static_asset(self, name, ips, description):
+    def create_static_asset(self, name, ips, description, label=None):
         self.calls.append(("create_asset", name, tuple(ips)))
         asset_id = self.next_asset_id
         self.next_asset_id += 1
@@ -100,17 +100,21 @@ class FakeDataAccess:
             "description": description,
             "typeFields": {"definedIPs": ",".join(ips)},
         }
+        if label is not None:
+            record["tags"] = label
         self.assets[asset_id] = record
         return record
 
-    def update_static_asset(self, asset_id, ips, description=None):
+    def update_static_asset(self, asset_id, ips, description=None, label=None):
         self.calls.append(("update_asset", asset_id, tuple(ips)))
         self.assets[asset_id]["typeFields"]["definedIPs"] = ",".join(ips)
         if description is not None:
             self.assets[asset_id]["description"] = description
+        if label is not None:
+            self.assets[asset_id]["tags"] = label
         return self.assets[asset_id]
 
-    def create_dynamic_asset(self, name, rules, description):
+    def create_dynamic_asset(self, name, rules, description, label=None):
         self.calls.append(("create_dynamic_asset", name, rules))
         asset_id = self.next_asset_id
         self.next_asset_id += 1
@@ -121,14 +125,18 @@ class FakeDataAccess:
             "description": description,
             "typeFields": {"rules": rules},
         }
+        if label is not None:
+            record["tags"] = label
         self.assets[asset_id] = record
         return record
 
-    def update_dynamic_asset(self, asset_id, rules, description=None):
+    def update_dynamic_asset(self, asset_id, rules, description=None, label=None):
         self.calls.append(("update_dynamic_asset", asset_id, rules))
         self.assets[asset_id]["typeFields"]["rules"] = rules
         if description is not None:
             self.assets[asset_id]["description"] = description
+        if label is not None:
+            self.assets[asset_id]["tags"] = label
         return self.assets[asset_id]
 
     def create_scan(self, name, repository_id, asset_ids, policy_id, description=None):
@@ -813,6 +821,71 @@ class ChangeApplicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Apply preflight failed"):
                 ChangeApplier(data_access, repository_id=7).apply(plan)
             self.assertEqual(data_access.calls, [])
+
+    def test_asset_label_is_created_and_verified(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            data_access = FakeDataAccess()
+
+            result = ChangeApplier(
+                data_access,
+                repository_id=7,
+                asset_label="Managed by Coverage Workflow",
+            ).apply(plan)
+
+            asset = next(iter(data_access.assets.values()))
+            self.assertEqual(asset["tags"], "Managed by Coverage Workflow")
+            self.assertEqual(result["asset_label"], "Managed by Coverage Workflow")
+            self.assertEqual(result["status_counts"], {"APPLIED": 1})
+
+    def test_asset_label_is_added_without_removing_existing_labels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(Path(directory) / "plan.csv", [approved_row()])
+            )
+            data_access = FakeDataAccess()
+            data_access.assets[8] = {
+                "id": 8,
+                "name": "NYC01 Servers VLAN 120",
+                "type": "dynamic",
+                "description": (
+                    "Dynamic VLAN asset for NYC01 Server networks\n\n"
+                    "VLANs:\n"
+                    "- VLAN 16 - vl16-it-services-static - 10.1.16.0/24\n\n"
+                    "Source grouping tag: vlan-server\n"
+                    "Membership criteria: IP address within the listed VLAN ranges "
+                    "AND Last Seen < 30 days\n"
+                    "Source of truth: subnet-as-code"
+                ),
+                "tags": "Operations",
+                "typeFields": {"rules": build_dynamic_asset_rules(("10.1.16.0/24",))},
+            }
+            data_access.scans[9] = {
+                "id": 9,
+                "name": "US East NYC01 Server Assessment",
+                "repository": {"id": 7},
+                "policy": {"id": 30},
+                "assets": [{"id": 8}],
+                "description": (
+                    "Assessment scan for NYC01 Server VLANs\n\n"
+                    "Target assets:\n- NYC01 Servers VLAN 120\n\n"
+                    "Source of truth: subnet-as-code"
+                ),
+            }
+
+            result = ChangeApplier(
+                data_access,
+                repository_id=7,
+                asset_label="Managed by Coverage Workflow",
+            ).apply(plan)
+
+            self.assertEqual(
+                data_access.assets[8]["tags"],
+                "Operations,Managed by Coverage Workflow",
+            )
+            self.assertEqual(result["operations"][0]["asset_status"], "UPDATED")
 
 
 if __name__ == "__main__":
