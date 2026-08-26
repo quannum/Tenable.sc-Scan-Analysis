@@ -14,6 +14,7 @@ from .change_application import (
     load_approved_plan,
     write_apply_markdown,
 )
+from .os_asset_config import build_os_asset_classifications_from_settings
 from .run_detect_and_plan import DetectAndPlanConfig, run_detect_and_plan
 from .settings import (
     SettingsResolver,
@@ -133,6 +134,7 @@ def _add_grouping_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--grouping-mode", choices=("default", "vlan_tag"))
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument("--grouping-tag-map")
+    parser.add_argument("--os-asset-classifications")
 
 
 def main(argv=None) -> int:
@@ -250,6 +252,11 @@ def _analyze_or_propose(args) -> int:
         sc_backoff_seconds=tenable.sc_backoff_seconds,
         sc_ssl_verify=tenable.sc_ssl_verify,
         grouping_config=build_grouping_config_from_settings(
+            lambda name, environment_name, default=None: _setting(
+                args, name, environment_name, default
+            )
+        ),
+        os_asset_classifications=build_os_asset_classifications_from_settings(
             lambda name, environment_name, default=None: _setting(
                 args, name, environment_name, default
             )

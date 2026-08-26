@@ -18,6 +18,7 @@ from src.tenable_coverage_workflow.models import (
     CoverageTarget,
     CoverageValidationResult,
     GroupingConfig,
+    OsAssetClassification,
 )
 from src.tenable_coverage_workflow.planning.naming_rules import (
     apply_naming_rules,
@@ -39,9 +40,68 @@ from src.tenable_coverage_workflow.run_detect_and_plan import (
     main as detect_and_plan_main,
 )
 from src.tenable_coverage_workflow.subnet_source import AuthoritativeSourceConfig
+from src.tenable_coverage_workflow.subnet_source.target_builder import (
+    build_os_dynamic_asset_targets,
+)
 
 
 class PlanningTests(unittest.TestCase):
+    def test_os_asset_targets_use_private_supernets_and_propose_asset_only_changes(
+        self,
+    ):
+        private = CoverageTarget(
+            target_type="PRIVATE_SUPERNET",
+            cidr="10.24.0.0/16",
+            site_code="nyc01",
+            site_name="New York Office",
+            location=None,
+            region=None,
+            description=None,
+            source_file="sites/nyc01.yaml",
+        )
+        vlan = CoverageTarget(
+            target_type="VLAN",
+            cidr="10.24.1.0/24",
+            site_code="nyc01",
+            site_name="New York Office",
+            location=None,
+            region=None,
+            description=None,
+            vlan_name="Workstations",
+            vlan_tag=10,
+        )
+        targets = build_os_dynamic_asset_targets(
+            [private, vlan],
+            (
+                OsAssetClassification("Windows", "Windows"),
+                OsAssetClassification("Linux", "Linux"),
+            ),
+        )
+        named_targets = [apply_naming_rules(target) for target in targets]
+        results = validate_coverage_targets(
+            named_targets,
+            actual_scopes=[],
+            actual_by_scan=defaultdict(list),
+            excluded_by_scan=defaultdict(list),
+        )
+        changes = generate_proposed_changes(results, run_id="run-001")
+
+        self.assertEqual(len(targets), 2)
+        self.assertEqual({target.cidr for target in targets}, {"10.24.0.0/16"})
+        self.assertEqual(
+            {target.required_asset_name for target in named_targets},
+            {"NYC01 Windows", "NYC01 Linux"},
+        )
+        self.assertEqual({result.status for result in results}, {"ASSET_MISSING"})
+        self.assertEqual(
+            {change.proposed_action for change in changes},
+            {"CREATE_OR_UPDATE_OS_DYNAMIC_ASSET"},
+        )
+        self.assertTrue(
+            all(change.desired_asset_type == "dynamic" for change in changes)
+        )
+        self.assertTrue(all(change.proposed_scan_name is None for change in changes))
+
     def test_asset_type_conflict_is_a_manual_review_change(self):
         changes = generate_proposed_changes(
             [
@@ -942,6 +1002,22 @@ class DetectAndPlanCliTests(unittest.TestCase):
                 private_row["Proposed Action"],
                 "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
             )
+
+            windows_row = next(
+                row
+                for row in rows
+                if row["Target Type"] == "OS_DYNAMIC"
+                and row["Proposed Asset Name"] == "NYC01 Windows"
+            )
+            self.assertEqual(windows_row["Current Status"], "ASSET_MISSING")
+            self.assertEqual(
+                windows_row["Proposed Action"],
+                "CREATE_OR_UPDATE_OS_DYNAMIC_ASSET",
+            )
+            self.assertEqual(windows_row["Desired Asset Type"], "dynamic")
+            self.assertEqual(windows_row["Dynamic Asset OS"], "Windows")
+            self.assertEqual(windows_row["Proposed Scan Name"], "")
+            self.assertEqual(windows_row["Proposed Policy Name"], "")
 
             end_user_vlan_row = next(
                 row

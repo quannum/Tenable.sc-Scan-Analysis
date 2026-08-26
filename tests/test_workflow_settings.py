@@ -1,6 +1,9 @@
 import unittest
 from typing import Any
 
+from src.tenable_coverage_workflow.os_asset_config import (
+    build_os_asset_classifications_from_settings,
+)
 from src.tenable_coverage_workflow.workflow_settings import (
     build_grouping_config_from_settings,
     build_scan_filter_config,
@@ -77,6 +80,21 @@ class WorkflowSettingsTests(unittest.TestCase):
         )
 
         self.assertEqual(config.tag_map, {"vlan-print": "NETWORK"})
+
+    def test_os_asset_classifications_default_and_custom_mapping(self):
+        defaults = build_os_asset_classifications_from_settings(self._scalar({}))
+        custom = build_os_asset_classifications_from_settings(
+            self._scalar({"os_asset_classifications": {"Unix": "Linux|Unix"}})
+        )
+
+        self.assertEqual(
+            [(item.name, item.os_contains) for item in defaults],
+            [("Windows", "Windows"), ("Linux", "Linux")],
+        )
+        self.assertEqual(
+            [(item.name, item.os_contains) for item in custom],
+            [("Unix", "Linux|Unix")],
+        )
 
 
 if __name__ == "__main__":

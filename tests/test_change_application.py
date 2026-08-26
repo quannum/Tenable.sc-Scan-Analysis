@@ -22,6 +22,8 @@ COLUMNS = [
     "VLAN Grouping Tag",
     "Proposed Action",
     "Proposed Asset Name",
+    "Desired Asset Type",
+    "Dynamic Asset OS",
     "Proposed Scan Name",
     "Proposed Policy Name",
     "Approval Status",
@@ -886,6 +888,69 @@ class ChangeApplicationTests(unittest.TestCase):
                 "Operations,Managed by Coverage Workflow",
             )
             self.assertEqual(result["operations"][0]["asset_status"], "UPDATED")
+
+    def test_os_dynamic_asset_is_created_without_a_scan_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = load_approved_plan(
+                write_plan(
+                    Path(directory) / "os-plan.csv",
+                    [
+                        approved_row(
+                            **{
+                                "Target Type": "OS_DYNAMIC",
+                                "Proposed Action": "CREATE_OR_UPDATE_OS_DYNAMIC_ASSET",
+                                "Proposed Asset Name": "NYC01 Windows",
+                                "Desired Asset Type": "dynamic",
+                                "Dynamic Asset OS": "Windows",
+                                "Proposed Scan Name": "",
+                                "Proposed Policy Name": "",
+                            }
+                        )
+                    ],
+                )
+            )
+            data_access = FakeDataAccess()
+
+            first = ChangeApplier(data_access, repository_id=7).apply(plan)
+            second = ChangeApplier(data_access, repository_id=7).apply(plan)
+
+            asset = next(iter(data_access.assets.values()))
+            rules = asset["typeFields"]["rules"]
+            self.assertEqual(asset["name"], "NYC01 Windows")
+            self.assertEqual(first["operations"][0]["scan_status"], "SKIPPED")
+            self.assertEqual(second["status_counts"], {"UNCHANGED": 1})
+            self.assertEqual(rules["operator"], "all")
+            self.assertEqual(rules["children"][1]["filterName"], "os")
+            self.assertEqual(rules["children"][1]["operator"], "contains")
+            self.assertEqual(rules["children"][1]["value"], "Windows")
+            self.assertEqual(
+                rules["children"][2]["pluginIDConstraint"], "19506"
+            )
+
+    def test_os_dynamic_rule_requires_the_last_seen_plugin_constraint(self):
+        expected = build_dynamic_asset_rules(("10.1.16.0/24",), "Linux")
+        actual = json.loads(json.dumps(expected))
+        del actual["children"][2]["pluginIDConstraint"]
+
+        self.assertFalse(_dynamic_rules_match(actual, expected))
+
+    def test_os_dynamic_rules_match_tenable_normalized_representation(self):
+        expected = build_dynamic_asset_rules(("10.1.16.0/24",), "Windows")
+        actual = json.loads(json.dumps(expected))
+        ip_clause = actual["children"][0]["children"][0]
+        ip_clause["value"] = "10.1.16.0-10.1.16.255"
+        ip_clause["filtername"] = ip_clause.pop("filterName")
+        actual["children"][2]["pluginIDConstraint"] = 19506
+        actual["children"] = [
+            actual["children"][2],
+            actual["children"][1],
+            actual["children"][0],
+        ]
+
+        response = {"typeFields": {"rules": actual}}
+        self.assertTrue(_dynamic_rules_match(response, expected))
+        actual["children"][1]["value"] = "Linux"
+        self.assertFalse(_dynamic_rules_match(response, expected))
 
 
 if __name__ == "__main__":

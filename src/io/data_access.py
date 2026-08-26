@@ -478,7 +478,13 @@ def _dynamic_rule_as_tuple(rule: Any) -> tuple[Any, ...]:
         raise ValueError(
             "Dynamic rule clauses require filter name, operator, and value"
         )
-    return (filter_name, operator, str(value))
+    plugin_constraint = rule.get("pluginIDConstraint")
+    if plugin_constraint in (None, ""):
+        return (filter_name, operator, str(value))
+    try:
+        return (filter_name, operator, str(value), int(plugin_constraint))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Dynamic rule pluginIDConstraint must be an integer") from exc
 
 
 def _iter_resource_records(payload: Any) -> Iterator[dict[str, Any]]:

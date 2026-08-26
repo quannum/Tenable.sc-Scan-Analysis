@@ -338,6 +338,26 @@ class DataAccessTests(unittest.TestCase):
         self.assertEqual(updated["description"], "updated")
         self.assertEqual(updated["tags"], "Managed by Coverage Workflow")
 
+    def test_dynamic_rule_plugin_constraint_is_passed_to_pytenable(self):
+        rules = {
+            "operator": "all",
+            "children": [
+                {
+                    "filterName": "lastseen",
+                    "operator": "lt",
+                    "value": "30",
+                    "pluginIDConstraint": "19506",
+                    "type": "clause",
+                }
+            ],
+        }
+        with patch.dict(sys.modules, fake_tenable_modules(), clear=False):
+            access = DataAccess(make_config())
+
+        created = access.create_dynamic_asset("Windows", rules, "managed")
+
+        self.assertEqual(created["rules"], ("all", ("lastseen", "lt", "30", 19506)))
+
     def test_live_mode_retries_retryable_errors(self):
         with (
             patch.dict(

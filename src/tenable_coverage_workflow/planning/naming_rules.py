@@ -230,6 +230,12 @@ def build_required_asset_name(
         return f"{_NAME_PREFIX} {site_code} Public"
     if target.target_type == "PRIVATE_SUPERNET":
         return f"{_NAME_PREFIX} {site_code} Private Discovery"
+    if target.target_type == "OS_DYNAMIC":
+        os_name = _display_name_part(
+            target.os_asset_name or target.dynamic_os,
+            fallback="Operating System",
+        )
+        return f"{site_code} {os_name}"
 
     grouping_config = grouping_config or GroupingConfig()
     grouping_tag = _get_vlan_grouping_tag(target, grouping_config)
@@ -277,6 +283,15 @@ def apply_naming_rules(
     grouping_config = grouping_config or GroupingConfig()
     if find_exclusion_tag(target.tags):
         return target
+
+    if target.target_type == "OS_DYNAMIC":
+        return replace(
+            target,
+            required_asset_name=(
+                target.required_asset_name
+                or build_required_asset_name(target, grouping_config)
+            ),
+        )
 
     if not has_explicit_assessment_mapping(target, grouping_config):
         classification = dict(target.scan_classification)

@@ -344,6 +344,20 @@ Set `--asset-label`, `TCW_ASSET_LABEL`, or `asset_label` under the
 tag created or updated by the workflow. Existing asset labels are preserved;
 this option only adds the requested label and verifies it after the write.
 
+## OS-Specific Dynamic Asset Tags
+
+By default, `analyze-coverage` and `propose-changes` add pending asset-only
+changes for `<Location> Windows` and `<Location> Linux` for each authoritative
+private supernet. They do not create scans, policies, or credentials. Each
+asset has an `all` rule containing the authoritative IP boundary, an `os
+contains` clause, and `lastseen < 30` constrained to plugin `19506`.
+
+Configure another set of classifications with `os_asset_classifications`, for
+example `{ Windows: Windows, Linux: Linux, Unix: Unix }`, or set it to `{}` to
+disable OS asset proposals. The approved-plan CSV carries the OS criterion, so
+`apply-changes` can verify the exact dynamic rules after it creates or updates
+the asset.
+
 ## Scheduled Service
 
 The scheduled workflow is a single-shot job, not a permanently running daemon.

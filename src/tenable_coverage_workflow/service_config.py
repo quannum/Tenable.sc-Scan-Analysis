@@ -8,7 +8,8 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from .models import GroupingConfig
+from .models import GroupingConfig, OsAssetClassification
+from .os_asset_config import build_os_asset_classifications_from_settings
 from .settings import (
     SettingsResolver,
     as_path,
@@ -59,6 +60,9 @@ class ScheduledServiceConfig:
     sc_backoff_seconds: float = 1.5
     sc_ssl_verify: bool = True
     grouping_config: GroupingConfig = field(default_factory=GroupingConfig)
+    os_asset_classifications: tuple[OsAssetClassification, ...] = field(
+        default_factory=tuple
+    )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -108,6 +112,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grouping-mode", choices=["default", "vlan_tag"])
     parser.add_argument("--grouping-vlan-tag-prefix")
     parser.add_argument("--grouping-tag-map")
+    parser.add_argument("--os-asset-classifications")
     parser.add_argument(
         "--no-sc-ssl-verify",
         dest="sc_ssl_verify",
@@ -174,6 +179,9 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         )
         scan_filter = build_scan_filter_config(scalar_getter, csv_getter)
         grouping_config = build_grouping_config_from_settings(scalar_getter)
+        os_asset_classifications = build_os_asset_classifications_from_settings(
+            scalar_getter
+        )
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -231,6 +239,7 @@ def build_service_config(argv=None) -> ScheduledServiceConfig:
         sc_backoff_seconds=tenable.sc_backoff_seconds,
         sc_ssl_verify=tenable.sc_ssl_verify,
         grouping_config=grouping_config,
+        os_asset_classifications=os_asset_classifications,
     )
 
 

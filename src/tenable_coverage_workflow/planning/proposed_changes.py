@@ -50,6 +50,7 @@ def adapt_coverage_result(row: Any) -> CoverageValidationResult:
         exclusion_tag=getter("exclusion_tag"),
         environment=getter("environment"),
         business_function=getter("business_function"),
+        dynamic_os=getter("dynamic_os"),
         scan_classification=dict(getter("scan_classification", {}) or {}),
     )
 
@@ -94,8 +95,11 @@ def generate_proposed_changes(
                     grouping_config,
                 ),
                 desired_asset_type=(
-                    "dynamic" if result.target_type == "VLAN" else "static"
+                    "dynamic"
+                    if result.target_type in {"VLAN", "OS_DYNAMIC"}
+                    else "static"
                 ),
+                dynamic_os=result.dynamic_os,
             )
         )
 
@@ -104,12 +108,19 @@ def generate_proposed_changes(
 
 def determine_proposed_action(result: CoverageValidationResult) -> str:
     """Determine proposed action (review / update / no action)"""
-    desired_asset_type = "dynamic" if result.target_type == "VLAN" else "static"
+    desired_asset_type = (
+        "dynamic" if result.target_type in {"VLAN", "OS_DYNAMIC"} else "static"
+    )
     configured_asset_type = str(
         getattr(result, "configured_asset_type", "") or ""
     ).lower()
     if configured_asset_type and configured_asset_type != desired_asset_type:
         return "REVIEW_ASSET_TYPE_CONFLICT"
+
+    if result.target_type == "OS_DYNAMIC":
+        if result.status == "ASSET_AMBIGUOUS":
+            return "REVIEW_OS_ASSET_AMBIGUITY"
+        return "CREATE_OR_UPDATE_OS_DYNAMIC_ASSET"
 
     if (
         result.scan_classification.get("assessment_mapping")
@@ -153,13 +164,17 @@ def _create_or_update_action(target_type: str) -> str:
         return "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN"
     if target_type == "VLAN":
         return "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN"
+    if target_type == "OS_DYNAMIC":
+        return "CREATE_OR_UPDATE_OS_DYNAMIC_ASSET"
     return "REVIEW_COVERAGE"
 
 
 def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
 
     if proposed_action == "REVIEW_ASSET_TYPE_CONFLICT":
-        desired = "dynamic" if result.target_type == "VLAN" else "static"
+        desired = (
+            "dynamic" if result.target_type in {"VLAN", "OS_DYNAMIC"} else "static"
+        )
         configured = str(getattr(result, "configured_asset_type", "") or "")
         return (
             f"Asset '{result.required_asset_name}' is {configured}, but this "
@@ -168,6 +183,11 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
     if proposed_action == "REVIEW_ASSESSMENT_MAPPING":
         vlan_role = result.scan_classification.get("vlan_role") or result.vlan_name
         return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'"
+    if proposed_action == "REVIEW_OS_ASSET_AMBIGUITY":
+        return (
+            "Multiple assets use the OS dynamic asset name; manual cleanup is "
+            "required"
+        )
 
     if proposed_action == "REVIEW_WRONG_SCAN":
         covering_scans = ", ".join(sorted(result.covering_scans)) or "none"
@@ -181,6 +201,10 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
 
     if result.status == "OK":
         return "Coverage target is fully covered"
+    if result.status == "ASSET_MISSING":
+        return "OS dynamic asset is missing"
+    if result.status == "ASSET_READY":
+        return "OS dynamic asset exists and will be verified if approved"
     if result.status == "EXCLUDED":
         return "Coverage is impacted by exclusions"
     if result.status == "PARTIAL":

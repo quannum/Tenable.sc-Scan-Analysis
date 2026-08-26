@@ -16,6 +16,10 @@ job_name = "tenable-coverage-all-sites"
 # grouping_vlan_tag_prefix = "vlan-"
 # grouping_tag_map = { vlan-server = "SERVER", vlan-storage = "SERVER", vlan-other = "SERVER", vlan-environment = "SERVER", vlan-mgmt = "NETWORK", vlan-workstation = "WORKSTATION", vlan-wireless = "WORKSTATION" }
 
+# Optional OS dynamic assets. Omit this setting to create Windows and Linux
+# assets for every authoritative private supernet, or use {} to disable them.
+# os_asset_classifications = { Windows = "Windows", Linux = "Linux" }
+
 # Output + scheduler state
 output_dir = "/data/output"
 run_id_prefix = "all-sites-"

@@ -18,8 +18,10 @@ SUPPORTED_ACTIONS = {
     "CREATE_OR_UPDATE_PUBLIC_ASSET_AND_SCAN",
     "CREATE_OR_UPDATE_DISCOVERY_ASSET_AND_SCAN",
     "CREATE_OR_UPDATE_VLAN_ASSET_AND_ATTACH_TO_SCAN",
+    "CREATE_OR_UPDATE_OS_DYNAMIC_ASSET",
     "UPDATE_SCAN_POLICY_AND_TARGET",
 }
+ASSET_ONLY_ACTIONS = {"CREATE_OR_UPDATE_OS_DYNAMIC_ASSET"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class ApprovedChange:
     vlan_tag: str = ""
     grouping_tag: str = ""
     desired_asset_type: str = ""
+    dynamic_os: str = ""
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,7 @@ class AssetDefinition:
     cidrs: tuple[str, ...]
     description: str
     label: str | None = None
+    dynamic_os: str | None = None
 
 
 @dataclass(frozen=True)
@@ -209,14 +213,15 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
                     row, "Proposed Action", row_number
                 ).upper(),
                 asset_name=_required_text(row, "Proposed Asset Name", row_number),
-                scan_name=_required_text(row, "Proposed Scan Name", row_number),
-                policy_name=_required_text(row, "Proposed Policy Name", row_number),
+                scan_name=_text(row.get("Proposed Scan Name")),
+                policy_name=_text(row.get("Proposed Policy Name")),
                 reviewer=reviewer,
                 decision_notes=_text(row.get("Decision Notes")),
                 vlan_name=_text(row.get("VLAN Name")),
                 vlan_tag=_text(row.get("VLAN Tag")),
                 grouping_tag=_text(row.get("VLAN Grouping Tag")),
                 desired_asset_type=_text(row.get("Desired Asset Type")).lower(),
+                dynamic_os=_text(row.get("Dynamic Asset OS")),
             )
             try:
                 canonical_cidr = str(ipaddress.ip_network(change.cidr, strict=False))
@@ -236,6 +241,17 @@ def load_approved_plan(path_value: str | Path) -> ApprovedPlan:
             change = ApprovedChange(
                 **{**asdict(change), "desired_asset_type": desired_asset_type}
             )
+            if change.proposed_action in ASSET_ONLY_ACTIONS:
+                if not change.dynamic_os:
+                    raise ValueError(
+                        f"Row {row_number} requires Dynamic Asset OS for "
+                        "an OS dynamic asset"
+                    )
+            elif not change.scan_name or not change.policy_name:
+                raise ValueError(
+                    f"Row {row_number} requires Proposed Scan Name and "
+                    "Proposed Policy Name"
+                )
             identity = (change.asset_name, change.scan_name, change.cidr)
             if identity in identities:
                 raise ValueError(
@@ -296,7 +312,10 @@ class ChangeApplier:
         errors: list[str] = []
         # Check every named policy before creating or updating anything
         for change in plan.approved_changes:
-            if change.proposed_action not in SUPPORTED_ACTIONS:
+            if (
+                change.proposed_action not in SUPPORTED_ACTIONS
+                or change.proposed_action in ASSET_ONLY_ACTIONS
+            ):
                 continue
             if change.policy_name not in self.policies:
                 errors.append(
@@ -348,6 +367,14 @@ class ChangeApplier:
                 )
                 continue
             try:
+                if change.proposed_action in ASSET_ONLY_ACTIONS:
+                    operations.append(
+                        self._apply_asset_only_change(
+                            change,
+                            asset_definitions[change.asset_name],
+                        )
+                    )
+                    continue
                 operations.append(
                     self._apply_change(
                         change,
@@ -440,6 +467,33 @@ class ChangeApplier:
             message="Post-change verification passed",
         )
 
+    def _apply_asset_only_change(
+        self,
+        change: ApprovedChange,
+        asset_definition: AssetDefinition,
+    ) -> ApplyOperation:
+        asset_status = "UNKNOWN"
+        asset_id: int | None = None
+        try:
+            asset, asset_status = self._confirm_asset(asset_definition)
+            asset_id = _resource_id(asset, "asset group", change.asset_name)
+            self._verify_asset(asset_id, asset_definition)
+        except Exception as exc:
+            raise _ApplyChangeFailure(
+                str(exc), asset_status, "SKIPPED", asset_id, None
+            ) from exc
+        return ApplyOperation(
+            site_code=change.site_code,
+            cidr=change.cidr,
+            action=change.proposed_action,
+            status="UNCHANGED" if asset_status == "UNCHANGED" else "APPLIED",
+            asset_status=asset_status,
+            scan_status="SKIPPED",
+            asset_id=asset_id,
+            scan_id=None,
+            message="Post-change asset verification passed",
+        )
+
     def _confirm_asset(self, definition: AssetDefinition) -> tuple[dict[str, Any], str]:
         """Checks if asset already exists and is correctly scoped
 
@@ -461,7 +515,7 @@ class ChangeApplier:
             else:
                 created = self.data_access.create_dynamic_asset(
                     definition.name,
-                    build_dynamic_asset_rules(definition.cidrs),
+                    build_dynamic_asset_rules(definition.cidrs, definition.dynamic_os),
                     definition.description,
                     definition.label,
                 )
@@ -494,14 +548,19 @@ class ChangeApplier:
                 _merged_asset_label(details, definition.label),
             )
         else:
-            desired_rules = build_dynamic_asset_rules(definition.cidrs)
+            desired_rules = build_dynamic_asset_rules(
+                definition.cidrs, definition.dynamic_os
+            )
             if (
                 _dynamic_rules_match(details, desired_rules)
                 and _text(details.get("description")) == definition.description
                 and _asset_has_label(details, definition.label)
             ):
                 return details, "UNCHANGED"
-            if _has_unmanaged_dynamic_rules(get_dynamic_asset_rules(details)):
+            if _has_unmanaged_dynamic_rules(
+                get_dynamic_asset_rules(details),
+                allow_os_clause=definition.dynamic_os is not None,
+            ):
                 raise RuntimeError(
                     f"Asset '{definition.name}' contains non-managed dynamic rules; "
                     "manual change is required"
@@ -595,7 +654,9 @@ class ChangeApplier:
                     f"{', '.join(sorted(missing))}"
                 )
         else:
-            expected_rules = build_dynamic_asset_rules(definition.cidrs)
+            expected_rules = build_dynamic_asset_rules(
+                definition.cidrs, definition.dynamic_os
+            )
             if not _dynamic_rules_match(details, expected_rules):
                 expected_signature = _normalize_dynamic_rule(expected_rules)
                 actual_signature = _normalize_dynamic_rule(
@@ -701,31 +762,46 @@ def _merged_asset_label(asset: dict[str, Any], label: str | None) -> str | None:
     ) else ",".join(get_asset_labels(asset))
 
 
-def build_dynamic_asset_rules(cidrs: tuple[str, ...]) -> dict[str, Any]:
-    """Build the exported Tenable.sc rule shape for a VLAN asset group"""
+def build_dynamic_asset_rules(
+    cidrs: tuple[str, ...], os_contains: str | None = None
+) -> dict[str, Any]:
+    """Build managed dynamic rules for VLAN or OS-specific asset groups."""
+    children: list[dict[str, Any]] = [
+        {
+            "operator": "any",
+            "children": [
+                {
+                    "filterName": "ip",
+                    "operator": "eq",
+                    "value": cidr,
+                    "type": "clause",
+                }
+                for cidr in cidrs
+            ],
+            "type": "group",
+        }
+    ]
+    if os_contains:
+        children.append(
+            {
+                "filterName": "os",
+                "operator": "contains",
+                "value": os_contains,
+                "type": "clause",
+            }
+        )
+    children.append(
+        {
+            "filterName": "lastseen",
+            "operator": "lt",
+            "value": "30",
+            "type": "clause",
+            **({"pluginIDConstraint": "19506"} if os_contains else {}),
+        }
+    )
     return {
         "operator": "all",
-        "children": [
-            {
-                "operator": "any",
-                "children": [
-                    {
-                        "filterName": "ip",
-                        "operator": "eq",
-                        "value": cidr,
-                        "type": "clause",
-                    }
-                    for cidr in cidrs
-                ],
-                "type": "group",
-            },
-            {
-                "filterName": "lastseen",
-                "operator": "lt",
-                "value": "30",
-                "type": "clause",
-            },
-        ],
+        "children": children,
         "type": "group",
     }
 
@@ -777,7 +853,9 @@ def _dynamic_rules_from_type_fields(type_fields: Any) -> dict[str, Any] | None:
     return None
 
 
-def _has_unmanaged_dynamic_rules(rules: dict[str, Any] | None) -> bool:
+def _has_unmanaged_dynamic_rules(
+    rules: dict[str, Any] | None, allow_os_clause: bool = False
+) -> bool:
     """Identify dynamic clauses that an application update cannot safely replace."""
     if not isinstance(rules, dict):
         return False
@@ -786,14 +864,18 @@ def _has_unmanaged_dynamic_rules(rules: dict[str, Any] | None) -> bool:
         children, (list, tuple)
     ):
         return True
-    return any(not _is_managed_dynamic_child(child) for child in children)
+    return any(
+        not _is_managed_dynamic_child(child, allow_os_clause) for child in children
+    )
 
 
-def _is_managed_dynamic_child(rule: Any) -> bool:
+def _is_managed_dynamic_child(rule: Any, allow_os_clause: bool) -> bool:
     """Return whether a root rule is generated and safely owned by this workflow."""
     if not isinstance(rule, dict):
         return False
     if _dynamic_filter_name(rule) == "lastseen":
+        return True
+    if allow_os_clause and _dynamic_filter_name(rule) == "os":
         return True
     children = rule.get("children")
     if not isinstance(children, (list, tuple)):
@@ -831,7 +913,17 @@ def _normalize_dynamic_rule(rule: Any) -> tuple[Any, ...] | None:
         _text(rule.get("operator")).lower(),
         filter_name,
         _normalize_dynamic_rule_value(filter_name, rule.get("value")),
+        (
+            _normalize_plugin_constraint(rule.get("pluginIDConstraint"))
+            if filter_name == "lastseen"
+            else None
+        ),
     )
+
+
+def _normalize_plugin_constraint(value: Any) -> str | None:
+    text = _text(value)
+    return text or None
 
 
 def _normalize_dynamic_rule_value(filter_name: str, value: Any) -> Any:
@@ -876,7 +968,7 @@ def _asset_type(asset: dict[str, Any]) -> str:
 
 
 def _asset_type_for_target(target_type: str) -> str:
-    return "dynamic" if target_type == "VLAN" else "static"
+    return "dynamic" if target_type in {"VLAN", "OS_DYNAMIC"} else "static"
 
 
 def _build_asset_definitions(
@@ -893,18 +985,44 @@ def _build_asset_definitions(
         asset_types = {change.desired_asset_type for change in members}
         if len(asset_types) != 1:
             raise ValueError(f"Asset '{name}' has conflicting asset types")
+        dynamic_os_values = {
+            change.dynamic_os for change in members if change.dynamic_os
+        }
+        if len(dynamic_os_values) > 1:
+            raise ValueError(f"Asset '{name}' has conflicting OS classifications")
         definitions[name] = AssetDefinition(
             name=name,
             asset_type=next(iter(asset_types)),
             cidrs=tuple(sorted({change.cidr for change in members})),
             description=_build_asset_description(members),
             label=_optional_text(asset_label),
+            dynamic_os=next(iter(dynamic_os_values), None),
         )
     return definitions
 
 
 def _build_asset_description(changes: list[ApprovedChange]) -> str:
     first = changes[0]
+    if first.dynamic_os:
+        lines = [
+            f"Dynamic {first.dynamic_os} asset for {first.site_code}",
+            "",
+            "Authoritative private-supernet boundaries:",
+        ]
+        lines.extend(
+            f"- {change.cidr}"
+            for change in sorted(changes, key=lambda item: item.cidr)
+        )
+        lines.extend(
+            (
+                "",
+                "Membership criteria: IP address within the listed boundaries "
+                f"AND Operating System contains {first.dynamic_os} AND Last Seen "
+                "< 30 days (plugin 19506)",
+                "Source of truth: subnet-as-code",
+            )
+        )
+        return "\n".join(lines)
     if first.desired_asset_type == "dynamic":
         role = _grouping_role_label(first.grouping_tag)
         lines = [
@@ -942,7 +1060,10 @@ def _build_asset_description(changes: list[ApprovedChange]) -> str:
 def _build_scan_definitions(changes: list[ApprovedChange]) -> dict[str, ScanDefinition]:
     grouped: dict[str, list[ApprovedChange]] = {}
     for change in changes:
-        if change.proposed_action in SUPPORTED_ACTIONS:
+        if (
+            change.proposed_action in SUPPORTED_ACTIONS
+            and change.proposed_action not in ASSET_ONLY_ACTIONS
+        ):
             grouped.setdefault(change.scan_name, []).append(change)
 
     definitions: dict[str, ScanDefinition] = {}

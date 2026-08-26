@@ -4,6 +4,14 @@ VLAN_ASSESSMENT_BUCKETS = frozenset({"WORKSTATION", "SERVER", "NETWORK"})
 
 
 @dataclass(frozen=True)
+class OsAssetClassification:
+    """One OS subset to generate inside each authoritative private supernet."""
+
+    name: str
+    os_contains: str
+
+
+@dataclass(frozen=True)
 class GroupingConfig:
     mode: str = "default"
     vlan_tag_prefix: str = "vlan-"
@@ -93,6 +101,8 @@ class CoverageTarget:
     tags: list[str] = field(default_factory=list)
     environment: str | None = None
     business_function: str | None = None
+    os_asset_name: str | None = None
+    dynamic_os: str | None = None
     scan_classification: dict[str, object] = field(default_factory=dict)
 
 
@@ -150,6 +160,7 @@ class CoverageValidationResult:
     exclusion_tag: str | None = None
     environment: str | None = None
     business_function: str | None = None
+    dynamic_os: str | None = None
     scan_classification: dict[str, object] = field(default_factory=dict)
 
 
@@ -174,3 +185,4 @@ class ProposedChange:
     source_file: str | None
     grouping_tag: str | None = None
     desired_asset_type: str = "static"
+    dynamic_os: str | None = None

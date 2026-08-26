@@ -20,6 +20,7 @@ CSV_COLUMNS = [
     "Proposed Action",
     "Proposed Asset Name",
     "Desired Asset Type",
+    "Dynamic Asset OS",
     "Proposed Scan Name",
     "Proposed Policy Name",
     "Approval Status",
@@ -75,6 +76,7 @@ def _write_csv(
                 change.proposed_action,
                 change.proposed_asset_name or "",
                 change.desired_asset_type,
+                change.dynamic_os or "",
                 change.proposed_scan_name or "",
                 change.proposed_policy_name or "",
                 change.approval_status,
@@ -121,6 +123,8 @@ def _write_markdown(
             lines.append(f"- Proposed Action: {change.proposed_action}")
             lines.append(f"- Proposed Asset: {change.proposed_asset_name or 'N/A'}")
             lines.append(f"- Desired Asset Type: {change.desired_asset_type}")
+            if change.dynamic_os:
+                lines.append(f"- Dynamic Asset OS: {change.dynamic_os}")
             lines.append(f"- Proposed Scan: {change.proposed_scan_name or 'N/A'}")
             lines.append(f"- Proposed Policy: {change.proposed_policy_name or 'N/A'}")
             lines.append(f"- Approval Status: {change.approval_status}")

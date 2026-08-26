@@ -32,6 +32,7 @@ DETAIL_COLUMNS = [
     "exclusion_tag",
     "environment",
     "business_function",
+    "dynamic_os",
     "scan_classification",
     "vlan_name",
     "vlan_tag",

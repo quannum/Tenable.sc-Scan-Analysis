@@ -23,20 +23,22 @@ from .audit import AuditLogger, write_proposed_change_audits
 from .audit.audit_logger import atomic_write_json
 from .coverage_reporting import write_coverage_reports, write_final_audit_report
 from .exclusion_tags import find_exclusion_tag
-from .models import CoverageTarget, CoverageValidationResult, GroupingConfig
+from .models import (
+    CoverageTarget,
+    CoverageValidationResult,
+    GroupingConfig,
+    OsAssetClassification,
+)
+from .os_asset_config import build_os_asset_classifications_from_settings
 from .planning import apply_naming_rules_to_targets, generate_proposed_changes
 from .planning.naming_rules import ASSESSMENT_MAPPING_UNMAPPED
-from .settings import (
-    SettingsResolver,
-)
-from .subnet_source import (
-    AuthoritativeSourceConfig,
-    load_authoritative_source,
-)
+from .settings import SettingsResolver
+from .subnet_source import AuthoritativeSourceConfig, load_authoritative_source
 from .subnet_source.source_config import (
     add_authoritative_source_arguments,
     build_authoritative_source_config,
 )
+from .subnet_source.target_builder import build_os_dynamic_asset_targets
 from .workflow_settings import (
     build_grouping_config_from_settings,
     build_scan_filter_config,
@@ -89,6 +91,9 @@ class DetectAndPlanConfig:
     sc_backoff_seconds: float = 1.5
     sc_ssl_verify: bool = True
     grouping_config: GroupingConfig = field(default_factory=GroupingConfig)
+    os_asset_classifications: tuple[OsAssetClassification, ...] = field(
+        default_factory=tuple
+    )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -129,6 +134,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--grouping-tag-map",
         help="JSON object or comma-separated key=value mappings for vlan tag groups",
+    )
+    parser.add_argument(
+        "--os-asset-classifications",
+        help="Mapping such as Windows=Windows,Linux=Linux",
     )
     parser.add_argument(
         "--no-sc-ssl-verify",
@@ -264,6 +273,9 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         csv_getter=csv_getter,
     )
     grouping_config = build_grouping_config_from_settings(scalar_getter)
+    os_asset_classifications = build_os_asset_classifications_from_settings(
+        scalar_getter
+    )
     tenable = build_tenable_access_config(scalar_getter)
     scan_filter = build_scan_filter_config(
         scalar_getter=lambda name, _environment_name, default=None: getattr(
@@ -298,6 +310,7 @@ def build_detect_and_plan_config(args) -> DetectAndPlanConfig:
         sc_backoff_seconds=tenable.sc_backoff_seconds,
         sc_ssl_verify=tenable.sc_ssl_verify,
         grouping_config=grouping_config,
+        os_asset_classifications=os_asset_classifications,
     )
 
 
@@ -332,8 +345,12 @@ def run_detect_and_plan(config: DetectAndPlanConfig) -> dict[str, object]:
         config.source_config,
         audit_logger=audit_logger,
     )
-    named_targets = apply_naming_rules_to_targets(
+    os_targets = build_os_dynamic_asset_targets(
         connector_result.coverage_targets,
+        config.os_asset_classifications,
+    )
+    named_targets = apply_naming_rules_to_targets(
+        [*connector_result.coverage_targets, *os_targets],
         config.grouping_config,
     )
     for target in named_targets:
@@ -533,6 +550,12 @@ def validate_coverage_targets(
                 )
             continue
 
+        if target.target_type == "OS_DYNAMIC":
+            coverage_results.append(
+                _validate_os_dynamic_asset_target(target, assets_by_name)
+            )
+            continue
+
         expected = parse_scope_item(target.cidr)
         base_result = calculate_coverage_result(
             scope_item=target.cidr,
@@ -613,6 +636,7 @@ def validate_coverage_targets(
             tags=list(target.tags),
             environment=target.environment,
             business_function=target.business_function,
+            dynamic_os=target.dynamic_os,
             scan_classification=dict(target.scan_classification),
         )
         coverage_results.append(coverage_result)
@@ -660,6 +684,58 @@ def validate_coverage_targets(
     return coverage_results
 
 
+def _validate_os_dynamic_asset_target(
+    target: CoverageTarget,
+    assets_by_name: dict[str, list[dict[str, Any]]],
+) -> CoverageValidationResult:
+    """Validate the OS asset itself without treating it as scan coverage."""
+    matching_assets = assets_by_name.get(target.required_asset_name or "", [])
+    required_asset_present = "Yes" if matching_assets else "No"
+    configured_asset_type = ""
+    if len(matching_assets) == 1:
+        configured_asset_type = str(matching_assets[0].get("type") or "").lower()
+
+    if not matching_assets:
+        status = "ASSET_MISSING"
+        reason = "OS dynamic asset is not present"
+    elif len(matching_assets) != 1:
+        status = "ASSET_AMBIGUOUS"
+        reason = "Multiple assets have the required OS dynamic asset name"
+    elif configured_asset_type != "dynamic":
+        status = "ASSET_TYPE_MISMATCH"
+        reason = "OS asset exists but is not dynamic"
+    else:
+        status = "ASSET_READY"
+        reason = "OS dynamic asset exists; rules will be verified if approved"
+
+    return CoverageValidationResult(
+        status=status,
+        target_type=target.target_type,
+        cidr=target.cidr,
+        site_code=target.site_code,
+        site_name=target.site_name,
+        region=target.region,
+        location=target.location,
+        description=target.description,
+        vlan_name=None,
+        vlan_tag=None,
+        covering_scans=[],
+        reason=reason,
+        source_file=target.source_file,
+        required_asset_name=target.required_asset_name,
+        required_scan_name=None,
+        required_policy_name=None,
+        required_asset_present=required_asset_present,
+        configured_asset_type=configured_asset_type,
+        dynamic_os=target.dynamic_os,
+        timezone=target.timezone,
+        tags=list(target.tags),
+        environment=target.environment,
+        business_function=target.business_function,
+        scan_classification=dict(target.scan_classification),
+    )
+
+
 def _build_tag_excluded_result(
     target: CoverageTarget, exclusion_tag: str
 ) -> CoverageValidationResult:
@@ -688,6 +764,7 @@ def _build_tag_excluded_result(
         exclusion_tag=exclusion_tag,
         environment=target.environment,
         business_function=target.business_function,
+        dynamic_os=target.dynamic_os,
         scan_classification=dict(target.scan_classification),
     )
 

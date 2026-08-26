@@ -16,6 +16,12 @@ tenable_sc_scan_analysis:
   #   vlan-workstation: WORKSTATION
   #   vlan-wireless: WORKSTATION
 
+  # Optional OS dynamic assets. Omit this setting to create Windows and Linux
+  # assets for every authoritative private supernet, or use {} to disable them.
+  # os_asset_classifications:
+  #   Windows: Windows
+  #   Linux: Linux
+
   # Tenable data source
   mode: offline
   scan_json_dir: /data/tenable/scans
