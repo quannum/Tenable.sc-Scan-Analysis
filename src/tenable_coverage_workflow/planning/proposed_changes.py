@@ -185,8 +185,7 @@ def build_issue(result: CoverageValidationResult, proposed_action: str) -> str:
         return f"No explicit assessment mapping exists for VLAN role '{vlan_role}'"
     if proposed_action == "REVIEW_OS_ASSET_AMBIGUITY":
         return (
-            "Multiple assets use the OS dynamic asset name; manual cleanup is "
-            "required"
+            "Multiple assets use the OS dynamic asset name; manual cleanup is required"
         )
 
     if proposed_action == "REVIEW_WRONG_SCAN":

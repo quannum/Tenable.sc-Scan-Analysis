@@ -923,9 +923,7 @@ class ChangeApplicationTests(unittest.TestCase):
             self.assertEqual(rules["children"][1]["filterName"], "os")
             self.assertEqual(rules["children"][1]["operator"], "contains")
             self.assertEqual(rules["children"][1]["value"], "Windows")
-            self.assertEqual(
-                rules["children"][2]["pluginIDConstraint"], "19506"
-            )
+            self.assertEqual(rules["children"][2]["pluginIDConstraint"], "19506")
 
     def test_os_dynamic_rule_requires_the_last_seen_plugin_constraint(self):
         expected = build_dynamic_asset_rules(("10.1.16.0/24",), "Linux")

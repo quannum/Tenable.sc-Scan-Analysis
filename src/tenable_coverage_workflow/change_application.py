@@ -757,9 +757,11 @@ def _asset_has_label(asset: dict[str, Any], label: str | None) -> bool:
 def _merged_asset_label(asset: dict[str, Any], label: str | None) -> str | None:
     if label is None:
         return None
-    return ",".join((*get_asset_labels(asset), label)) if not _asset_has_label(
-        asset, label
-    ) else ",".join(get_asset_labels(asset))
+    return (
+        ",".join((*get_asset_labels(asset), label))
+        if not _asset_has_label(asset, label)
+        else ",".join(get_asset_labels(asset))
+    )
 
 
 def build_dynamic_asset_rules(
@@ -1010,8 +1012,7 @@ def _build_asset_description(changes: list[ApprovedChange]) -> str:
             "Authoritative private-supernet boundaries:",
         ]
         lines.extend(
-            f"- {change.cidr}"
-            for change in sorted(changes, key=lambda item: item.cidr)
+            f"- {change.cidr}" for change in sorted(changes, key=lambda item: item.cidr)
         )
         lines.extend(
             (
