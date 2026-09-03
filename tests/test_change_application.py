@@ -328,6 +328,7 @@ class ChangeApplicationTests(unittest.TestCase):
         ip_rule = actual["children"][0]["children"][0]
         ip_rule["value"] = "10.1.16.0-10.1.16.255"
         ip_rule["pluginIDConstraint"] = "-1"
+        actual["children"][1]["pluginIDConstraint"] = "-1"
         actual["children"].reverse()
 
         self.assertTrue(_dynamic_rules_match({"rules": actual}, expected))

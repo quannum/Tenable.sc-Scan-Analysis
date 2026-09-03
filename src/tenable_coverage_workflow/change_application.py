@@ -925,7 +925,9 @@ def _normalize_dynamic_rule(rule: Any) -> tuple[Any, ...] | None:
 
 def _normalize_plugin_constraint(value: Any) -> str | None:
     text = _text(value)
-    return text or None
+    # Security Center returns -1 for an unrestricted last-seen plugin filter
+    # treat it the same as a None constraint
+    return None if text in ("", "-1") else text
 
 
 def _normalize_dynamic_rule_value(filter_name: str, value: Any) -> Any:
